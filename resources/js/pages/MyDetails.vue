@@ -91,7 +91,7 @@ const family = [
                             <img src="/20856.png" alt="Reagan Jade Balansag">
                         </div>
 
-                        <div>
+                        <div>   
                             <p class="ehris-name">Reagan Jade Balansag</p>
                             <p class="ehris-muted">2202054</p>
 
