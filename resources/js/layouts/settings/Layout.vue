@@ -48,15 +48,15 @@ const { isCurrentUrl } = useCurrentUrl();
                 >
                     <Button
                         v-for="item in sidebarNavItems"
-                        :key="toUrl(item.href)"
+                        :key="toUrl(item.href!)"
                         variant="ghost"
                         :class="[
                             'w-full justify-start',
-                            { 'bg-muted': isCurrentUrl(item.href) },
+                            { 'bg-muted': isCurrentUrl(item.href!) },
                         ]"
                         as-child
                     >
-                        <Link :href="item.href">
+                        <Link :href="item.href!">
                             <component :is="item.icon" class="h-4 w-4" />
                             {{ item.title }}
                         </Link>
