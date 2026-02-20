@@ -35,32 +35,26 @@ const tabs = [
 ];
 
 const infoRows = [
-    { label: 'Place of birth', value: 'Bandung' },
-    { label: 'Birth date', value: '30 Oct 1994' },
+    { label: 'Place of birth', value: 'Calamba, Misamis Occidental' },
+    { label: 'Birth date', value: '29 Aug 2003' },
     { label: 'Blood type', value: 'AB' },
-    { label: 'Marital Status', value: 'Married' },
+    { label: 'Marital Status', value: 'Single' },
     { label: 'Religion', value: 'Christian' },
 ];
 
 const education = [
     {
-        degree: 'Master Degree - Bina Nusantara',
-        field: 'Business',
-        gpa: 'GPA (3.5)',
-        period: '2016 - 2018',
-    },
-    {
-        degree: 'Bachelor Degree - Bina Nusantara',
-        field: 'Business',
-        gpa: 'GPA (3.9)',
-        period: '2012 - 2016',
+        degree: 'Bachelor\'s Degree - Misamis University',
+        field: 'Information Technology',
+        gpa: 'GPA (1.43)',
+        period: '2022 - 2026',
     },
 ];
 
 const family = [
-    { type: 'Father', person: 'Benjamin Williams' },
-    { type: 'Mother', person: 'Evelyn Potts' },
-    { type: 'Siblings', person: 'James Williams, Emily Williams' },
+    { type: 'Father', person: 'Reagan Balansag' },
+    { type: 'Mother', person: 'Aurea Balansag' },
+    { type: 'Siblings', person: 'Pawil John Balansag' },
 ];
 </script>
 
@@ -93,13 +87,13 @@ const family = [
 
                 <div class="ehris-profile-grid">
                     <div class="ehris-profile-main">
-                        <div class="ehris-avatar ehris-avatar-placeholder" aria-label="John Williams">
-                            <span>JW</span>
+                        <div class="ehris-avatar ehris-avatar-placeholder" aria-label="Reagan Jade Balansag">
+                            <img src="/20856.png" alt="Reagan Jade Balansag">
                         </div>
 
                         <div>
-                            <p class="ehris-name">John Williams</p>
-                            <p class="ehris-muted">1210372726433743682</p>
+                            <p class="ehris-name">Reagan Jade Balansag</p>
+                            <p class="ehris-muted">2202054</p>
 
                             <ul class="ehris-meta-list">
                                 <li>
@@ -108,11 +102,11 @@ const family = [
                                 </li>
                                 <li>
                                     <Mail class="size-4" />
-                                    <span>johnwilliams@bicaradata.com</span>
+                                    <span>reaganjade.balansag@deped.gov.ph</span>
                                 </li>
                                 <li>
                                     <Phone class="size-4" />
-                                    <span>081323323311</span>
+                                    <span>09303291846</span>
                                 </li>
                             </ul>
                         </div>
@@ -141,14 +135,14 @@ const family = [
                             <dt>Citizen ID address</dt>
                             <dd>
                                 <MapPin class="size-4" />
-                                <span>Jl. Wayang No.2, Burangrang, Kec. Lengkong, Kota Bandung, Jawa Barat 40262</span>
+                                <span>Danao, Plaridel, Misamis Occidental</span>
                             </dd>
                         </div>
                         <div>
                             <dt>Residential address</dt>
                             <dd>
                                 <MapPin class="size-4" />
-                                <span>Jl. Wayang No.2, Burangrang, Kec. Lengkong, Kota Bandung, Jawa Barat 40262</span>
+                                <span>Purok 6, Lam-an, Ozamiz City, Misamis Occidental</span>
                             </dd>
                         </div>
                     </dl>
@@ -165,15 +159,15 @@ const family = [
                     <dl class="ehris-compact-grid">
                         <div>
                             <dt>Name</dt>
-                            <dd>Olivia Bennett</dd>
+                            <dd>Januard Amarille</dd>
                         </div>
                         <div>
                             <dt>Relationship</dt>
-                            <dd>Wife</dd>
+                            <dd>Classmate</dd>
                         </div>
                         <div>
                             <dt>Phone number</dt>
-                            <dd>081324815250</dd>
+                            <dd>09761732164</dd>
                         </div>
                     </dl>
                 </section>

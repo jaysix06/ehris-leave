@@ -11,6 +11,7 @@ import {
 import AppLayout from '@/layouts/AppLayout.vue';
 import selfServiceRoutes from '@/routes/self-service';
 import { type BreadcrumbItem } from '@/types';
+import { differenceInDays } from 'date-fns';
 
 const pageTitle = 'Leave Application';
 
@@ -41,10 +42,6 @@ const leaveRange = ref<{ start: Date | null; end: Date | null }>({
     end: today,
 });
 
-const inputMasks = {
-    input: 'MMM D, YYYY',
-};
-
 const formatter = new Intl.DateTimeFormat('en-GB', {
     day: '2-digit',
     month: '2-digit',
@@ -57,6 +54,13 @@ const formatDate = (date: Date | null) =>
 const selectedRangeText = computed(
     () => `${formatDate(leaveRange.value.start)} to ${formatDate(leaveRange.value.end)}`,
 );
+
+const noOfDays = computed(() => {
+    if (!leaveRange.value.start || !leaveRange.value.end) {
+        return 0;
+    }
+    return differenceInDays(leaveRange.value.end, leaveRange.value.start) + 1;
+});
 </script>
 
 <template>
@@ -90,7 +94,7 @@ const selectedRangeText = computed(
             <section class="leave-main-row">
                 <article class="ehris-card request-card">
                     <div class="request-head">
-                        <h3>Leave request</h3>
+                        <h3>Create Leave request</h3>
                         <p class="date-range">{{ selectedRangeText }}</p>
                     </div>
 
@@ -116,36 +120,28 @@ const selectedRangeText = computed(
                                 </select>
                             </label>
 
-                            <label>
-                                Start date
-                                <DatePicker
-                                    v-model="leaveRange.start"
-                                    :min-date="today"
-                                    :max-date="leaveRange.end || undefined"
-                                    :masks="inputMasks"
-                                >
-                                    <template #default="{ inputValue, togglePopover }">
-                                        <button type="button" class="date-input" @click="togglePopover">
-                                            {{ inputValue || 'Select start date' }}
-                                        </button>
-                                    </template>
-                                </DatePicker>
-                            </label>
+                            <div class="date-range-row">
+                                <label>
+                                    Start date
+                                    <div class="date-readonly">
+                                        {{ formatDate(leaveRange.start) }}
+                                    </div>
+                                </label>
 
-                            <label>
-                                End date
-                                <DatePicker
-                                    v-model="leaveRange.end"
-                                    :min-date="leaveRange.start || today"
-                                    :masks="inputMasks"
-                                >
-                                    <template #default="{ inputValue, togglePopover }">
-                                        <button type="button" class="date-input" @click="togglePopover">
-                                            {{ inputValue || 'Select end date' }}
-                                        </button>
-                                    </template>
-                                </DatePicker>
-                            </label>
+                                <label>
+                                    End date
+                                    <div class="date-readonly">
+                                        {{ formatDate(leaveRange.end) }}
+                                    </div>
+                                </label>
+
+                                <label>
+                                    No. of Days
+                                    <div class="date-readonly">
+                                        {{ noOfDays }}
+                                    </div>
+                                </label>
+                            </div>
 
                             <label>
                                 Reason for leave
@@ -272,6 +268,12 @@ const selectedRangeText = computed(
     color: hsl(var(--foreground));
 }
 
+.date-range-row{
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0.7rem;
+}
+
 .leave-type :deep(svg) {
     color: #2ea37f;
 }
@@ -337,7 +339,7 @@ const selectedRangeText = computed(
 
 .left-form select,
 .left-form textarea,
-.date-input {
+.date-readonly {
     border-radius: 0.7rem;
     border: 1px solid hsl(var(--input));
     background: hsl(var(--card));
@@ -346,9 +348,11 @@ const selectedRangeText = computed(
     padding: 0.65rem 0.75rem;
 }
 
-.date-input {
+.date-readonly {
     width: 100%;
     text-align: left;
+    cursor: default;
+    user-select: none;
 }
 
 .left-form textarea {
