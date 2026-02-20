@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { Head } from '@inertiajs/vue3';
+import { computed, ref } from 'vue';
+import { DatePicker } from 'v-calendar';
 import {
     Bell,
     CalendarDays,
@@ -31,6 +33,30 @@ const announcements = [
     'Keep emergency contact details updated before extended leave.',
     'Use the comments field for handover notes and critical tasks.',
 ];
+
+const today = new Date();
+
+const leaveRange = ref<{ start: Date | null; end: Date | null }>({
+    start: today,
+    end: today,
+});
+
+const inputMasks = {
+    input: 'MMM D, YYYY',
+};
+
+const formatter = new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+});
+
+const formatDate = (date: Date | null) =>
+    date ? formatter.format(date) : '--/--/----';
+
+const selectedRangeText = computed(
+    () => `${formatDate(leaveRange.value.start)} to ${formatDate(leaveRange.value.end)}`,
+);
 </script>
 
 <template>
@@ -38,21 +64,6 @@ const announcements = [
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="ehris-page leave-application-page">
-            <section class="leave-top-row">
-                <div>
-                    <p class="leave-kicker">Self-Service</p>
-                    <h2 class="leave-heading">Leave management</h2>
-                </div>
-
-                <div class="leave-user-actions">
-                    <button class="icon-btn" type="button" aria-label="Notifications">
-                        <Bell :size="16" />
-                    </button>
-                    <button class="icon-btn" type="button" aria-label="Calendar">
-                        <CalendarDays :size="16" />
-                    </button>
-                </div>
-            </section>
 
             <section class="leave-summary-row">
                 <article class="ehris-card leave-highlight-card">
@@ -80,23 +91,62 @@ const announcements = [
                 <article class="ehris-card request-card">
                     <div class="request-head">
                         <h3>Leave request</h3>
-                        <p class="date-range">19/05/2023 to 24/05/2023</p>
+                        <p class="date-range">{{ selectedRangeText }}</p>
                     </div>
 
                     <div class="request-grid">
                         <div class="left-form">
                             <label>
-                                Approval manager
-                                <select>
-                                    <option>Jack Jensen</option>
+                                Leave Type
+                                <select class="border-5 border-primary">
+                                    <option selected>- Select Leave Type -</option>
+                                    <option>Sick Leave</option>
+                                    <option>Vacation Leave</option>
+                                    <option>Maternity Leave</option>
+                                    <option>CTO</option>
+                                    <option>Paternity Leave</option>
+                                    <option>Force Leave</option>
+                                    <option>Others</option>
                                 </select>
                             </label>
                             <label>
-                                Leave type
+                                Leave For
                                 <select>
-                                    <option>Sick Leave</option>
+                                    <option>Full Day</option>
                                 </select>
                             </label>
+
+                            <label>
+                                Start date
+                                <DatePicker
+                                    v-model="leaveRange.start"
+                                    :min-date="today"
+                                    :max-date="leaveRange.end || undefined"
+                                    :masks="inputMasks"
+                                >
+                                    <template #default="{ inputValue, togglePopover }">
+                                        <button type="button" class="date-input" @click="togglePopover">
+                                            {{ inputValue || 'Select start date' }}
+                                        </button>
+                                    </template>
+                                </DatePicker>
+                            </label>
+
+                            <label>
+                                End date
+                                <DatePicker
+                                    v-model="leaveRange.end"
+                                    :min-date="leaveRange.start || today"
+                                    :masks="inputMasks"
+                                >
+                                    <template #default="{ inputValue, togglePopover }">
+                                        <button type="button" class="date-input" @click="togglePopover">
+                                            {{ inputValue || 'Select end date' }}
+                                        </button>
+                                    </template>
+                                </DatePicker>
+                            </label>
+
                             <label>
                                 Reason for leave
                                 <textarea placeholder="Type your reason"></textarea>
@@ -104,19 +154,15 @@ const announcements = [
                         </div>
 
                         <div class="calendar-box">
-                            <div class="month-head">
-                                <button type="button" aria-label="Previous month">&lt;</button>
-                                <strong>May 2023</strong>
-                                <button type="button" aria-label="Next month">&gt;</button>
-                            </div>
-                            <div class="calendar-grid">
-                                <span>MON</span><span>TUE</span><span>WED</span><span>THU</span><span>FRI</span><span>SAT</span><span>SUN</span>
-                                <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span>
-                                <span>8</span><span>9</span><span>10</span><span>11</span><span>12</span><span>13</span><span>14</span>
-                                <span>15</span><span>16</span><span>17</span><span>18</span><span class="selected">19</span><span class="selected">20</span><span class="selected">21</span>
-                                <span class="selected light">22</span><span class="selected light">23</span><span class="selected">24</span><span>25</span><span>26</span><span>27</span><span>28</span>
-                                <span>29</span><span>30</span><span>1</span><span>1</span><span>1</span><span>1</span><span>1</span>
-                            </div>
+                            <DatePicker
+                                v-model="leaveRange"
+                                is-range
+                                is-inline
+                                expanded
+                                :min-date="today"
+                                :masks="{ weekdays: 'WWW' }"
+                                class="calendar-inline"
+                            />
                         </div>
                     </div>
 
@@ -273,7 +319,7 @@ const announcements = [
 
 .request-grid {
     display: grid;
-    grid-template-columns: 1.1fr 1fr;
+    grid-template-columns: 1fr 1.35fr;
     gap: 0.8rem;
 }
 
@@ -290,13 +336,19 @@ const announcements = [
 }
 
 .left-form select,
-.left-form textarea {
+.left-form textarea,
+.date-input {
     border-radius: 0.7rem;
     border: 1px solid hsl(var(--input));
     background: hsl(var(--card));
     color: hsl(var(--foreground));
     font-size: 0.94rem;
     padding: 0.65rem 0.75rem;
+}
+
+.date-input {
+    width: 100%;
+    text-align: left;
 }
 
 .left-form textarea {
@@ -309,47 +361,41 @@ const announcements = [
     border-radius: 0.8rem;
     background: hsl(var(--card));
     padding: 0.7rem;
+    min-width: 0;
+    overflow: hidden;
 }
 
-.month-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    border-bottom: 1px solid hsl(var(--border));
-    padding-bottom: 0.52rem;
-    margin-bottom: 0.65rem;
-}
-
-.month-head button {
-    border: none;
+.calendar-inline :deep(.vc-container) {
+    display: flex !important;
+    width: 100%;
+    max-width: none;
+    border: 0;
     background: transparent;
     color: hsl(var(--foreground));
-    font-size: 1rem;
-    cursor: pointer;
 }
 
-.month-head strong {
-    color: hsl(var(--foreground));
+.calendar-inline :deep(.vc-pane-layout) {
+    width: 100% !important;
+    grid-template-columns: minmax(0, 1fr) !important;
 }
 
-.calendar-grid {
-    display: grid;
-    grid-template-columns: repeat(7, minmax(0, 1fr));
-    gap: 0.36rem;
-    text-align: center;
-    color: hsl(var(--foreground));
-    font-size: 0.84rem;
+.calendar-inline :deep(.vc-pane) {
+    width: 100% !important;
+    min-width: 0 !important;
 }
 
-.calendar-grid .selected {
-    border-radius: 999px;
-    background: hsl(var(--primary));
-    color: hsl(var(--primary-foreground));
+.calendar-inline :deep(.vc-title),
+.calendar-inline :deep(.vc-weekday) {
+    color: hsl(var(--muted-foreground));
+    font-weight: 600;
 }
 
-.calendar-grid .selected.light {
-    background: color-mix(in srgb, hsl(var(--primary)) 25%, white);
-    color: hsl(var(--foreground));
+.calendar-inline :deep(.vc-day-content:hover) {
+    background: color-mix(in srgb, hsl(var(--primary)) 18%, white);
+}
+
+.calendar-inline :deep(.vc-highlight-bg-solid) {
+    background-color: hsl(var(--primary));
 }
 
 .request-actions {
@@ -410,6 +456,10 @@ const announcements = [
     .request-grid {
         grid-template-columns: 1fr;
     }
+
+    .calendar-box {
+        width: 100%;
+    }
 }
 
 @media (max-width: 760px) {
@@ -419,6 +469,14 @@ const announcements = [
 
     .leave-heading {
         font-size: 1.45rem;
+    }
+
+    .calendar-box {
+        padding: 0.55rem;
+    }
+
+    .calendar-inline :deep(.vc-container) {
+        font-size: 0.9rem;
     }
 }
 </style>
