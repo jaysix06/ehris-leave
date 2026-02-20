@@ -7,7 +7,7 @@ const { state } = useSidebar();
 
 <template>
     <div
-        class="flex aspect-auto size-50 items-center justify-center rounded-md "
+        class="flex aspect-auto size-auto items-center justify-center rounded-md "
         v-if="state==='expanded'"
     >
         <AppLogoIcon class="size-auto fill-current text-white dark:text-black" />
@@ -16,10 +16,5 @@ const { state } = useSidebar();
         v-if="state==='collapsed'"
     >
         <AppLogoIcon class="size-auto fill-current text-white dark:text-black" />
-    </div>
-    <div class="ml-1 grid flex-1 text-left text-sm">
-        <span class="mb-0.5 truncate leading-tight font-semibold"
-            ></span
-        >
     </div>
 </template>
