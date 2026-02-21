@@ -28,7 +28,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 const today = new Date();
 
-const leaveRange = ref<{ start: Date | null; end: Date | null }>({
+const leaveRange = ref<{ start: Date; end: Date }>({
     start: today,
     end: today,
 });
