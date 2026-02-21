@@ -61,6 +61,21 @@ const noOfDays = computed(() => {
     }
     return differenceInDays(leaveRange.value.end, leaveRange.value.start) + 1;
 });
+
+const selectedLeaveType = ref<string>('- Select Leave Type -');
+
+const leaveTypeOptions: { label: string; value: string }[] = [
+    { label: '- Select Leave Type -', value: '- Select Leave Type -' },
+    { label: 'Sick Leave', value: 'Sick Leave' },
+    { label: 'Vacation Leave', value: 'Vacation Leave' },
+    { label: 'Maternity Leave', value: 'Maternity Leave' },
+    { label: 'CTO', value: 'CTO' },
+    { label: 'Paternity Leave', value: 'Paternity Leave' },
+    { label: 'Force Leave', value: 'Force Leave' },
+    { label: 'Others', value: 'Others' },
+];
+
+const picked = ref<string>('');
 </script>
 
 <template>
@@ -102,15 +117,10 @@ const noOfDays = computed(() => {
                         <div class="left-form">
                             <label>
                                 Leave Type
-                                <select class="border-5 border-primary">
-                                    <option selected>- Select Leave Type -</option>
-                                    <option>Sick Leave</option>
-                                    <option>Vacation Leave</option>
-                                    <option>Maternity Leave</option>
-                                    <option>CTO</option>
-                                    <option>Paternity Leave</option>
-                                    <option>Force Leave</option>
-                                    <option>Others</option>
+                                <select v-model="selectedLeaveType" class="border-5 border-primary">
+                                    <option v-for="option in leaveTypeOptions" :key="option.value" :value="option.value">
+                                        {{ option.label }}
+                                    </option>
                                 </select>
                             </label>
                             <label>
@@ -143,9 +153,46 @@ const noOfDays = computed(() => {
                                 </label>
                             </div>
 
+                            <label v-if="selectedLeaveType === 'Sick Leave'">
+                                Reason for Sick Leave
+                                <div class="flex flex-wrap gap-12 mt-2">
+                                    <label class="radio-option inline-flex  gap-2 cursor-pointer">
+                                        <input type="radio" v-model="picked" name="choice" value="a" />
+                                        In Hospital
+                                    </label>
+                                    <label class="radio-option inline-flex  gap-2 cursor-pointer">
+                                        <input type="radio" v-model="picked" name="choice" value="b" />
+                                        Outpatient
+                                    </label>
+                                </div>
+                                <textarea placeholder="Specify..."></textarea>
+                            </label>
+                            <label v-else-if="selectedLeaveType === 'Vacation Leave'">
+                                Reason for Vacation Leave
+                                <div class="flex flex-wrap gap-12 mt-2">
+                                    <label class="radio-option inline-flex  gap-2 cursor-pointer">
+                                        <input type="radio" v-model="picked" name="choice" value="a" />
+                                        Within the Philippines
+                                    </label>
+                                    <label class="radio-option inline-flex  gap-2 cursor-pointer">
+                                        <input type="radio" v-model="picked" name="choice" value="b" />
+                                        Abroad
+                                    </label>
+                                </div>
+                                <textarea placeholder="Specify..."></textarea>
+                            </label>
                             <label>
-                                Reason for leave
-                                <textarea placeholder="Type your reason"></textarea>
+                                Commutation
+                                <div class="flex flex-wrap gap-12 mt-2">
+                                    <label class="radio-option inline-flex  gap-2 cursor-pointer">
+                                        <input type="radio" v-model="picked" name="choice" value="a" />
+                                        Requested
+                                    </label>
+                                    <label class="radio-option inline-flex  gap-2 cursor-pointer">
+                                        <input type="radio" v-model="picked" name="choice" value="b" />
+                                        Not Requested
+                                    </label>
+                                </div>
                             </label>
                         </div>
 
@@ -172,13 +219,25 @@ const noOfDays = computed(() => {
                 </article>
 
                 <aside class="ehris-card announcement-card">
-                    <h3>Announcements</h3>
-                    <ul>
-                        <li v-for="(item, index) in announcements" :key="index">
-                            <p>{{ item }}</p>
-                            <span>19/05/2023</span>
-                        </li>
-                    </ul>
+                    <h3>Details</h3>
+                    <label>
+                        Office/School Name
+                        <select>
+                            <option selected>- Select Office/School Name -</option>
+                        </select>
+                    </label>
+                    <label>
+                        Monthly Salary <span class="text-red-500 text-xs">(SG | Steps | Amount)</span>
+                        <select>
+                            <option selected>- Select Office/School Name -</option>
+                        </select>
+                    </label>
+                    <label>
+                        Position
+                        <select>
+                            <option selected>- Select Office/School Name -</option>
+                        </select>
+                    </label>
                 </aside>
             </section>
         </div>
@@ -335,6 +394,13 @@ const noOfDays = computed(() => {
     gap: 0.4rem;
     color: hsl(var(--muted-foreground));
     font-size: 0.84rem;
+}
+
+.left-form label.radio-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
 }
 
 .left-form select,

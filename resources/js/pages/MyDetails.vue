@@ -49,6 +49,7 @@ const education = [
         gpa: 'GPA (1.43)',
         period: '2022 - 2026',
     },
+    
 ];
 
 const family = [
@@ -88,7 +89,7 @@ const family = [
                 <div class="ehris-profile-grid">
                     <div class="ehris-profile-main">
                         <div class="ehris-avatar ehris-avatar-placeholder" aria-label="Reagan Jade Balansag">
-                            <img src="/20856.png" alt="Reagan Jade Balansag">
+                            <img src="/20856.jpg" class="ehris-avatar" alt="Reagan Jade Balansag">
                         </div>
 
                         <div>   
