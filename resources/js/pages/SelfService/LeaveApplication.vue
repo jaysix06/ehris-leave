@@ -1,16 +1,16 @@
 <script setup lang="ts">
-import { Head } from '@inertiajs/vue3';
+import { Head, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import { DatePicker } from 'v-calendar';
 import {
-    Bell,
-    CalendarDays,
     CheckCircle2,
+    ImagePlus,
     SendHorizontal,
+    X,
 } from 'lucide-vue-next';
 import AppLayout from '@/layouts/AppLayout.vue';
 import selfServiceRoutes from '@/routes/self-service';
-import { type BreadcrumbItem } from '@/types';
+import { type BreadcrumbItem, type User } from '@/types';
 import { differenceInDays } from 'date-fns';
 
 const pageTitle = 'Leave Application';
@@ -24,15 +24,6 @@ const breadcrumbs: BreadcrumbItem[] = [
         title: pageTitle,
         href: selfServiceRoutes.leaveApplication().url,
     },
-];
-
-const announcements = [
-    'Please submit leave applications at least 5 working days in advance.',
-    'Medical leave requests require supporting documents upon return.',
-    'Team leads should endorse requests before final submission.',
-    'Unused leave credits are evaluated according to yearly policy.',
-    'Keep emergency contact details updated before extended leave.',
-    'Use the comments field for handover notes and critical tasks.',
 ];
 
 const today = new Date();
@@ -76,6 +67,54 @@ const leaveTypeOptions: { label: string; value: string }[] = [
 ];
 
 const picked = ref<string>('');
+const medicalCertification = ref<File | null>(null);
+const medicalFileInput = ref<HTMLInputElement | null>(null);
+const isMedicalDropActive = ref(false);
+
+const page = usePage();
+const authUser = computed(() => page.props.auth?.user as User | undefined);
+
+const pickUserValue = (keys: string[], fallback = 'Not available') => {
+    const user = authUser.value as Record<string, unknown> | undefined;
+    if (!user) return fallback;
+
+    for (const key of keys) {
+        const value = user[key];
+        if (typeof value === 'string' && value.trim()) {
+            return value.trim();
+        }
+    }
+    return fallback;
+};
+
+const employeeDetails = computed(() => ({
+    position: pickUserValue(['position', 'job_title', 'designation']),
+    officeSchool: pickUserValue(['office_school_name', 'office_name', 'school_name', 'office']),
+    salary: pickUserValue(['salary', 'monthly_salary', 'salary_grade']),
+}));
+
+const onMedicalCertificationChange = (event: Event) => {
+    const target = event.target as HTMLInputElement;
+    medicalCertification.value = target.files?.[0] ?? null;
+};
+
+const openMedicalFilePicker = () => {
+    medicalFileInput.value?.click();
+};
+
+const onMedicalDrop = (event: DragEvent) => {
+    event.preventDefault();
+    isMedicalDropActive.value = false;
+    const file = event.dataTransfer?.files?.[0] ?? null;
+    medicalCertification.value = file;
+};
+
+const clearMedicalCertification = () => {
+    medicalCertification.value = null;
+    if (medicalFileInput.value) {
+        medicalFileInput.value.value = '';
+    }
+};
 </script>
 
 <template>
@@ -206,37 +245,84 @@ const picked = ref<string>('');
                                 :masks="{ weekdays: 'WWW' }"
                                 class="calendar-inline"
                             />
+                            <div
+                                v-if="selectedLeaveType === 'Sick Leave' && noOfDays >= 7"
+                                class="medical-cert-panel"
+                            >
+                                <p class="upload-title">Medical Certification</p>
+
+                                <div
+                                    v-if="!medicalCertification"
+                                    class="medical-dropzone"
+                                    :class="{ 'is-active': isMedicalDropActive }"
+                                    @click="openMedicalFilePicker"
+                                    @dragover.prevent="isMedicalDropActive = true"
+                                    @dragleave.prevent="isMedicalDropActive = false"
+                                    @drop="onMedicalDrop"
+                                >
+                                    <div class="dropzone-icon-wrap">
+                                        <ImagePlus :size="30" />
+                                    </div>
+                                    <p class="dropzone-main">
+                                        Drag &amp; drop
+                                        <span>images, videos, or any file</span>
+                                    </p>
+                                    <p class="dropzone-sub">
+                                        or
+                                        <button type="button" class="browse-link" @click.stop="openMedicalFilePicker">
+                                            browse files
+                                        </button>
+                                        on your computer
+                                    </p>
+                                    <input
+                                        ref="medicalFileInput"
+                                        type="file"
+                                        accept=".pdf,.jpg,.jpeg,.png"
+                                        class="sr-only"
+                                        @change="onMedicalCertificationChange"
+                                    />
+                                </div>
+
+                                <div v-if="medicalCertification" class="medical-file-row">
+                                    <div class="file-meta">
+                                        <p class="file-name">{{ medicalCertification.name }}</p>
+                                        <p class="file-info">
+                                            {{ Math.max(1, Math.round(medicalCertification.size / 1024)) }} KB
+                                        </p>
+                                    </div>
+                                    <button type="button" class="remove-file-btn" @click="clearMedicalCertification">
+                                        <X :size="16" />
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
                     <div class="request-actions">
-                        <button class="draft-btn" type="button">Save as draft</button>
-                        <button class="send-btn" type="button">
-                            Send request
+                        <button class="cancel-btn" type="button">Cancel</button>
+                        <button class="apply-btn" type="button">
+                            Apply Leave
                             <SendHorizontal :size="14" />
                         </button>
                     </div>
                 </article>
 
-                <aside class="ehris-card announcement-card">
-                    <h3>Details</h3>
+                <aside class="ehris-card employee-details-card">
+                    <h3>Employee Details</h3>
                     <label>
                         Office/School Name
-                        <select>
-                            <option selected>- Select Office/School Name -</option>
-                        </select>
+                        <div class="info-readonly">{{ employeeDetails.officeSchool }}</div>
                     </label>
                     <label>
-                        Monthly Salary <span class="text-red-500 text-xs">(SG | Steps | Amount)</span>
-                        <select>
-                            <option selected>- Select Office/School Name -</option>
-                        </select>
+                        <div class="salary-label-row">
+                            <span>Monthly Salary</span>
+                            <span class="salary-note">(SG | Steps | Amount)</span>
+                        </div>
+                        <div class="info-readonly">{{ employeeDetails.salary }}</div>
                     </label>
                     <label>
                         Position
-                        <select>
-                            <option selected>- Select Office/School Name -</option>
-                        </select>
+                        <div class="info-readonly">{{ employeeDetails.position }}</div>
                     </label>
                 </aside>
             </section>
@@ -298,7 +384,7 @@ const picked = ref<string>('');
 
 .leave-highlight-card h3,
 .request-head h3,
-.announcement-card h3 {
+.employee-details-card h3 {
     margin: 0;
     color: hsl(var(--foreground));
     font-size: 1.4rem;
@@ -414,6 +500,124 @@ const picked = ref<string>('');
     padding: 0.65rem 0.75rem;
 }
 
+.medical-cert-panel {
+    display: grid;
+    gap: 0.55rem;
+    margin-top: 0.7rem;
+}
+
+.medical-cert-panel .upload-title {
+    margin: 0;
+    color: hsl(var(--foreground));
+    font-size: 0.84rem;
+    font-weight: 600;
+}
+
+.medical-dropzone {
+    border: 2px dashed hsl(var(--border));
+    border-radius: 1rem;
+    background: hsl(var(--muted) / 0.25);
+    padding: 1rem;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.medical-dropzone.is-active {
+    border-color: hsl(var(--primary));
+    background: hsl(var(--primary) / 0.08);
+}
+
+.dropzone-icon-wrap {
+    margin: 0 auto 0.45rem;
+    width: 42px;
+    height: 42px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: hsl(var(--primary) / 0.14);
+    color: hsl(var(--primary));
+}
+
+.dropzone-main {
+    margin: 0;
+    color: hsl(var(--foreground));
+    font-size: 0.95rem;
+    font-weight: 700;
+}
+
+.dropzone-main span {
+    color: hsl(var(--primary));
+}
+
+.dropzone-sub {
+    margin: 0.2rem 0 0;
+    color: hsl(var(--muted-foreground));
+    font-size: 0.78rem;
+}
+
+.browse-link {
+    border: 0;
+    background: transparent;
+    color: hsl(var(--primary));
+    padding: 0;
+    text-decoration: underline;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.medical-file-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 0.55rem;
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--card));
+    border-radius: 0.7rem;
+    padding: 0.5rem 0.6rem;
+}
+
+.file-meta .file-name {
+    margin: 0;
+    color: hsl(var(--foreground));
+    font-size: 0.8rem;
+    line-height: 1.2;
+    word-break: break-all;
+}
+
+.file-meta .file-info {
+    margin: 0.1rem 0 0;
+    color: hsl(var(--muted-foreground));
+    font-size: 0.68rem;
+}
+
+.remove-file-btn {
+    border: 0;
+    background: transparent;
+    color: hsl(var(--destructive));
+    width: 24px;
+    height: 24px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.upload-medical-btn {
+    justify-self: center;
+    border: 0;
+    border-radius: 999px;
+    padding: 0.45rem 1.45rem;
+    min-width: 112px;
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
 .date-readonly {
     width: 100%;
     text-align: left;
@@ -475,8 +679,8 @@ const picked = ref<string>('');
     margin-top: 0.9rem;
 }
 
-.draft-btn,
-.send-btn {
+.cancel-btn,
+.apply-btn {
     border-radius: 0.6rem;
     border: 1px solid hsl(var(--primary));
     padding: 0.48rem 0.85rem;
@@ -485,12 +689,12 @@ const picked = ref<string>('');
     cursor: pointer;
 }
 
-.draft-btn {
+.cancel-btn {
     background: hsl(var(--card));
     color: hsl(var(--primary));
 }
 
-.send-btn {
+.apply-btn {
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
@@ -498,26 +702,46 @@ const picked = ref<string>('');
     color: hsl(var(--primary-foreground));
 }
 
-.announcement-card ul {
-    margin: 0.6rem 0 0;
-    padding-left: 1rem;
+.employee-details-card {
     display: grid;
-    gap: 0.72rem;
+    gap: 0.7rem;
+    align-content: start;
+    align-self: start;
+    height: fit-content;
 }
 
-.announcement-card li p {
-    margin: 0;
-    color: hsl(var(--foreground));
-    font-size: 0.8rem;
-    line-height: 1.4;
-}
-
-.announcement-card li span {
-    display: block;
-    margin-top: 0.2rem;
-    text-align: right;
+.employee-details-card label {
+    display: grid;
+    gap: 0.38rem;
     color: hsl(var(--muted-foreground));
-    font-size: 0.68rem;
+    font-size: 0.84rem;
+}
+
+.employee-details-card .salary-note {
+    color: hsl(var(--destructive)) !important;
+    font-size: 0.72rem;
+    font-weight: 600;
+    line-height: 1;
+}
+
+.employee-details-card .salary-label-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    flex-wrap: nowrap;
+    white-space: nowrap;
+}
+
+.employee-details-card .info-readonly {
+    border-radius: 0.7rem;
+    border: 1px solid hsl(var(--input));
+    background: hsl(var(--card));
+    color: hsl(var(--foreground));
+    font-size: 0.92rem;
+    padding: 0.65rem 0.75rem;
+    min-height: 42px;
+    display: flex;
+    align-items: center;
 }
 
 @media (max-width: 1160px) {
