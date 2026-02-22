@@ -851,6 +851,12 @@ CREATE TABLE `tbl_emp_official_info` (
 -- ----------------------------
 -- Records of tbl_emp_official_info
 -- ----------------------------
+INSERT INTO `tbl_emp_official_info` (`hrid`, `employee_id`, `firstname`, `middlename`, `lastname`, `mobile_number`, `role`, `email`, `office`, `station_code`, `job_title`, `salary_grade`, `salary_actual`, `step`, `employ_status`, `date_of_joining`) VALUES
+(10001, 20001, 'Juan', 'Torres', 'Santos', '09171234567', 'Employee', 'juan.santos@deped.gov.ph', 'SDO-ICT Services (ICT)', '100104', 'Information Technology Officer I', 19, 42099, 1, 'Permanent', '2024-06-10'),
+(10002, 20002, 'Maria', 'Cabrera', 'Reyes', '09182345678', 'Employee', 'maria.reyes@deped.gov.ph', 'SDO-Human Resource Management Office (HRMO)', '100107', 'Administrative Officer II', 11, 20698, 3, 'Permanent', '2023-09-18'),
+(10003, 20003, 'Carlo', 'Mendoza', 'Dizon', '09193456789', 'Employee', 'carlo.dizon@deped.gov.ph', 'Ozamiz City Central School', '128164', 'Teacher I', 11, 20179, 1, 'Permanent', '2022-08-01'),
+(10004, 20004, 'Angelica', 'May', 'Villanueva', '09204567890', 'Employee', 'angelica.villanueva@deped.gov.ph', 'SGOD-School Health & Nutrition (SHN)', '100303', 'Nurse II', 15, 29010, 1, 'Permanent', '2021-01-15'),
+(10005, 20005, 'Mark', 'Santos', 'Bacolod', '09215678901', 'Employee', 'mark.bacolod@deped.gov.ph', 'Ozamiz City National High School', '304167', 'School Principal I', 19, 42730, 2, 'Permanent', '2020-05-20');
 
 -- ----------------------------
 -- Table structure for `tbl_emp_personal_info`
@@ -2714,6 +2720,12 @@ CREATE TABLE `tbl_user` (
 -- ----------------------------
 -- Records of tbl_user
 -- ----------------------------
+INSERT INTO `tbl_user` (`hrId`, `email`, `password`, `lastname`, `firstname`, `middlename`, `extname`, `avatar`, `job_title`, `role`, `active`, `date_created`, `fullname`, `department_id`) VALUES
+(10001, 'juan.santos@deped.gov.ph', '1234', 'Santos', 'Juan', 'Torres', NULL, 'avatar-default.jpg', 'Information Technology Officer I', 'Employee', 1, '2026-02-22', 'Juan Torres Santos', 100104),
+(10002, 'maria.reyes@deped.gov.ph', '1234', 'Reyes', 'Maria', 'Cabrera', NULL, 'avatar-default.jpg', 'Administrative Officer II', 'Employee', 1, '2026-02-22', 'Maria Cabrera Reyes', 100107),
+(10003, 'carlo.dizon@deped.gov.ph', '1234', 'Dizon', 'Carlo', 'Mendoza', NULL, 'avatar-default.jpg', 'Teacher I', 'Employee', 1, '2026-02-22', 'Carlo Mendoza Dizon', 128164),
+(10004, 'angelica.villanueva@deped.gov.ph', '1234', 'Villanueva', 'Angelica', 'May', NULL, 'avatar-default.jpg', 'Nurse II', 'Employee', 1, '2026-02-22', 'Angelica May Villanueva', 100303),
+(10005, 'mark.bacolod@deped.gov.ph', '1234', 'Bacolod', 'Mark', 'Santos', NULL, 'avatar-default.jpg', 'School Principal I', 'Employee', 1, '2026-02-22', 'Mark Santos Bacolod', 304167);
 
 -- ----------------------------
 -- Table structure for `user`

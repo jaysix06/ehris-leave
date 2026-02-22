@@ -7,7 +7,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
-import AuthBase from '@/layouts/AuthLayout.vue';
 import { register } from '@/routes';
 import { store } from '@/routes/login';
 import { request } from '@/routes/password';
@@ -20,26 +19,42 @@ defineProps<{
 </script>
 
 <template>
-    <AuthBase
-        title="Log in to your account"
-        description="Enter your email and password below to log in"
-    >
-        <Head title="Log in" />
+    <Head title="Log in" />
 
+    <div class="flex min-h-svh items-center justify-center bg-background p-6">
         <div
-            v-if="status"
-            class="mb-4 text-center text-sm font-medium text-green-600"
+            class="w-full max-w-md rounded-2xl border bg-card p-6 shadow-sm sm:p-8"
         >
-            {{ status }}
-        </div>
+            <div class="mb-6 overflow-hidden rounded-xl">
+                <img
+                    src="/dous.png"
+                    alt="DepEd Ozamiz Unit School Division"
+                    class="h-36 w-full object-cover object-center"
+                />
+            </div>
 
-        <Form
-            v-bind="store.form()"
-            :reset-on-success="['password']"
-            v-slot="{ errors, processing }"
-            class="flex flex-col gap-6"
-        >
-            <div class="grid gap-6">
+            <div class="mb-6 text-center">
+                <h1 class="text-2xl font-semibold text-foreground">
+                    Log in to your account
+                </h1>
+                <p class="mt-2 text-sm text-muted-foreground">
+                    Enter your email and password to continue.
+                </p>
+            </div>
+
+            <div
+                v-if="status"
+                class="mb-4 rounded-md border border-emerald-600/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300"
+            >
+                {{ status }}
+            </div>
+
+            <Form
+                v-bind="store.form()"
+                :reset-on-success="['password']"
+                v-slot="{ errors, processing }"
+                class="flex flex-col gap-5"
+            >
                 <div class="grid gap-2">
                     <Label for="email">Email address</Label>
                     <Input
@@ -79,16 +94,14 @@ defineProps<{
                     <InputError :message="errors.password" />
                 </div>
 
-                <div class="flex items-center justify-between">
-                    <Label for="remember" class="flex items-center space-x-3">
-                        <Checkbox id="remember" name="remember" :tabindex="3" />
-                        <span>Remember me</span>
-                    </Label>
-                </div>
+                <Label for="remember" class="flex items-center gap-3 text-sm">
+                    <Checkbox id="remember" name="remember" :tabindex="3" />
+                    <span>Remember me</span>
+                </Label>
 
                 <Button
                     type="submit"
-                    class="mt-4 w-full"
+                    class="mt-2 w-full"
                     :tabindex="4"
                     :disabled="processing"
                     data-test="login-button"
@@ -96,15 +109,17 @@ defineProps<{
                     <Spinner v-if="processing" />
                     Log in
                 </Button>
-            </div>
 
-            <div
-                class="text-center text-sm text-muted-foreground"
-                v-if="canRegister"
-            >
-                Don't have an account?
-                <TextLink :href="register()" :tabindex="5">Sign up</TextLink>
-            </div>
-        </Form>
-    </AuthBase>
+                <p
+                    v-if="canRegister"
+                    class="pt-2 text-center text-sm text-muted-foreground"
+                >
+                    Don't have an account?
+                    <TextLink :href="register()" :tabindex="5" class="ml-1">
+                        Sign up
+                    </TextLink>
+                </p>
+            </Form>
+        </div>
+    </div>
 </template>

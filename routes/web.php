@@ -1,6 +1,9 @@
 <?php
 
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
 
@@ -97,8 +100,31 @@ Route::get('request-status/my-leave', function () {
     return Inertia::render('RequestStatus/MyLeave');
 })->middleware(['auth', 'verified'])->name('request-status.my-leave');
 
-Route::get('my-details', function () {
-    return Inertia::render('MyDetails');
+Route::get('my-details', function (Request $request) {
+    $authUser = $request->user();
+    $dbProfile = null;
+
+    if ($authUser && Schema::hasTable('tbl_user')) {
+        $dbProfile = DB::table('tbl_user')
+            ->select([
+                'hrId',
+                'email',
+                'lastname',
+                'firstname',
+                'middlename',
+                'extname',
+                'avatar',
+                'job_title',
+                'role',
+                'fullname',
+            ])
+            ->where('email', $authUser->email)
+            ->first();
+    }
+
+    return Inertia::render('MyDetails', [
+        'profile' => $dbProfile,
+    ]);
 })->middleware(['auth', 'verified'])->name('my-details');
 
 Route::get('utilities', function () {
