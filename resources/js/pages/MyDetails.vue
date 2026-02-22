@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head } from '@inertiajs/vue3';
+import { Head, usePage } from '@inertiajs/vue3';
 import {
     Calendar,
     GraduationCap,
@@ -9,6 +9,7 @@ import {
     Phone,
     User,
 } from 'lucide-vue-next';
+import { computed } from 'vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { BreadcrumbItem } from '@/types';
 
@@ -33,6 +34,73 @@ const tabs = [
     'Leave history',
     'Attendance',
 ];
+
+type Profile = {
+    hrId?: number | null;
+    email?: string | null;
+    lastname?: string | null;
+    firstname?: string | null;
+    middlename?: string | null;
+    extname?: string | null;
+    avatar?: string | null;
+    job_title?: string | null;
+    role?: string | null;
+    fullname?: string | null;
+};
+
+const props = defineProps<{
+    profile?: Profile | null;
+}>();
+
+const page = usePage();
+const authUser = computed(() => page.props.auth.user);
+
+const employeeName = computed(() => {
+    if (props.profile?.fullname) {
+        return props.profile.fullname;
+    }
+
+    const authName = authUser.value?.name;
+    return typeof authName === 'string' && authName.length > 0
+        ? authName
+        : 'N/A';
+});
+
+const employeeId = computed(() => {
+    if (props.profile?.hrId !== null && props.profile?.hrId !== undefined) {
+        return String(props.profile.hrId);
+    }
+
+    const authId = authUser.value?.id;
+    return authId !== null && authId !== undefined ? String(authId) : 'N/A';
+});
+
+const employeeEmail = computed(() => {
+    if (props.profile?.email) {
+        return props.profile.email;
+    }
+
+    const authEmail = authUser.value?.email;
+    return typeof authEmail === 'string' && authEmail.length > 0
+        ? authEmail
+        : 'N/A';
+});
+
+const employeeJobTitle = computed(() => props.profile?.job_title || 'N/A');
+
+const avatarSrc = computed(() => {
+    const avatar = props.profile?.avatar || authUser.value?.avatar;
+
+    if (typeof avatar !== 'string' || avatar.length === 0) {
+        return null;
+    }
+
+    if (avatar.startsWith('http://') || avatar.startsWith('https://') || avatar.startsWith('/')) {
+        return avatar;
+    }
+
+    return `/${avatar}`;
+});
 
 const infoRows = [
     { label: 'Place of birth', value: 'Calamba, Misamis Occidental' },
@@ -88,22 +156,22 @@ const family = [
 
                 <div class="ehris-profile-grid">
                     <div class="ehris-profile-main">
-                        <div class="ehris-avatar ehris-avatar-placeholder" aria-label="Reagan Jade Balansag">
-                            <img src="/20856.jpg" class="ehris-avatar" alt="Reagan Jade Balansag">
+                        <div class="ehris-avatar ehris-avatar-placeholder" :aria-label="employeeName">
+                            <img v-if="avatarSrc" :src="avatarSrc" class="ehris-avatar" :alt="employeeName">
                         </div>
 
                         <div>   
-                            <p class="ehris-name">Reagan Jade Balansag</p>
-                            <p class="ehris-muted">2202054</p>
+                            <p class="ehris-name">{{ employeeName }}</p>
+                            <p class="ehris-muted">{{ employeeId }}</p>
 
                             <ul class="ehris-meta-list">
                                 <li>
                                     <User class="size-4" />
-                                    <span>Male</span>
+                                    <span>{{ employeeJobTitle }}</span>
                                 </li>
                                 <li>
                                     <Mail class="size-4" />
-                                    <span>reaganjade.balansag@deped.gov.ph</span>
+                                    <span>{{ employeeEmail }}</span>
                                 </li>
                                 <li>
                                     <Phone class="size-4" />
