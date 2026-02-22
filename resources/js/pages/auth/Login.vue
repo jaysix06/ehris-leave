@@ -38,7 +38,7 @@ defineProps<{
                     Log in to your account
                 </h1>
                 <p class="mt-2 text-sm text-muted-foreground">
-                    Enter your email and password below to continue.
+                    Enter your email and password to continue.
                 </p>
             </div>
 
