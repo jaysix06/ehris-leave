@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head, usePage } from '@inertiajs/vue3';
+<<<<<<< HEAD
 import {
     Calendar,
     ChevronDown,
@@ -12,9 +13,21 @@ import {
     Phone,
     User,
 } from 'lucide-vue-next';
+=======
+import { User } from 'lucide-vue-next';
+>>>>>>> 16990dcf89dad8a8ee64e8b2539c2d4bc4dcf398
 import { computed, ref, watch } from 'vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { BreadcrumbItem } from '@/types';
+import Affiliation from '@/pages/MyDetails/Affiliation.vue';
+import EducationBackground from '@/pages/MyDetails/EducationBackground.vue';
+import Eligibility from '@/pages/MyDetails/Eligibility.vue';
+import FamilyBackground from '@/pages/MyDetails/FamilyBackground.vue';
+import OfficialInfo from '@/pages/MyDetails/OfficialInfo.vue';
+import Others from '@/pages/MyDetails/Others.vue';
+import PersonalInfo from '@/pages/MyDetails/PersonalInfo.vue';
+import Training from '@/pages/MyDetails/Training.vue';
+import WorkExperience from '@/pages/MyDetails/WorkExperience.vue';
 
 const pageTitle = 'Employee';
 
@@ -27,7 +40,6 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
-// Tabs matching the My Details UI (two rows)
 const tabs = [
     'Official Info',
     'Personal Info',
@@ -39,6 +51,18 @@ const tabs = [
     'Training',
     'Others',
 ];
+
+const sectionComponents = [
+    OfficialInfo,
+    PersonalInfo,
+    FamilyBackground,
+    EducationBackground,
+    Eligibility,
+    WorkExperience,
+    Affiliation,
+    Training,
+    Others,
+] as const;
 
 const activeTab = ref(0);
 const avatarImageError = ref(false);
@@ -89,6 +113,7 @@ const props = defineProps<{
     researches?: Record<string, unknown>[];
     expertise?: Record<string, unknown>[];
     affiliation?: Record<string, unknown>[];
+    familyUpdateUrl?: string;
 }>();
 
 const page = usePage();
@@ -128,14 +153,9 @@ const employeeEmail = computed(() => {
     return typeof authEmail === 'string' && authEmail.length > 0 ? authEmail : 'N/A';
 });
 
-const employeeJobTitle = computed(() => {
-    return (props.profile?.job_title ?? props.officialInfo?.job_title) as string || 'N/A';
-});
-
 const avatarSrc = computed(() => {
     const avatar = props.profile?.avatar || authUser.value?.avatar;
     if (typeof avatar !== 'string' || avatar.length === 0) return null;
-    // Don't show default avatar placeholder images
     if (avatar.includes('avatar-default') || avatar.includes('default')) return null;
     if (avatar.startsWith('http://') || avatar.startsWith('https://') || avatar.startsWith('/')) {
         return avatar;
@@ -143,11 +163,9 @@ const avatarSrc = computed(() => {
     return `/${avatar}`;
 });
 
-// Reset avatar error when avatarSrc changes
 watch(avatarSrc, () => {
     avatarImageError.value = false;
 });
-
 
 const employeeNo = computed(() => {
     const o = props.officialInfo;
@@ -163,38 +181,37 @@ const contactNo = computed(() => {
     return 'N/A';
 });
 
-function val(v: unknown): string {
-    if (v == null || v === '') return '—';
-    return String(v);
-}
-
-// Personal info rows from DB (all fields that have values)
-const personalInfoRows = computed(() => {
-    const p = props.personalInfo;
-    if (!p) return [];
-    const rows = [
-        { label: 'Place of birth', value: p.pob },
-        { label: 'Birth date', value: p.dob },
-        { label: 'Blood type', value: p.blood_type },
-        { label: 'Marital status', value: p.civil_stat },
-        { label: 'Citizenship', value: p.citizenship },
-        { label: 'Gender', value: p.gender },
-        { label: 'Height', value: p.height },
-        { label: 'Weight', value: p.weight },
-        { label: 'PRC no.', value: p.prc_no },
-        { label: 'TIN', value: p.tin },
-        { label: 'SSS', value: p.sss },
-        { label: 'GSIS', value: p.gsis },
-        { label: 'PhilHealth', value: p.philhealth },
-        { label: 'Pag-IBIG', value: p.pag_ibig },
-    ];
-    return rows.filter((r) => r.value != null && String(r.value).trim() !== '');
-});
-
-// Family display: relationship + full name
-function familyName(item: Record<string, unknown>): string {
-    const parts = [item.firstname, item.middlename, item.lastname, item.extension].filter(Boolean);
-    return parts.map(String).join(' ').trim() || '—';
+function sectionProps(index: number): Record<string, unknown> {
+    switch (index) {
+        case 0:
+            return { officialInfo: props.officialInfo };
+        case 1:
+            return { personalInfo: props.personalInfo };
+        case 2:
+            return { family: props.family, familyUpdateUrl: props.familyUpdateUrl };
+        case 3:
+            return { education: props.education };
+        case 4:
+            return { eligibility: props.eligibility };
+        case 5:
+            return { workExperience: props.workExperience };
+        case 6:
+            return { affiliation: props.affiliation };
+        case 7:
+            return { training: props.training };
+        case 8:
+            return {
+                serviceRecord: props.serviceRecord,
+                leaveHistory: props.leaveHistory,
+                documents: props.documents,
+                awards: props.awards,
+                performance: props.performance,
+                researches: props.researches,
+                expertise: props.expertise,
+            };
+        default:
+            return {};
+    }
 }
 </script>
 
@@ -216,7 +233,6 @@ function familyName(item: Record<string, unknown>): string {
                 </button>
             </section>
 
-            <!-- My Details summary: always visible, does not change when switching tabs -->
             <section class="ehris-card ehris-mydetails-summary" aria-label="My Details">
                 <h2 class="ehris-mydetails-summary-title">My Details</h2>
                 <div class="ehris-mydetails-summary-inner">
@@ -262,6 +278,7 @@ function familyName(item: Record<string, unknown>): string {
 
             <h2 class="ehris-page-title">{{ tabs[activeTab] }}</h2>
 
+<<<<<<< HEAD
             <!-- OFFICIAL INFO: three-column layout + Grade & Subject Taught button -->
             <template v-if="activeTab === 0">
                 <section class="ehris-card">
@@ -910,6 +927,12 @@ function familyName(item: Record<string, unknown>): string {
                 </div>
             </template>
 
+=======
+            <component
+                :is="sectionComponents[activeTab]"
+                v-bind="sectionProps(activeTab)"
+            />
+>>>>>>> 16990dcf89dad8a8ee64e8b2539c2d4bc4dcf398
         </div>
     </AppLayout>
 </template>
@@ -932,15 +955,6 @@ function familyName(item: Record<string, unknown>): string {
     height: 100%;
     object-fit: cover;
     border-radius: 0.5rem;
-}
-
-.ehris-gov-id-header {
-    margin-top: 2rem;
-    margin-bottom: 1rem;
-    color: #dc2626;
-    font-size: 1rem;
-    font-weight: 600;
-    text-transform: uppercase;
 }
 
 .ehris-avatar-default-wrapper {
