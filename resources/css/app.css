@@ -368,4 +368,78 @@
     .ehris-table td {
         @apply border-t border-border px-4 py-3 text-foreground;
     }
+
+    /* My Details summary: fixed block below tabs, does not change with tab */
+    .ehris-mydetails-summary {
+        @apply mb-6;
+    }
+
+    .ehris-mydetails-summary-title {
+        @apply mb-4 text-xl font-bold text-foreground;
+    }
+
+    .ehris-mydetails-summary-inner {
+        @apply flex flex-col gap-6 sm:flex-row sm:items-start;
+    }
+
+    .ehris-mydetails-avatar {
+        @apply h-28 w-28 shrink-0 overflow-hidden rounded-lg border border-border sm:h-32 sm:w-32;
+    }
+
+    .ehris-mydetails-avatar.ehris-avatar-placeholder {
+        @apply flex items-center justify-center bg-muted;
+    }
+
+    .ehris-mydetails-avatar .ehris-avatar {
+        @apply h-full w-full rounded-none object-cover;
+    }
+
+    .ehris-mydetails-fields {
+        @apply grid min-w-0 flex-1 gap-3;
+    }
+
+    .ehris-mydetails-fields .ehris-details-row {
+        @apply grid-cols-[130px_1fr] sm:grid-cols-[140px_1fr];
+    }
+
+    .ehris-mydetails-fields .ehris-details-row dd {
+        @apply rounded-md border border-border bg-muted/50 px-3 py-2 text-foreground;
+    }
+
+    .ehris-email-link {
+        @apply text-primary underline decoration-primary/50 underline-offset-2 transition hover:decoration-primary;
+    }
+
+    /* Official Info: header with Grade & Subject Taught button + three columns */
+    .ehris-official-info-header {
+        @apply mb-5 flex flex-wrap items-center justify-between gap-3;
+    }
+
+    .ehris-official-info-header h3 {
+        @apply text-2xl font-bold text-foreground;
+    }
+
+    .ehris-btn-grade-subject {
+        @apply inline-flex items-center gap-2 rounded-lg bg-blue-500 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2;
+    }
+
+    .ehris-official-info-grid {
+        @apply grid gap-6 sm:grid-cols-2 lg:grid-cols-3;
+    }
+
+    .ehris-official-info-col {
+        @apply grid gap-3;
+    }
+
+    .ehris-official-info-col .ehris-details-row {
+        @apply grid-cols-[1fr_1.2fr] gap-3 text-sm min-[480px]:grid-cols-[140px_1fr];
+    }
+
+    .ehris-official-info-col .ehris-details-row dt {
+        @apply font-semibold text-foreground;
+    }
+
+    .ehris-official-info-col .ehris-details-row dd {
+        @apply rounded-md border border-border bg-muted/50 px-3 py-2 text-foreground;
+    }
 }
