@@ -59,3 +59,6 @@ git push origin main
 - See current branch: `git branch`
 - See status: `git status`
 - Switch branch: `git checkout branch-name`
+
+
+php artisan users:hash-legacy-passwords
