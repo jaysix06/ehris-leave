@@ -10,7 +10,7 @@ import {
     Phone,
     User,
 } from 'lucide-vue-next';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { BreadcrumbItem } from '@/types';
 
@@ -29,23 +29,17 @@ const breadcrumbs: BreadcrumbItem[] = [
 const tabs = [
     'Official Info',
     'Personal Info',
-    'Contact Info',
-    'Family',
-    'Education',
-    'Work Experience',
+    'Family Background',
+    'Education Background',
     'Eligibility',
-    'Service Record',
-    'Leave History',
-    'Documents',
+    'Work Experience',
+    'Affiliation',
     'Training',
-    'Awards',
-    'Performance',
-    'Researches',
-    'Expertise',
-    'Affilation',
+    'Others',
 ];
 
 const activeTab = ref(0);
+const avatarImageError = ref(false);
 
 type Profile = {
     hrId?: number | null;
@@ -124,11 +118,19 @@ const employeeJobTitle = computed(() => {
 const avatarSrc = computed(() => {
     const avatar = props.profile?.avatar || authUser.value?.avatar;
     if (typeof avatar !== 'string' || avatar.length === 0) return null;
+    // Don't show default avatar placeholder images
+    if (avatar.includes('avatar-default') || avatar.includes('default')) return null;
     if (avatar.startsWith('http://') || avatar.startsWith('https://') || avatar.startsWith('/')) {
         return avatar;
     }
     return `/${avatar}`;
 });
+
+// Reset avatar error when avatarSrc changes
+watch(avatarSrc, () => {
+    avatarImageError.value = false;
+});
+
 
 const employeeNo = computed(() => {
     const o = props.officialInfo;
@@ -202,7 +204,10 @@ function familyName(item: Record<string, unknown>): string {
                 <h2 class="ehris-mydetails-summary-title">My Details</h2>
                 <div class="ehris-mydetails-summary-inner">
                     <div class="ehris-avatar ehris-avatar-placeholder ehris-mydetails-avatar" :aria-label="employeeName">
-                        <img v-if="avatarSrc" :src="avatarSrc" class="ehris-avatar" :alt="employeeName">
+                        <img v-if="avatarSrc && !avatarImageError" :src="avatarSrc" class="ehris-avatar" :alt="employeeName" @error="avatarImageError = true">
+                        <div v-if="!avatarSrc || avatarImageError" class="ehris-avatar-default-wrapper">
+                            <User class="ehris-avatar-default-icon" />
+                        </div>
                     </div>
                     <dl class="ehris-mydetails-fields">
                         <div class="ehris-details-row">
@@ -304,48 +309,45 @@ function familyName(item: Record<string, unknown>): string {
                             <Pencil class="size-4" />
                         </button>
                     </div>
-                    <dl class="ehris-details-grid" v-if="personalInfoRows.length">
-                        <div v-for="row in personalInfoRows" :key="row.label" class="ehris-details-row">
-                            <dt>{{ row.label }}</dt>
-                            <dd>{{ val(row.value) }}</dd>
-                        </div>
-                    </dl>
-                    <p v-else class="ehris-muted">No personal information on file.</p>
+                    <div v-if="personalInfo" class="ehris-official-info-grid">
+                        <dl class="ehris-official-info-col">
+                            <div class="ehris-details-row"><dt>Gender</dt><dd>{{ val(personalInfo.gender) }}</dd></div>
+                            <div class="ehris-details-row"><dt>Citizenship</dt><dd>{{ val(personalInfo.citizenship) }}</dd></div>
+                            <div class="ehris-details-row"><dt>Pls. Indicate Country</dt><dd>{{ val(personalInfo.country) }}</dd></div>
+                            <div class="ehris-details-row"><dt>Height (in Meters)</dt><dd>{{ val(personalInfo.height) }}</dd></div>
+                            <div class="ehris-details-row"><dt>Date of Birth</dt><dd>{{ val(personalInfo.dob) }}</dd></div>
+                        </dl>
+                        <dl class="ehris-official-info-col">
+                            <div class="ehris-details-row"><dt>Civil Status</dt><dd>{{ val(personalInfo.civil_stat) }}</dd></div>
+                            <div class="ehris-details-row"><dt>If Dual Citizenship</dt><dd>{{ val(personalInfo.dual_citizenship) }}</dd></div>
+                            <div class="ehris-details-row"><dt>Blood Type</dt><dd>{{ val(personalInfo.blood_type) }}</dd></div>
+                            <div class="ehris-details-row"><dt>Weight (in Kilograms)</dt><dd>{{ val(personalInfo.weight) }}</dd></div>
+                            <div class="ehris-details-row"><dt>Place of Birth</dt><dd>{{ val(personalInfo.pob) }}</dd></div>
+                        </dl>
+                    </div>
+                    <h4 class="ehris-gov-id-header">GOVERNMENT IDENTIFICATION</h4>
+                    <div v-if="personalInfo" class="ehris-official-info-grid">
+                        <dl class="ehris-official-info-col">
+                            <div class="ehris-details-row"><dt>PRC No.</dt><dd>{{ val(personalInfo.prc_no) }}</dd></div>
+                            <div class="ehris-details-row"><dt>TIN</dt><dd>{{ val(personalInfo.tin) }}</dd></div>
+                            <div class="ehris-details-row"><dt>GSIS BP No.</dt><dd>{{ val(personalInfo.gsis_bp) }}</dd></div>
+                            <div class="ehris-details-row"><dt>PAG-IBIG No.</dt><dd>{{ val(personalInfo.pag_ibig) }}</dd></div>
+                        </dl>
+                        <dl class="ehris-official-info-col">
+                            <div class="ehris-details-row"><dt>SSS No.</dt><dd>{{ val(personalInfo.sss) }}</dd></div>
+                            <div class="ehris-details-row"><dt>Philhealth No.</dt><dd>{{ val(personalInfo.philhealth) }}</dd></div>
+                            <div class="ehris-details-row"><dt>GSIS No.</dt><dd>{{ val(personalInfo.gsis) }}</dd></div>
+                        </dl>
+                    </div>
+                    <p v-if="!personalInfo" class="ehris-muted">No personal information on file.</p>
                 </section>
             </template>
 
-            <!-- CONTACT INFO -->
+            <!-- FAMILY BACKGROUND -->
             <template v-if="activeTab === 2">
                 <section class="ehris-card">
                     <div class="ehris-card-header">
-                        <h3>Contact information</h3>
-                        <button type="button" class="ehris-edit-btn" aria-label="Edit contact">
-                            <Pencil class="size-4" />
-                        </button>
-                    </div>
-                    <dl class="ehris-details-grid" v-if="contactInfo">
-                        <div class="ehris-details-row"><dt>Email</dt><dd>{{ val(contactInfo.email) }}</dd></div>
-                        <div class="ehris-details-row"><dt>Phone</dt><dd>{{ val(contactInfo.phone_num) }}</dd></div>
-                        <div class="ehris-details-row"><dt>Mobile</dt><dd>{{ val(contactInfo.mobile_num) }}</dd></div>
-                        <div class="ehris-details-row"><dt>Address</dt><dd>{{ [contactInfo.house_block_lotnum, contactInfo.street_add, contactInfo.subdivision_village].filter(Boolean).join(', ') || '—' }}</dd></div>
-                        <div class="ehris-details-row"><dt>Barangay / City / Province</dt><dd>{{ [contactInfo.barangay, contactInfo.city_municipality, contactInfo.province].filter(Boolean).join(' / ') || '—' }}</dd></div>
-                        <div class="ehris-details-row"><dt>Zip code</dt><dd>{{ val(contactInfo.zip_code) }}</dd></div>
-                    </dl>
-                    <h4 class="ehris-card-subtitle">Emergency contact</h4>
-                    <dl class="ehris-compact-grid" v-if="contactInfo">
-                        <div><dt>Name</dt><dd>{{ val(contactInfo.emergency_name) }}</dd></div>
-                        <div><dt>Phone</dt><dd>{{ val(contactInfo.emergency_num) }}</dd></div>
-                        <div><dt>Email</dt><dd>{{ val(contactInfo.emergency_email) }}</dd></div>
-                    </dl>
-                    <p v-if="!contactInfo" class="ehris-muted">No contact information on file.</p>
-                </section>
-            </template>
-
-            <!-- FAMILY -->
-            <template v-if="activeTab === 3">
-                <section class="ehris-card">
-                    <div class="ehris-card-header">
-                        <h3>Family</h3>
+                        <h3>Family Background</h3>
                         <button type="button" class="ehris-edit-btn" aria-label="Edit family">
                             <Pencil class="size-4" />
                         </button>
@@ -374,11 +376,11 @@ function familyName(item: Record<string, unknown>): string {
                 </section>
             </template>
 
-            <!-- EDUCATION -->
-            <template v-if="activeTab === 4">
+            <!-- EDUCATION BACKGROUND -->
+            <template v-if="activeTab === 3">
                 <section class="ehris-card">
                     <div class="ehris-card-header">
-                        <h3>Education</h3>
+                        <h3>Education Background</h3>
                         <button type="button" class="ehris-edit-btn" aria-label="Edit education">
                             <Pencil class="size-4" />
                         </button>
@@ -394,6 +396,41 @@ function familyName(item: Record<string, unknown>): string {
                         </li>
                     </ul>
                     <p v-else class="ehris-muted">No education records on file.</p>
+                </section>
+            </template>
+
+            <!-- ELIGIBILITY -->
+            <template v-if="activeTab === 4">
+                <section class="ehris-card">
+                    <div class="ehris-card-header">
+                        <h3>Eligibility (Civil service)</h3>
+                        <button type="button" class="ehris-edit-btn" aria-label="Edit eligibility">
+                            <Pencil class="size-4" />
+                        </button>
+                    </div>
+                    <div class="ehris-table-wrap" v-if="eligibility && eligibility.length">
+                        <table class="ehris-table">
+                            <thead>
+                                <tr>
+                                    <th>Title</th>
+                                    <th>Rating</th>
+                                    <th>Date of exam</th>
+                                    <th>Place</th>
+                                    <th>License no.</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="(item, i) in eligibility" :key="i">
+                                    <td>{{ val(item.title) }}</td>
+                                    <td>{{ val(item.rating) }}</td>
+                                    <td>{{ val(item.date_exam) }}</td>
+                                    <td>{{ val(item.place_exam) }}</td>
+                                    <td>{{ val(item.license_no) }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <p v-else class="ehris-muted">No eligibility records on file.</p>
                 </section>
             </template>
 
@@ -430,135 +467,26 @@ function familyName(item: Record<string, unknown>): string {
                 </section>
             </template>
 
-            <!-- ELIGIBILITY -->
+            <!-- AFFILIATION -->
             <template v-if="activeTab === 6">
                 <section class="ehris-card">
                     <div class="ehris-card-header">
-                        <h3>Eligibility (Civil service)</h3>
-                        <button type="button" class="ehris-edit-btn" aria-label="Edit eligibility">
+                        <h3>Affiliation</h3>
+                        <button type="button" class="ehris-edit-btn" aria-label="Edit affiliation">
                             <Pencil class="size-4" />
                         </button>
                     </div>
-                    <div class="ehris-table-wrap" v-if="eligibility && eligibility.length">
-                        <table class="ehris-table">
-                            <thead>
-                                <tr>
-                                    <th>Title</th>
-                                    <th>Rating</th>
-                                    <th>Date of exam</th>
-                                    <th>Place</th>
-                                    <th>License no.</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr v-for="(item, i) in eligibility" :key="i">
-                                    <td>{{ val(item.title) }}</td>
-                                    <td>{{ val(item.rating) }}</td>
-                                    <td>{{ val(item.date_exam) }}</td>
-                                    <td>{{ val(item.place_exam) }}</td>
-                                    <td>{{ val(item.license_no) }}</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                    <p v-else class="ehris-muted">No eligibility records on file.</p>
-                </section>
-            </template>
-
-            <!-- SERVICE RECORD -->
-            <template v-if="activeTab === 7">
-                <section class="ehris-card">
-                    <div class="ehris-card-header">
-                        <h3>Service record</h3>
-                        <button type="button" class="ehris-edit-btn" aria-label="Edit service record">
-                            <Pencil class="size-4" />
-                        </button>
-                    </div>
-                    <div class="ehris-table-wrap" v-if="serviceRecord && serviceRecord.length">
-                        <table class="ehris-table">
-                            <thead>
-                                <tr>
-                                    <th>From</th>
-                                    <th>To</th>
-                                    <th>Designation</th>
-                                    <th>Status</th>
-                                    <th>Place of assignment</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr v-for="(item, i) in serviceRecord" :key="i">
-                                    <td>{{ val(item.service_from) }}</td>
-                                    <td>{{ val(item.service_to) }}</td>
-                                    <td>{{ val(item.designation) }}</td>
-                                    <td>{{ val(item.status) }}</td>
-                                    <td>{{ val(item.place_of_assign) }}</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                    <p v-else class="ehris-muted">No service record on file.</p>
-                </section>
-            </template>
-
-            <!-- LEAVE HISTORY -->
-            <template v-if="activeTab === 8">
-                <section class="ehris-card">
-                    <div class="ehris-card-header">
-                        <h3>Leave history</h3>
-                        <button type="button" class="ehris-edit-btn" aria-label="Edit leave history">
-                            <Pencil class="size-4" />
-                        </button>
-                    </div>
-                    <div class="ehris-table-wrap" v-if="leaveHistory && leaveHistory.length">
-                        <table class="ehris-table">
-                            <thead>
-                                <tr>
-                                    <th>Credits from</th>
-                                    <th>Credits to</th>
-                                    <th>Type</th>
-                                    <th>No. of days</th>
-                                    <th>Balance</th>
-                                    <th>Particulars</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr v-for="(item, i) in leaveHistory" :key="i">
-                                    <td>{{ val(item.credits_from) }}</td>
-                                    <td>{{ val(item.credits_to) }}</td>
-                                    <td>{{ val(item.type) }}</td>
-                                    <td>{{ val(item.no_of_days) }}</td>
-                                    <td>{{ val(item.balance) }}</td>
-                                    <td>{{ val(item.particulars) }}</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                    <p v-else class="ehris-muted">No leave history on file.</p>
-                </section>
-            </template>
-
-            <!-- DOCUMENTS -->
-            <template v-if="activeTab === 9">
-                <section class="ehris-card">
-                    <div class="ehris-card-header">
-                        <h3>Documents</h3>
-                        <button type="button" class="ehris-edit-btn" aria-label="Edit documents">
-                            <Pencil class="size-4" />
-                        </button>
-                    </div>
-                    <ul class="ehris-stacked-list" v-if="documents && documents.length">
-                        <li v-for="(item, i) in documents" :key="i" class="ehris-doc-row">
-                            <FileText class="size-4" />
-                            <span>{{ val(item.title) }}</span>
-                            <span v-if="item.document" class="ehris-muted"> – {{ val(item.document) }}</span>
+                    <ul class="ehris-stacked-list" v-if="affiliation && affiliation.length">
+                        <li v-for="(item, i) in affiliation" :key="i">
+                            {{ val(item.affiliation) }}
                         </li>
                     </ul>
-                    <p v-else class="ehris-muted">No documents on file.</p>
+                    <p v-else class="ehris-muted">No affiliation on file.</p>
                 </section>
             </template>
 
             <!-- TRAINING -->
-            <template v-if="activeTab === 10">
+            <template v-if="activeTab === 7">
                 <section class="ehris-card">
                     <div class="ehris-card-header">
                         <h3>Training</h3>
@@ -590,8 +518,95 @@ function familyName(item: Record<string, unknown>): string {
                 </section>
             </template>
 
-            <!-- AWARDS -->
-            <template v-if="activeTab === 11">
+            <!-- OTHERS: Combined section for Service Record, Leave History, Documents, Awards, Performance, Researches, Expertise -->
+            <template v-if="activeTab === 8">
+                <!-- SERVICE RECORD -->
+                <section class="ehris-card">
+                    <div class="ehris-card-header">
+                        <h3>Service Record</h3>
+                        <button type="button" class="ehris-edit-btn" aria-label="Edit service record">
+                            <Pencil class="size-4" />
+                        </button>
+                    </div>
+                    <div class="ehris-table-wrap" v-if="serviceRecord && serviceRecord.length">
+                        <table class="ehris-table">
+                            <thead>
+                                <tr>
+                                    <th>From</th>
+                                    <th>To</th>
+                                    <th>Designation</th>
+                                    <th>Status</th>
+                                    <th>Place of assignment</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="(item, i) in serviceRecord" :key="i">
+                                    <td>{{ val(item.service_from) }}</td>
+                                    <td>{{ val(item.service_to) }}</td>
+                                    <td>{{ val(item.designation) }}</td>
+                                    <td>{{ val(item.status) }}</td>
+                                    <td>{{ val(item.place_of_assign) }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <p v-else class="ehris-muted">No service record on file.</p>
+                </section>
+
+                <!-- LEAVE HISTORY -->
+                <section class="ehris-card">
+                    <div class="ehris-card-header">
+                        <h3>Leave History</h3>
+                        <button type="button" class="ehris-edit-btn" aria-label="Edit leave history">
+                            <Pencil class="size-4" />
+                        </button>
+                    </div>
+                    <div class="ehris-table-wrap" v-if="leaveHistory && leaveHistory.length">
+                        <table class="ehris-table">
+                            <thead>
+                                <tr>
+                                    <th>Credits from</th>
+                                    <th>Credits to</th>
+                                    <th>Type</th>
+                                    <th>No. of days</th>
+                                    <th>Balance</th>
+                                    <th>Particulars</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="(item, i) in leaveHistory" :key="i">
+                                    <td>{{ val(item.credits_from) }}</td>
+                                    <td>{{ val(item.credits_to) }}</td>
+                                    <td>{{ val(item.type) }}</td>
+                                    <td>{{ val(item.no_of_days) }}</td>
+                                    <td>{{ val(item.balance) }}</td>
+                                    <td>{{ val(item.particulars) }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <p v-else class="ehris-muted">No leave history on file.</p>
+                </section>
+
+                <!-- DOCUMENTS -->
+                <section class="ehris-card">
+                    <div class="ehris-card-header">
+                        <h3>Documents</h3>
+                        <button type="button" class="ehris-edit-btn" aria-label="Edit documents">
+                            <Pencil class="size-4" />
+                        </button>
+                    </div>
+                    <ul class="ehris-stacked-list" v-if="documents && documents.length">
+                        <li v-for="(item, i) in documents" :key="i" class="ehris-doc-row">
+                            <FileText class="size-4" />
+                            <span>{{ val(item.title) }}</span>
+                            <span v-if="item.document" class="ehris-muted"> – {{ val(item.document) }}</span>
+                        </li>
+                    </ul>
+                    <p v-else class="ehris-muted">No documents on file.</p>
+                </section>
+
+                <!-- AWARDS -->
                 <section class="ehris-card">
                     <div class="ehris-card-header">
                         <h3>Awards</h3>
@@ -621,10 +636,8 @@ function familyName(item: Record<string, unknown>): string {
                     </div>
                     <p v-else class="ehris-muted">No awards on file.</p>
                 </section>
-            </template>
 
-            <!-- PERFORMANCE -->
-            <template v-if="activeTab === 12">
+                <!-- PERFORMANCE -->
                 <section class="ehris-card">
                     <div class="ehris-card-header">
                         <h3>Performance</h3>
@@ -656,10 +669,8 @@ function familyName(item: Record<string, unknown>): string {
                     </div>
                     <p v-else class="ehris-muted">No performance records on file.</p>
                 </section>
-            </template>
 
-            <!-- RESEARCHES -->
-            <template v-if="activeTab === 13">
+                <!-- RESEARCHES -->
                 <section class="ehris-card">
                     <div class="ehris-card-header">
                         <h3>Researches</h3>
@@ -687,10 +698,8 @@ function familyName(item: Record<string, unknown>): string {
                     </div>
                     <p v-else class="ehris-muted">No researches on file.</p>
                 </section>
-            </template>
 
-            <!-- EXPERTISE -->
-            <template v-if="activeTab === 14">
+                <!-- EXPERTISE -->
                 <section class="ehris-card">
                     <div class="ehris-card-header">
                         <h3>Expertise</h3>
@@ -707,23 +716,6 @@ function familyName(item: Record<string, unknown>): string {
                 </section>
             </template>
 
-            <!-- AFFILIATION -->
-            <template v-if="activeTab === 15">
-                <section class="ehris-card">
-                    <div class="ehris-card-header">
-                        <h3>Affiliation</h3>
-                        <button type="button" class="ehris-edit-btn" aria-label="Edit affiliation">
-                            <Pencil class="size-4" />
-                        </button>
-                    </div>
-                    <ul class="ehris-stacked-list" v-if="affiliation && affiliation.length">
-                        <li v-for="(item, i) in affiliation" :key="i">
-                            {{ val(item.affiliation) }}
-                        </li>
-                    </ul>
-                    <p v-else class="ehris-muted">No affiliation on file.</p>
-                </section>
-            </template>
         </div>
     </AppLayout>
 </template>
@@ -734,11 +726,48 @@ function familyName(item: Record<string, unknown>): string {
     height: 240px !important;
     min-width: 240px;
     min-height: 240px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #f3f4f6;
+    border-radius: 0.5rem;
 }
 
 .ehris-mydetails-avatar img {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    border-radius: 0.5rem;
+}
+
+.ehris-gov-id-header {
+    margin-top: 2rem;
+    margin-bottom: 1rem;
+    color: #dc2626;
+    font-size: 1rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.ehris-avatar-default-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+}
+
+.ehris-avatar-default-icon {
+    width: 120px;
+    height: 120px;
+    color: #9ca3af;
+    stroke-width: 1.5;
+}
+
+.ehris-mydetails-fields dd {
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 </style>
