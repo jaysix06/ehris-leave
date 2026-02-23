@@ -727,3 +727,18 @@ function familyName(item: Record<string, unknown>): string {
         </div>
     </AppLayout>
 </template>
+
+<style scoped>
+.ehris-mydetails-avatar {
+    width: 240px !important;
+    height: 240px !important;
+    min-width: 240px;
+    min-height: 240px;
+}
+
+.ehris-mydetails-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+</style>
