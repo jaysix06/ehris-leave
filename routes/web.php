@@ -103,6 +103,23 @@ Route::get('request-status/my-leave', function () {
 Route::get('my-details', function (Request $request) {
     $authUser = $request->user();
     $dbProfile = null;
+    $hrid = null;
+    $officialInfo = null;
+    $personalInfo = null;
+    $contactInfo = null;
+    $family = [];
+    $education = [];
+    $workExperience = [];
+    $eligibility = [];
+    $serviceRecord = [];
+    $leaveHistory = [];
+    $documents = [];
+    $training = [];
+    $awards = [];
+    $performance = [];
+    $researches = [];
+    $expertise = [];
+    $affiliation = [];
 
     if ($authUser && Schema::hasTable('tbl_user')) {
         $dbProfile = DB::table('tbl_user')
@@ -120,10 +137,79 @@ Route::get('my-details', function (Request $request) {
             ])
             ->where('email', $authUser->email)
             ->first();
+        $hrid = $dbProfile->hrId ?? $authUser->hrId ?? null;
+    }
+
+    if ($hrid !== null) {
+        $tables = [
+            'tbl_emp_official_info' => fn () => DB::table('tbl_emp_official_info')->where('hrid', $hrid)->first(),
+            'tbl_emp_personal_info' => fn () => DB::table('tbl_emp_personal_info')->where('hrid', $hrid)->first(),
+            'tbl_emp_contact_info' => fn () => DB::table('tbl_emp_contact_info')->where('hrid', $hrid)->first(),
+            'tbl_emp_family_info' => fn () => DB::table('tbl_emp_family_info')->where('hrid', $hrid)->get(),
+            'tbl_emp_education_info' => fn () => DB::table('tbl_emp_education_info')->where('hrid', $hrid)->get(),
+            'tbl_emp_work_experience_info' => fn () => DB::table('tbl_emp_work_experience_info')->where('hrid', $hrid)->get(),
+            'tbl_emp_civil_service_info' => fn () => DB::table('tbl_emp_civil_service_info')->where('hrid', $hrid)->get(),
+            'tbl_emp_service_record' => fn () => DB::table('tbl_emp_service_record')->where('hrid', $hrid)->get(),
+            'tbl_leave_history' => fn () => DB::table('tbl_leave_history')->where('hrid', $hrid)->get(),
+            'tbl_document' => fn () => DB::table('tbl_document')->where('hrid', $hrid)->get(),
+            'tbl_emp_training' => fn () => DB::table('tbl_emp_training')->where('hrid', $hrid)->get(),
+            'tbl_awards' => fn () => DB::table('tbl_awards')->where('hrid', $hrid)->get(),
+            'tbl_performance' => fn () => DB::table('tbl_performance')->where('hrid', $hrid)->get(),
+            'tbl_researches' => fn () => DB::table('tbl_researches')->where('hrid', $hrid)->get(),
+            'tbl_expertise' => fn () => DB::table('tbl_expertise')->where('hrid', $hrid)->get(),
+            'tbl_affiliation' => fn () => DB::table('tbl_affiliation')->where('hrid', $hrid)->get(),
+        ];
+        foreach ($tables as $table => $query) {
+            if (! Schema::hasTable($table)) {
+                continue;
+            }
+            try {
+                $result = $query();
+                if ($result instanceof \Illuminate\Support\Collection) {
+                    $result = $result->all();
+                }
+                switch ($table) {
+                    case 'tbl_emp_official_info': $officialInfo = $result; break;
+                    case 'tbl_emp_personal_info': $personalInfo = $result; break;
+                    case 'tbl_emp_contact_info': $contactInfo = $result; break;
+                    case 'tbl_emp_family_info': $family = $result; break;
+                    case 'tbl_emp_education_info': $education = $result; break;
+                    case 'tbl_emp_work_experience_info': $workExperience = $result; break;
+                    case 'tbl_emp_civil_service_info': $eligibility = $result; break;
+                    case 'tbl_emp_service_record': $serviceRecord = $result; break;
+                    case 'tbl_leave_history': $leaveHistory = $result; break;
+                    case 'tbl_document': $documents = $result; break;
+                    case 'tbl_emp_training': $training = $result; break;
+                    case 'tbl_awards': $awards = $result; break;
+                    case 'tbl_performance': $performance = $result; break;
+                    case 'tbl_researches': $researches = $result; break;
+                    case 'tbl_expertise': $expertise = $result; break;
+                    case 'tbl_affiliation': $affiliation = $result; break;
+                }
+            } catch (\Throwable $e) {
+                // skip if table missing or query fails
+            }
+        }
     }
 
     return Inertia::render('MyDetails', [
         'profile' => $dbProfile,
+        'officialInfo' => $officialInfo,
+        'personalInfo' => $personalInfo,
+        'contactInfo' => $contactInfo,
+        'family' => $family,
+        'education' => $education,
+        'workExperience' => $workExperience,
+        'eligibility' => $eligibility,
+        'serviceRecord' => $serviceRecord,
+        'leaveHistory' => $leaveHistory,
+        'documents' => $documents,
+        'training' => $training,
+        'awards' => $awards,
+        'performance' => $performance,
+        'researches' => $researches,
+        'expertise' => $expertise,
+        'affiliation' => $affiliation,
     ]);
 })->middleware(['auth', 'verified'])->name('my-details');
 
