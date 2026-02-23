@@ -27,22 +27,22 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 // Tabs matching the My Details UI (two rows)
 const tabs = [
-    'OFFICIAL INFO',
-    'PERSONAL INFO',
-    'CONTACT INFO',
-    'FAMILY',
-    'EDUCATION',
-    'WORK EXPERIENCE',
-    'ELIGIBILITY',
-    'SERVICE RECORD',
-    'LEAVE HISTORY',
-    'DOCUMENTS',
-    'TRAINING',
-    'AWARDS',
-    'PERFORMANCE',
-    'RESEARCHES',
-    'EXPERTISE',
-    'AFFILIATION',
+    'Official Info',
+    'Personal Info',
+    'Contact Info',
+    'Family',
+    'Education',
+    'Work Experience',
+    'Eligibility',
+    'Service Record',
+    'Leave History',
+    'Documents',
+    'Training',
+    'Awards',
+    'Performance',
+    'Researches',
+    'Expertise',
+    'Affilation',
 ];
 
 const activeTab = ref(0);
