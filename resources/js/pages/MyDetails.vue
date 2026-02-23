@@ -27,22 +27,22 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 // Tabs matching the My Details UI (two rows)
 const tabs = [
-    'OFFICIAL INFO',
-    'PERSONAL INFO',
-    'CONTACT INFO',
-    'FAMILY',
-    'EDUCATION',
-    'WORK EXPERIENCE',
-    'ELIGIBILITY',
-    'SERVICE RECORD',
-    'LEAVE HISTORY',
-    'DOCUMENTS',
-    'TRAINING',
-    'AWARDS',
-    'PERFORMANCE',
-    'RESEARCHES',
-    'EXPERTISE',
-    'AFFILIATION',
+    'Official Info',
+    'Personal Info',
+    'Contact Info',
+    'Family',
+    'Education',
+    'Work Experience',
+    'Eligibility',
+    'Service Record',
+    'Leave History',
+    'Documents',
+    'Training',
+    'Awards',
+    'Performance',
+    'Researches',
+    'Expertise',
+    'Affilation',
 ];
 
 const activeTab = ref(0);
@@ -727,3 +727,18 @@ function familyName(item: Record<string, unknown>): string {
         </div>
     </AppLayout>
 </template>
+
+<style scoped>
+.ehris-mydetails-avatar {
+    width: 240px !important;
+    height: 240px !important;
+    min-width: 240px;
+    min-height: 240px;
+}
+
+.ehris-mydetails-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+</style>
