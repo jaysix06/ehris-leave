@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, usePage } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { DatePicker } from 'v-calendar';
 import {
     CheckCircle2,
@@ -11,7 +11,7 @@ import {
 import AppLayout from '@/layouts/AppLayout.vue';
 import selfServiceRoutes from '@/routes/self-service';
 import { type BreadcrumbItem, type User } from '@/types';
-import { differenceInDays } from 'date-fns';
+import { addDays, differenceInDays } from 'date-fns';
 
 const pageTitle = 'Leave Application';
 
@@ -27,6 +27,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 const today = new Date();
+today.setHours(0, 0, 0, 0);
 
 const leaveRange = ref<{ start: Date; end: Date }>({
     start: today,
@@ -71,6 +72,13 @@ const leaveTypeOptions: { label: string; value: string }[] = [
     { label: 'Special Emergency (Calamity) Leave', value: 'Special Emergency (Calamity) Leave' },
     { label: 'Others', value: 'Others' },
 ];
+
+const minSelectableDate = computed(() => {
+    if (selectedLeaveType.value === 'Vacation Leave') {
+        return addDays(today, 5);
+    }
+    return today;
+});
 
 const reason = ref<string>('');
 const commutation = ref<string>('');
@@ -123,6 +131,16 @@ const clearMedicalCertification = () => {
         medicalFileInput.value.value = '';
     }
 };
+
+watch(selectedLeaveType, () => {
+    const minimumDate = minSelectableDate.value;
+    if (leaveRange.value.start < minimumDate) {
+        leaveRange.value = {
+            start: minimumDate,
+            end: minimumDate,
+        };
+    }
+});
 </script>
 
 <template>
@@ -284,12 +302,12 @@ const clearMedicalCertification = () => {
                                 is-range
                                 is-inline
                                 expanded
-                                :min-date="today"
+                                :min-date="minSelectableDate"
                                 :masks="{ weekdays: 'WWW' }"
                                 class="calendar-inline"
                             />
                             <div
-                                v-if="selectedLeaveType === 'Sick Leave' && noOfDays >= 7"
+                                v-if="selectedLeaveType === 'Sick Leave' && noOfDays >= 6"
                                 class="medical-cert-panel"
                             >
                                 <p class="upload-title">Medical Certification</p>
