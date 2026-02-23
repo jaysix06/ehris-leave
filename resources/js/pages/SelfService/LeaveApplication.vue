@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, usePage } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { DatePicker } from 'v-calendar';
 import {
     CheckCircle2,
@@ -11,7 +11,7 @@ import {
 import AppLayout from '@/layouts/AppLayout.vue';
 import selfServiceRoutes from '@/routes/self-service';
 import { type BreadcrumbItem, type User } from '@/types';
-import { differenceInDays } from 'date-fns';
+import { addDays, differenceInDays } from 'date-fns';
 
 const pageTitle = 'Leave Application';
 
@@ -27,6 +27,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 const today = new Date();
+today.setHours(0, 0, 0, 0);
 
 const leaveRange = ref<{ start: Date; end: Date }>({
     start: today,
@@ -57,16 +58,30 @@ const selectedLeaveType = ref<string>('- Select Leave Type -');
 
 const leaveTypeOptions: { label: string; value: string }[] = [
     { label: '- Select Leave Type -', value: '- Select Leave Type -' },
-    { label: 'Sick Leave', value: 'Sick Leave' },
     { label: 'Vacation Leave', value: 'Vacation Leave' },
+    { label: 'Mandatory/Force Leave', value: 'Mandatory/Force Leave' },
+    { label: 'Sick Leave', value: 'Sick Leave' },
     { label: 'Maternity Leave', value: 'Maternity Leave' },
-    { label: 'CTO', value: 'CTO' },
     { label: 'Paternity Leave', value: 'Paternity Leave' },
-    { label: 'Force Leave', value: 'Force Leave' },
+    { label: 'Special Privilege Leave', value: 'Special Privilege Leave' },
+    { label: 'Solo Parent Leave', value: 'Solo Parent Leave' },
+    { label: 'Study Leave', value: 'Study Leave' },
+    { label: '10-Day VAWC Leave', value: '10-Day VAWC Leave' },
+    { label: 'Rehabilitation Privilege', value: 'Rehabilitation Privilege' },
+    { label: 'Special Leave Benefits for Women', value: 'Special Leave Benefits for Women' },
+    { label: 'Special Emergency (Calamity) Leave', value: 'Special Emergency (Calamity) Leave' },
     { label: 'Others', value: 'Others' },
 ];
 
-const picked = ref<string>('');
+const minSelectableDate = computed(() => {
+    if (selectedLeaveType.value === 'Vacation Leave') {
+        return addDays(today, 5);
+    }
+    return today;
+});
+
+const reason = ref<string>('');
+const commutation = ref<string>('');
 const medicalCertification = ref<File | null>(null);
 const medicalFileInput = ref<HTMLInputElement | null>(null);
 const isMedicalDropActive = ref(false);
@@ -88,8 +103,9 @@ const pickUserValue = (keys: string[], fallback = 'Not available') => {
 };
 
 const employeeDetails = computed(() => ({
+    name: pickUserValue(['name', 'firstname', 'lastname', 'middlename', 'extension']),
     position: pickUserValue(['position', 'job_title', 'designation']),
-    officeSchool: pickUserValue(['office_school_name', 'office_name', 'school_name', 'office']),
+    officeSchool: pickUserValue(['office']),
     salary: pickUserValue(['salary', 'monthly_salary', 'salary_grade']),
 }));
 
@@ -115,6 +131,16 @@ const clearMedicalCertification = () => {
         medicalFileInput.value.value = '';
     }
 };
+
+watch(selectedLeaveType, () => {
+    const minimumDate = minSelectableDate.value;
+    if (leaveRange.value.start < minimumDate) {
+        leaveRange.value = {
+            start: minimumDate,
+            end: minimumDate,
+        };
+    }
+});
 </script>
 
 <template>
@@ -162,6 +188,9 @@ const clearMedicalCertification = () => {
                                     </option>
                                 </select>
                             </label>
+                            <label v-if="selectedLeaveType === 'Others'">
+                                <textarea placeholder="Specify..."></textarea>
+                            </label>
                             <label>
                                 Leave For
                                 <select>
@@ -196,26 +225,58 @@ const clearMedicalCertification = () => {
                                 Reason for Sick Leave
                                 <div class="flex flex-wrap gap-12 mt-2">
                                     <label class="radio-option inline-flex  gap-2 cursor-pointer">
-                                        <input type="radio" v-model="picked" name="choice" value="a" />
+                                        <input type="radio" v-model="reason" name="choice" value="a" />
                                         In Hospital
                                     </label>
                                     <label class="radio-option inline-flex  gap-2 cursor-pointer">
-                                        <input type="radio" v-model="picked" name="choice" value="b" />
+                                        <input type="radio" v-model="reason" name="choice" value="b" />
                                         Outpatient
+                                    </label>
+                                </div>
+                                <textarea placeholder="Specify Illness..."></textarea>
+                            </label>
+                            <label v-else-if="selectedLeaveType === 'Vacation Leave' || selectedLeaveType === 'Special Privilege Leave'">
+                                Reason for {{ selectedLeaveType }}
+                                <div class="flex flex-wrap gap-12 mt-2">
+                                    <label class="radio-option inline-flex  gap-2 cursor-pointer">
+                                        <input type="radio" v-model="reason" name="within" value="Within the Philippines" />
+                                        Within the Philippines
+                                    </label>
+                                    <label class="radio-option inline-flex  gap-2 cursor-pointer">
+                                        <input type="radio" v-model="reason" name="abroad" value="Abroad" />
+                                        Abroad
                                     </label>
                                 </div>
                                 <textarea placeholder="Specify..."></textarea>
                             </label>
-                            <label v-else-if="selectedLeaveType === 'Vacation Leave'">
-                                Reason for Vacation Leave
-                                <div class="flex flex-wrap gap-12 mt-2">
-                                    <label class="radio-option inline-flex  gap-2 cursor-pointer">
-                                        <input type="radio" v-model="picked" name="choice" value="a" />
-                                        Within the Philippines
+                            <label v-else-if="selectedLeaveType === 'Special Leave Benefits for Women'">
+                                Reason for {{ selectedLeaveType }}
+                                <textarea placeholder="Specify..."></textarea>
+                            </label>
+                            <label v-else-if="selectedLeaveType === 'Study Leave'">
+                                Reason for {{ selectedLeaveType }}
+                                <div class="flex flex-wrap gap-2 mt-2">
+                                    <label class="radio-option inline-flex  gap-1 cursor-pointer">
+                                        <input type="radio" v-model="reason" name="masters" value="Completion of Master's Degree" />
+                                        Completion of Master's Degree
                                     </label>
-                                    <label class="radio-option inline-flex  gap-2 cursor-pointer">
-                                        <input type="radio" v-model="picked" name="choice" value="b" />
-                                        Abroad
+                                    <label class="radio-option inline-flex  gap-1 cursor-pointer">
+                                        <input type="radio" v-model="reason" name="review" value="BAR/Board Examination Review" />
+                                        BAR/Board Examination Review
+                                    </label>
+                                </div>
+                                <textarea placeholder="Specify..."></textarea>
+                            </label>
+                            <label v-else-if="selectedLeaveType === 'Others'">
+                                Reason for {{ selectedLeaveType }}
+                                <div class="flex flex-wrap gap-2 mt-2">
+                                    <label class="radio-option inline-flex  gap-1 cursor-pointer">
+                                        <input type="radio" v-model="reason" name="monetization" value="Monetization of Leave Credits" />
+                                        Monetization of Leave Credits
+                                    </label>
+                                    <label class="radio-option inline-flex  gap-1 cursor-pointer">
+                                        <input type="radio" v-model="reason" name="terminal" value="Terminal Leave" />
+                                        Terminal Leave
                                     </label>
                                 </div>
                                 <textarea placeholder="Specify..."></textarea>
@@ -224,11 +285,11 @@ const clearMedicalCertification = () => {
                                 Commutation
                                 <div class="flex flex-wrap gap-12 mt-2">
                                     <label class="radio-option inline-flex  gap-2 cursor-pointer">
-                                        <input type="radio" v-model="picked" name="choice" value="a" />
+                                        <input type="radio" v-model="commutation" name="requested" value="Requested" />
                                         Requested
                                     </label>
                                     <label class="radio-option inline-flex  gap-2 cursor-pointer">
-                                        <input type="radio" v-model="picked" name="choice" value="b" />
+                                        <input type="radio" v-model="commutation" name="not_requested" value="Not Requested" />
                                         Not Requested
                                     </label>
                                 </div>
@@ -241,12 +302,12 @@ const clearMedicalCertification = () => {
                                 is-range
                                 is-inline
                                 expanded
-                                :min-date="today"
+                                :min-date="minSelectableDate"
                                 :masks="{ weekdays: 'WWW' }"
                                 class="calendar-inline"
                             />
                             <div
-                                v-if="selectedLeaveType === 'Sick Leave' && noOfDays >= 7"
+                                v-if="selectedLeaveType === 'Sick Leave' && noOfDays >= 6"
                                 class="medical-cert-panel"
                             >
                                 <p class="upload-title">Medical Certification</p>
@@ -309,6 +370,10 @@ const clearMedicalCertification = () => {
 
                 <aside class="ehris-card employee-details-card">
                     <h3>Employee Details</h3>
+                    <label>
+                        Employee Name
+                        <div class="info-readonly">{{ employeeDetails.name }}</div>
+                    </label>
                     <label>
                         Office/School Name
                         <div class="info-readonly">{{ employeeDetails.officeSchool }}</div>
