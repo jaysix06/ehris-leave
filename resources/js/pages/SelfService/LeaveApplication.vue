@@ -307,7 +307,7 @@ watch(selectedLeaveType, () => {
                                 class="calendar-inline"
                             />
                             <div
-                                v-if="selectedLeaveType === 'Sick Leave' && noOfDays >= 6"
+                                v-if="selectedLeaveType === 'Sick Leave' && noOfDays >= 6 || selectedLeaveType === 'Maternity Leave' || selectedLeaveType === 'Paternity Leave'"
                                 class="medical-cert-panel"
                             >
                                 <p class="upload-title">Medical Certification</p>
