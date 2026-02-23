@@ -14,7 +14,7 @@ defineProps<{
 <template>
     <section class="ehris-card">
         <div class="ehris-card-header">
-            <h3>Personal information</h3>
+            <h3>Personal  information</h3>
             <button type="button" class="ehris-edit-btn" aria-label="Edit personal information">
                 <Pencil class="size-4" />
             </button>

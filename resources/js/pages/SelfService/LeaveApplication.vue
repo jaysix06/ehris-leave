@@ -88,6 +88,42 @@ const isMedicalDropActive = ref(false);
 
 const page = usePage();
 const authUser = computed(() => page.props.auth?.user as User | undefined);
+const leaveEmployee = computed(() => page.props.leaveEmployee as Record<string, unknown> | undefined);
+const salaryFormatter = new Intl.NumberFormat('en-PH', {
+    style: 'currency',
+    currency: 'PHP',
+});
+
+const readRecordString = (record: Record<string, unknown> | undefined, keys: string[]) => {
+    if (!record) return null;
+
+    for (const key of keys) {
+        const value = record[key];
+        if (typeof value === 'string' && value.trim()) {
+            return value.trim();
+        }
+        if (typeof value === 'number' && Number.isFinite(value)) {
+            return String(value);
+        }
+    }
+
+    return null;
+};
+
+const toNumber = (value: unknown): number | null => {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+        return value;
+    }
+
+    if (typeof value === 'string') {
+        const normalized = value.replace(/,/g, '').trim();
+        if (!normalized) return null;
+        const parsed = Number(normalized);
+        return Number.isFinite(parsed) ? parsed : null;
+    }
+
+    return null;
+};
 
 const pickUserValue = (keys: string[], fallback = 'Not available') => {
     const user = authUser.value as Record<string, unknown> | undefined;
@@ -102,11 +138,35 @@ const pickUserValue = (keys: string[], fallback = 'Not available') => {
     return fallback;
 };
 
+const formattedSalary = computed(() => {
+    const source = leaveEmployee.value;
+    if (!source) return null;
+
+    const grade = readRecordString(source, ['salaryGrade', 'salary_grade', 'salary']);
+    const step = readRecordString(source, ['salaryStep', 'salary_step', 'step']);
+    const amountValue = toNumber(source.salaryAmount ?? source.salary_actual ?? source.salary_authorized);
+
+    const parts: string[] = [];
+    if (grade) parts.push(`SG ${grade}`);
+    if (step) parts.push(`Step ${step}`);
+    if (amountValue !== null) parts.push(salaryFormatter.format(amountValue));
+
+    return parts.length > 0 ? parts.join(' | ') : null;
+});
+
 const employeeDetails = computed(() => ({
-    name: pickUserValue(['name', 'firstname', 'lastname', 'middlename', 'extension']),
-    position: pickUserValue(['position', 'job_title', 'designation']),
-    officeSchool: pickUserValue(['office']),
-    salary: pickUserValue(['salary', 'monthly_salary', 'salary_grade']),
+    name:
+        readRecordString(leaveEmployee.value, ['name', 'fullname']) ??
+        pickUserValue(['name', 'firstname', 'lastname', 'middlename', 'extension']),
+    position:
+        readRecordString(leaveEmployee.value, ['position', 'job_title', 'designation']) ??
+        pickUserValue(['position', 'job_title', 'designation']),
+    officeSchool:
+        readRecordString(leaveEmployee.value, ['officeSchool', 'office', 'department']) ??
+        pickUserValue(['office']),
+    salary:
+        formattedSalary.value ??
+        pickUserValue(['salary', 'monthly_salary', 'salary_grade']),
 }));
 
 const onMedicalCertificationChange = (event: Event) => {
