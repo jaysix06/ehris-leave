@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { FileText, Pencil } from 'lucide-vue-next';
+import { ChevronDown, FileText, Pencil } from 'lucide-vue-next';
+import { ref } from 'vue';
 
 function val(v: unknown): string {
     if (v == null || v === '') return '—';
@@ -15,18 +16,45 @@ defineProps<{
     researches?: Record<string, unknown>[];
     expertise?: Record<string, unknown>[];
 }>();
+
+const accordionOpen = ref<Record<string, boolean>>({
+    serviceRecord: false,
+    leaveHistory: false,
+    documents: false,
+    awards: false,
+    performance: false,
+    researches: false,
+    expertise: false,
+});
+
+function toggleAccordion(key: string) {
+    accordionOpen.value[key] = !accordionOpen.value[key];
+}
 </script>
 
 <template>
-    <!-- SERVICE RECORD -->
-    <section class="ehris-card">
-        <div class="ehris-card-header">
-            <h3>Service Record</h3>
-            <button type="button" class="ehris-edit-btn" aria-label="Edit service record">
-                <Pencil class="size-4" />
+    <div class="ehris-accordion">
+        <!-- SERVICE RECORD -->
+        <div class="ehris-accordion-item">
+            <button
+                type="button"
+                class="ehris-accordion-header"
+                :aria-expanded="accordionOpen.serviceRecord"
+                @click="toggleAccordion('serviceRecord')"
+            >
+                <h3>Service Record</h3>
+                <div class="ehris-accordion-actions">
+                    <button type="button" class="ehris-edit-btn" aria-label="Edit service record" @click.stop>
+                        <Pencil class="size-4" />
+                    </button>
+                    <ChevronDown
+                        class="ehris-accordion-chevron"
+                        :class="{ 'ehris-accordion-chevron-open': accordionOpen.serviceRecord }"
+                    />
+                </div>
             </button>
-        </div>
-        <div class="ehris-table-wrap" v-if="serviceRecord && serviceRecord.length">
+            <div v-show="accordionOpen.serviceRecord" class="ehris-accordion-content">
+                <div class="ehris-table-wrap" v-if="serviceRecord && serviceRecord.length">
             <table class="ehris-table">
                 <thead>
                     <tr>
@@ -47,19 +75,32 @@ defineProps<{
                     </tr>
                 </tbody>
             </table>
+                </div>
+                <p v-else class="ehris-muted">No service record on file.</p>
+            </div>
         </div>
-        <p v-else class="ehris-muted">No service record on file.</p>
-    </section>
 
-    <!-- LEAVE HISTORY -->
-    <section class="ehris-card">
-        <div class="ehris-card-header">
-            <h3>Leave History</h3>
-            <button type="button" class="ehris-edit-btn" aria-label="Edit leave history">
-                <Pencil class="size-4" />
+        <!-- LEAVE HISTORY -->
+        <div class="ehris-accordion-item">
+            <button
+                type="button"
+                class="ehris-accordion-header"
+                :aria-expanded="accordionOpen.leaveHistory"
+                @click="toggleAccordion('leaveHistory')"
+            >
+                <h3>Leave History</h3>
+                <div class="ehris-accordion-actions">
+                    <button type="button" class="ehris-edit-btn" aria-label="Edit leave history" @click.stop>
+                        <Pencil class="size-4" />
+                    </button>
+                    <ChevronDown
+                        class="ehris-accordion-chevron"
+                        :class="{ 'ehris-accordion-chevron-open': accordionOpen.leaveHistory }"
+                    />
+                </div>
             </button>
-        </div>
-        <div class="ehris-table-wrap" v-if="leaveHistory && leaveHistory.length">
+            <div v-show="accordionOpen.leaveHistory" class="ehris-accordion-content">
+                <div class="ehris-table-wrap" v-if="leaveHistory && leaveHistory.length">
             <table class="ehris-table">
                 <thead>
                     <tr>
@@ -82,37 +123,63 @@ defineProps<{
                     </tr>
                 </tbody>
             </table>
+                </div>
+                <p v-else class="ehris-muted">No leave history on file.</p>
+            </div>
         </div>
-        <p v-else class="ehris-muted">No leave history on file.</p>
-    </section>
 
-    <!-- DOCUMENTS -->
-    <section class="ehris-card">
-        <div class="ehris-card-header">
-            <h3>Documents</h3>
-            <button type="button" class="ehris-edit-btn" aria-label="Edit documents">
-                <Pencil class="size-4" />
+        <!-- DOCUMENTS -->
+        <div class="ehris-accordion-item">
+            <button
+                type="button"
+                class="ehris-accordion-header"
+                :aria-expanded="accordionOpen.documents"
+                @click="toggleAccordion('documents')"
+            >
+                <h3>Documents</h3>
+                <div class="ehris-accordion-actions">
+                    <button type="button" class="ehris-edit-btn" aria-label="Edit documents" @click.stop>
+                        <Pencil class="size-4" />
+                    </button>
+                    <ChevronDown
+                        class="ehris-accordion-chevron"
+                        :class="{ 'ehris-accordion-chevron-open': accordionOpen.documents }"
+                    />
+                </div>
             </button>
-        </div>
-        <ul class="ehris-stacked-list" v-if="documents && documents.length">
+            <div v-show="accordionOpen.documents" class="ehris-accordion-content">
+                <ul class="ehris-stacked-list" v-if="documents && documents.length">
             <li v-for="(item, i) in documents" :key="i" class="ehris-doc-row">
                 <FileText class="size-4" />
                 <span>{{ val(item.title) }}</span>
                 <span v-if="item.document" class="ehris-muted"> – {{ val(item.document) }}</span>
             </li>
-        </ul>
-        <p v-else class="ehris-muted">No documents on file.</p>
-    </section>
-
-    <!-- AWARDS -->
-    <section class="ehris-card">
-        <div class="ehris-card-header">
-            <h3>Awards</h3>
-            <button type="button" class="ehris-edit-btn" aria-label="Edit awards">
-                <Pencil class="size-4" />
-            </button>
+                </ul>
+                <p v-else class="ehris-muted">No documents on file.</p>
+            </div>
         </div>
-        <div class="ehris-table-wrap" v-if="awards && awards.length">
+
+        <!-- AWARDS -->
+        <div class="ehris-accordion-item">
+            <button
+                type="button"
+                class="ehris-accordion-header"
+                :aria-expanded="accordionOpen.awards"
+                @click="toggleAccordion('awards')"
+            >
+                <h3>Awards</h3>
+                <div class="ehris-accordion-actions">
+                    <button type="button" class="ehris-edit-btn" aria-label="Edit awards" @click.stop>
+                        <Pencil class="size-4" />
+                    </button>
+                    <ChevronDown
+                        class="ehris-accordion-chevron"
+                        :class="{ 'ehris-accordion-chevron-open': accordionOpen.awards }"
+                    />
+                </div>
+            </button>
+            <div v-show="accordionOpen.awards" class="ehris-accordion-content">
+                <div class="ehris-table-wrap" v-if="awards && awards.length">
             <table class="ehris-table">
                 <thead>
                     <tr>
@@ -131,19 +198,32 @@ defineProps<{
                     </tr>
                 </tbody>
             </table>
+                </div>
+                <p v-else class="ehris-muted">No awards on file.</p>
+            </div>
         </div>
-        <p v-else class="ehris-muted">No awards on file.</p>
-    </section>
 
-    <!-- PERFORMANCE -->
-    <section class="ehris-card">
-        <div class="ehris-card-header">
-            <h3>Performance</h3>
-            <button type="button" class="ehris-edit-btn" aria-label="Edit performance">
-                <Pencil class="size-4" />
+        <!-- PERFORMANCE -->
+        <div class="ehris-accordion-item">
+            <button
+                type="button"
+                class="ehris-accordion-header"
+                :aria-expanded="accordionOpen.performance"
+                @click="toggleAccordion('performance')"
+            >
+                <h3>Performance</h3>
+                <div class="ehris-accordion-actions">
+                    <button type="button" class="ehris-edit-btn" aria-label="Edit performance" @click.stop>
+                        <Pencil class="size-4" />
+                    </button>
+                    <ChevronDown
+                        class="ehris-accordion-chevron"
+                        :class="{ 'ehris-accordion-chevron-open': accordionOpen.performance }"
+                    />
+                </div>
             </button>
-        </div>
-        <div class="ehris-table-wrap" v-if="performance && performance.length">
+            <div v-show="accordionOpen.performance" class="ehris-accordion-content">
+                <div class="ehris-table-wrap" v-if="performance && performance.length">
             <table class="ehris-table">
                 <thead>
                     <tr>
@@ -164,19 +244,32 @@ defineProps<{
                     </tr>
                 </tbody>
             </table>
+                </div>
+                <p v-else class="ehris-muted">No performance records on file.</p>
+            </div>
         </div>
-        <p v-else class="ehris-muted">No performance records on file.</p>
-    </section>
 
-    <!-- RESEARCHES -->
-    <section class="ehris-card">
-        <div class="ehris-card-header">
-            <h3>Researches</h3>
-            <button type="button" class="ehris-edit-btn" aria-label="Edit researches">
-                <Pencil class="size-4" />
+        <!-- RESEARCHES -->
+        <div class="ehris-accordion-item">
+            <button
+                type="button"
+                class="ehris-accordion-header"
+                :aria-expanded="accordionOpen.researches"
+                @click="toggleAccordion('researches')"
+            >
+                <h3>Researches</h3>
+                <div class="ehris-accordion-actions">
+                    <button type="button" class="ehris-edit-btn" aria-label="Edit researches" @click.stop>
+                        <Pencil class="size-4" />
+                    </button>
+                    <ChevronDown
+                        class="ehris-accordion-chevron"
+                        :class="{ 'ehris-accordion-chevron-open': accordionOpen.researches }"
+                    />
+                </div>
             </button>
-        </div>
-        <div class="ehris-table-wrap" v-if="researches && researches.length">
+            <div v-show="accordionOpen.researches" class="ehris-accordion-content">
+                <div class="ehris-table-wrap" v-if="researches && researches.length">
             <table class="ehris-table">
                 <thead>
                     <tr>
@@ -193,23 +286,110 @@ defineProps<{
                     </tr>
                 </tbody>
             </table>
+                </div>
+                <p v-else class="ehris-muted">No researches on file.</p>
+            </div>
         </div>
-        <p v-else class="ehris-muted">No researches on file.</p>
-    </section>
 
-    <!-- EXPERTISE -->
-    <section class="ehris-card">
-        <div class="ehris-card-header">
-            <h3>Expertise</h3>
-            <button type="button" class="ehris-edit-btn" aria-label="Edit expertise">
-                <Pencil class="size-4" />
+        <!-- EXPERTISE -->
+        <div class="ehris-accordion-item">
+            <button
+                type="button"
+                class="ehris-accordion-header"
+                :aria-expanded="accordionOpen.expertise"
+                @click="toggleAccordion('expertise')"
+            >
+                <h3>Expertise</h3>
+                <div class="ehris-accordion-actions">
+                    <button type="button" class="ehris-edit-btn" aria-label="Edit expertise" @click.stop>
+                        <Pencil class="size-4" />
+                    </button>
+                    <ChevronDown
+                        class="ehris-accordion-chevron"
+                        :class="{ 'ehris-accordion-chevron-open': accordionOpen.expertise }"
+                    />
+                </div>
             </button>
+            <div v-show="accordionOpen.expertise" class="ehris-accordion-content">
+                <ul class="ehris-stacked-list" v-if="expertise && expertise.length">
+                    <li v-for="(item, i) in expertise" :key="i">
+                        {{ val(item.expertise) }}
+                    </li>
+                </ul>
+                <p v-else class="ehris-muted">No expertise on file.</p>
+            </div>
         </div>
-        <ul class="ehris-stacked-list" v-if="expertise && expertise.length">
-            <li v-for="(item, i) in expertise" :key="i">
-                {{ val(item.expertise) }}
-            </li>
-        </ul>
-        <p v-else class="ehris-muted">No expertise on file.</p>
-    </section>
+    </div>
 </template>
+
+<style scoped>
+.ehris-accordion {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.ehris-accordion-item {
+    background: white;
+    border-radius: 0.5rem;
+    border: 1px solid #e5e7eb;
+    overflow: hidden;
+}
+
+.ehris-accordion-header {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.25rem;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    transition: background-color 0.2s;
+}
+
+.ehris-accordion-header:hover {
+    background-color: #f9fafb;
+}
+
+.ehris-accordion-header h3 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #111827;
+}
+
+.ehris-accordion-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.ehris-accordion-chevron {
+    width: 1.25rem;
+    height: 1.25rem;
+    color: #6b7280;
+    transition: transform 0.2s;
+}
+
+.ehris-accordion-chevron-open {
+    transform: rotate(180deg);
+}
+
+.ehris-accordion-content {
+    padding: 0 1.25rem 1.25rem 1.25rem;
+    animation: ehris-accordion-slide 0.2s ease-out;
+}
+
+@keyframes ehris-accordion-slide {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+</style>
