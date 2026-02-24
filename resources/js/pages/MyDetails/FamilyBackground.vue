@@ -512,8 +512,6 @@ onMounted(() => {
                             </div>
                         </div>
                     </div>
-
-                    <p class="ehris-family-note">(Continue on separate sheet if necessary)</p>
                 </div>
 
                     </div>

@@ -5,6 +5,7 @@ namespace App\Models;
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
@@ -104,6 +105,14 @@ class User extends Authenticatable
      *
      * @return array<string, string>
      */
+    /**
+     * Family information records for this user (keyed by hrId).
+     */
+    public function familyInfo(): HasMany
+    {
+        return $this->hasMany(FamilyInfo::class, 'hrid', 'hrId');
+    }
+
     protected function casts(): array
     {
         return [
