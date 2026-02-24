@@ -263,22 +263,38 @@ Route::get('my-details', function (Request $request) {
                     $result = $result->all();
                 }
                 switch ($table) {
-                    case 'tbl_emp_official_info': $officialInfo = $result; break;
-                    case 'tbl_emp_personal_info': $personalInfo = $result; break;
-                    case 'tbl_emp_contact_info': $contactInfo = $result; break;
-                    case 'tbl_emp_family_info': $family = $result; break;
-                    case 'tbl_emp_education_info': $education = $result; break;
-                    case 'tbl_emp_work_experience_info': $workExperience = $result; break;
-                    case 'tbl_emp_civil_service_info': $eligibility = $result; break;
-                    case 'tbl_emp_service_record': $serviceRecord = $result; break;
-                    case 'tbl_leave_history': $leaveHistory = $result; break;
-                    case 'tbl_document': $documents = $result; break;
-                    case 'tbl_emp_training': $training = $result; break;
-                    case 'tbl_awards': $awards = $result; break;
-                    case 'tbl_performance': $performance = $result; break;
-                    case 'tbl_researches': $researches = $result; break;
-                    case 'tbl_expertise': $expertise = $result; break;
-                    case 'tbl_affiliation': $affiliation = $result; break;
+                    case 'tbl_emp_official_info': $officialInfo = $result;
+                        break;
+                    case 'tbl_emp_personal_info': $personalInfo = $result;
+                        break;
+                    case 'tbl_emp_contact_info': $contactInfo = $result;
+                        break;
+                    case 'tbl_emp_family_info': $family = $result;
+                        break;
+                    case 'tbl_emp_education_info': $education = $result;
+                        break;
+                    case 'tbl_emp_work_experience_info': $workExperience = $result;
+                        break;
+                    case 'tbl_emp_civil_service_info': $eligibility = $result;
+                        break;
+                    case 'tbl_emp_service_record': $serviceRecord = $result;
+                        break;
+                    case 'tbl_leave_history': $leaveHistory = $result;
+                        break;
+                    case 'tbl_document': $documents = $result;
+                        break;
+                    case 'tbl_emp_training': $training = $result;
+                        break;
+                    case 'tbl_awards': $awards = $result;
+                        break;
+                    case 'tbl_performance': $performance = $result;
+                        break;
+                    case 'tbl_researches': $researches = $result;
+                        break;
+                    case 'tbl_expertise': $expertise = $result;
+                        break;
+                    case 'tbl_affiliation': $affiliation = $result;
+                        break;
                 }
             } catch (\Throwable $e) {
                 // skip if table missing or query fails
@@ -341,5 +357,9 @@ Route::get('survey', function () {
 Route::get('survey/gad', function () {
     return Inertia::render('Survey/Gad');
 })->middleware(['auth', 'verified'])->name('survey.gad');
+
+Route::get('reports/employee-listing', [App\Http\Controllers\Reports\EmployeeListingController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('reports.employee-listing');
 
 require __DIR__.'/settings.php';
