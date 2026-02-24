@@ -1,12 +1,17 @@
 <?php
 
+<<<<<<< HEAD
 use App\Http\Controllers\MyDetails\FamilyController;
 use App\Models\EmpFamilyInfo;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+=======
+use App\Http\Controllers\MyDetailsController;
+use App\Http\Controllers\SelfService\LeaveApplicationController;
+use App\Http\Controllers\Utilities\LeaveTypeController;
+>>>>>>> 28cd2466f1c978f8628c442848035637ca473213
 use Illuminate\Support\Facades\Route;
-use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
 
@@ -86,9 +91,12 @@ Route::get('self-service/id-card', function () {
 Route::get('self-service/service-record', function () {
     return Inertia::render('SelfService/ServiceRecord');
 })->middleware(['auth', 'verified'])->name('self-service.service-record');
-Route::get('self-service/leave-application', function () {
-    return Inertia::render('SelfService/LeaveApplication');
-})->middleware(['auth', 'verified'])->name('self-service.leave-application');
+Route::get('self-service/leave-application', [LeaveApplicationController::class, 'show'])
+    ->middleware(['auth', 'verified'])
+    ->name('self-service.leave-application');
+Route::post('self-service/leave-application', [LeaveApplicationController::class, 'store'])
+    ->middleware(['auth', 'verified'])
+    ->name('self-service.leave-application.store');
 Route::get('self-service/deped-email-requests', function () {
     return Inertia::render('SelfService/DepedEmailRequests');
 })->middleware(['auth', 'verified'])->name('self-service.deped-email-requests');
@@ -103,6 +111,7 @@ Route::get('request-status/my-leave', function () {
     return Inertia::render('RequestStatus/MyLeave');
 })->middleware(['auth', 'verified'])->name('request-status.my-leave');
 
+<<<<<<< HEAD
 Route::get('my-details', function (Request $request) {
     $authUser = $request->user();
     $dbProfile = null;
@@ -232,6 +241,11 @@ Route::get('my-details', function (Request $request) {
         'familyUpdateUrl' => route('my-details.family.store'),
     ]);
 })->middleware(['auth', 'verified'])->name('my-details');
+=======
+Route::get('my-details', [MyDetailsController::class, 'show'])
+    ->middleware(['auth', 'verified'])
+    ->name('my-details');
+>>>>>>> 28cd2466f1c978f8628c442848035637ca473213
 
 Route::post('my-details/family', [FamilyController::class, 'store'])
     ->middleware(['auth', 'verified'])
@@ -264,6 +278,18 @@ Route::get('utilities/survey-management', function () {
 Route::get('utilities/pop-up-management', function () {
     return Inertia::render('Utilities/PopUpManagement');
 })->middleware(['auth', 'verified'])->name('utilities.pop-up-management');
+Route::get('utilities/leave-types', [LeaveTypeController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('utilities.leave-types.index');
+Route::post('utilities/leave-types', [LeaveTypeController::class, 'store'])
+    ->middleware(['auth', 'verified'])
+    ->name('utilities.leave-types.store');
+Route::put('utilities/leave-types/{leaveType}', [LeaveTypeController::class, 'update'])
+    ->middleware(['auth', 'verified'])
+    ->name('utilities.leave-types.update');
+Route::delete('utilities/leave-types/{leaveType}', [LeaveTypeController::class, 'destroy'])
+    ->middleware(['auth', 'verified'])
+    ->name('utilities.leave-types.destroy');
 
 Route::get('survey', function () {
     return Inertia::render('Survey');

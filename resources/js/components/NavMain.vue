@@ -29,7 +29,7 @@ const itemHasActiveChild = (item: NavItem) =>
 <template>
     <SidebarGroup class="px-2 py-0">
         <SidebarGroupLabel>Main Navigation</SidebarGroupLabel>
-        <SidebarMenu>
+        <SidebarMenu class="space-y-2">
             <SidebarMenuItem v-for="item in items" :key="item.title">
                 <template v-if="!itemHasChildren(item) && item.href">
                     <SidebarMenuButton
@@ -60,7 +60,7 @@ const itemHasActiveChild = (item: NavItem) =>
                     </CollapsibleTrigger>
 
                     <CollapsibleContent>
-                        <SidebarMenuSub>
+                        <SidebarMenuSub class="space-y-1">
                             <SidebarMenuSubItem
                                 v-for="child in item.children"
                                 :key="`${item.title}-${child.title}`"
