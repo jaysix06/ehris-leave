@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\SelfService\LeaveApplicationController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
@@ -83,119 +84,9 @@ Route::get('self-service/id-card', function () {
 Route::get('self-service/service-record', function () {
     return Inertia::render('SelfService/ServiceRecord');
 })->middleware(['auth', 'verified'])->name('self-service.service-record');
-Route::get('self-service/leave-application', function (Request $request) {
-    $authUser = $request->user();
-    $leaveEmployee = null;
-    $leaveTypes = [];
-
-    if ($authUser && Schema::hasTable('tbl_user')) {
-        $profile = DB::table('tbl_user')
-            ->select([
-                'hrId',
-                'email',
-                'lastname',
-                'firstname',
-                'middlename',
-                'extname',
-                'job_title',
-                'fullname',
-            ])
-            ->where('email', $authUser->email)
-            ->first();
-
-        $hrid = $profile->hrId ?? $authUser->hrId ?? null;
-        $officialInfo = null;
-
-        if (Schema::hasTable('tbl_emp_official_info')) {
-            if ($hrid !== null) {
-                $officialInfo = DB::table('tbl_emp_official_info')->where('hrid', $hrid)->first();
-            }
-
-            if ($officialInfo === null) {
-                $officialInfo = DB::table('tbl_emp_official_info')->where('email', $authUser->email)->first();
-            }
-        }
-
-        $officeSchool = null;
-        if ($officialInfo !== null) {
-            $rawOffice = trim((string) ($officialInfo->office ?? ''));
-            if ($rawOffice !== '') {
-                $officeSchool = $rawOffice;
-            }
-
-            $departmentId = trim((string) ($officialInfo->department_id ?? ''));
-            if ($departmentId !== '' && ctype_digit($departmentId) && Schema::hasTable('tbl_department')) {
-                $departmentName = DB::table('tbl_department')
-                    ->where('department_id', (int) $departmentId)
-                    ->value('department_name');
-                if (is_string($departmentName) && trim($departmentName) !== '') {
-                    $officeSchool = trim($departmentName);
-                }
-            }
-
-            if (
-                ($officeSchool === null || ctype_digit(trim((string) $officeSchool)))
-                && $rawOffice !== ''
-                && ctype_digit($rawOffice)
-                && Schema::hasTable('tbl_office')
-            ) {
-                $officeName = DB::table('tbl_office')
-                    ->where('office_Id', (int) $rawOffice)
-                    ->value('office_name');
-
-                if (! is_string($officeName) || trim($officeName) === '') {
-                    $officeName = DB::table('tbl_office')
-                        ->where('office_id', (int) $rawOffice)
-                        ->value('office_name');
-                }
-
-                if (is_string($officeName) && trim($officeName) !== '') {
-                    $officeSchool = trim($officeName);
-                }
-            }
-        }
-
-        $fullName = trim((string) ($profile->fullname ?? ''));
-        if ($fullName === '') {
-            $nameParts = array_filter([
-                $profile->firstname ?? null,
-                $profile->middlename ?? null,
-                $profile->lastname ?? null,
-                $profile->extname ?? null,
-            ], fn ($part) => is_string($part) && trim($part) !== '');
-
-            $fullName = $nameParts !== [] ? trim(implode(' ', $nameParts)) : '';
-        }
-
-        $leaveEmployee = [
-            'name' => $fullName !== '' ? $fullName : ($authUser->name ?? null),
-            'position' => $officialInfo->job_title ?? $profile->job_title ?? null,
-            'officeSchool' => $officeSchool,
-            'salaryGrade' => $officialInfo->salary_grade ?? null,
-            'salaryStep' => $officialInfo->salary_step ?? $officialInfo->step ?? null,
-            'salaryAmount' => $officialInfo->salary_actual ?? $officialInfo->salary_authorized ?? null,
-        ];
-    }
-
-    if (Schema::hasTable('tbl_leave_type')) {
-        $leaveTypes = DB::table('tbl_leave_type')
-            ->select('leave_type')
-            ->whereNotNull('leave_type')
-            ->where('leave_type', '!=', '')
-            ->distinct()
-            ->orderBy('id')
-            ->pluck('leave_type')
-            ->map(fn ($type) => trim((string) $type))
-            ->filter(fn ($type) => $type !== '')
-            ->values()
-            ->all();
-    }
-
-    return Inertia::render('SelfService/LeaveApplication', [
-        'leaveEmployee' => $leaveEmployee,
-        'leaveTypes' => $leaveTypes,
-    ]);
-})->middleware(['auth', 'verified'])->name('self-service.leave-application');
+Route::get('self-service/leave-application', [LeaveApplicationController::class, 'show'])
+    ->middleware(['auth', 'verified'])
+    ->name('self-service.leave-application');
 Route::get('self-service/deped-email-requests', function () {
     return Inertia::render('SelfService/DepedEmailRequests');
 })->middleware(['auth', 'verified'])->name('self-service.deped-email-requests');
