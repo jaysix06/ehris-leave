@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Head, usePage } from '@inertiajs/vue3';
-import { computed, ref, watch } from 'vue';
+import { Head, router, usePage } from '@inertiajs/vue3';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { DatePicker } from 'v-calendar';
 import {
     CheckCircle2,
@@ -12,6 +12,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import selfServiceRoutes from '@/routes/self-service';
 import { type BreadcrumbItem, type User } from '@/types';
 import { addDays, differenceInDays } from 'date-fns';
+import { echo } from '@laravel/echo-vue';
 
 const pageTitle = 'Leave Application';
 
@@ -211,6 +212,19 @@ watch(leaveTypeOptions, (options) => {
     if (!isValid) {
         selectedLeaveType.value = defaultLeaveTypeLabel;
     }
+});
+
+const refreshLeaveTypes = () => {
+    console.info('[LeaveApplication] LeaveTypeUpdated received. Refreshing leave types.');
+    router.reload({ only: ['leaveTypes'] });
+};
+
+onMounted(() => {
+    echo().channel('leave-types').listen('.LeaveTypeUpdated', refreshLeaveTypes);
+});
+
+onBeforeUnmount(() => {
+    echo().channel('leave-types').stopListening('LeaveTypeUpdated');
 });
 </script>
 

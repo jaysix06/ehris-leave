@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\MyDetailsController;
 use App\Http\Controllers\SelfService\LeaveApplicationController;
+use App\Http\Controllers\Utilities\LeaveTypeController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
@@ -130,6 +131,18 @@ Route::get('utilities/survey-management', function () {
 Route::get('utilities/pop-up-management', function () {
     return Inertia::render('Utilities/PopUpManagement');
 })->middleware(['auth', 'verified'])->name('utilities.pop-up-management');
+Route::get('utilities/leave-types', [LeaveTypeController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('utilities.leave-types.index');
+Route::post('utilities/leave-types', [LeaveTypeController::class, 'store'])
+    ->middleware(['auth', 'verified'])
+    ->name('utilities.leave-types.store');
+Route::put('utilities/leave-types/{leaveType}', [LeaveTypeController::class, 'update'])
+    ->middleware(['auth', 'verified'])
+    ->name('utilities.leave-types.update');
+Route::delete('utilities/leave-types/{leaveType}', [LeaveTypeController::class, 'destroy'])
+    ->middleware(['auth', 'verified'])
+    ->name('utilities.leave-types.destroy');
 
 Route::get('survey', function () {
     return Inertia::render('Survey');

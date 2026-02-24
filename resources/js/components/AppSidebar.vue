@@ -23,6 +23,7 @@ import satSummaryRoutes from '@/routes/sat-summary';
 import selfServiceRoutes from '@/routes/self-service';
 import surveyRoutes from '@/routes/survey';
 import utilitiesRoutes from '@/routes/utilities';
+import leaveTypesRoutes from '@/routes/utilities/leave-types';
 
 const mainNavItems: NavItem[] = [
     {
@@ -160,6 +161,10 @@ const mainNavItems: NavItem[] = [
             {
                 title: 'User List',
                 href: utilitiesRoutes.userList(),
+            },
+            {
+                title: 'Leave Types List',
+                href: leaveTypesRoutes.index(),
             },
             {
                 title: 'Business & Department List',
