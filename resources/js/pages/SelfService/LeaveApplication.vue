@@ -1,18 +1,18 @@
 <script setup lang="ts">
 import { Head, router, usePage } from '@inertiajs/vue3';
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { DatePicker } from 'v-calendar';
+import { echo } from '@laravel/echo-vue';
+import { addDays, differenceInDays } from 'date-fns';
 import {
     CheckCircle2,
     ImagePlus,
     SendHorizontal,
     X,
 } from 'lucide-vue-next';
+import { DatePicker } from 'v-calendar';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import selfServiceRoutes from '@/routes/self-service';
 import { type BreadcrumbItem, type User } from '@/types';
-import { addDays, differenceInDays } from 'date-fns';
-import { echo } from '@laravel/echo-vue';
 
 const pageTitle = 'Leave Application';
 
@@ -69,6 +69,8 @@ const requiredDocType = computed(() => {
 const defaultLeaveTypeLabel = '- Select Leave Type -';
 const selectedLeaveType = ref<string>(defaultLeaveTypeLabel);
 const isSickLeave = computed(() => selectedLeaveType.value === 'Sick Leave');
+const isMaternityLeave = computed(() => selectedLeaveType.value === 'Maternity Leave');
+const isPaternityLeave = computed(() => selectedLeaveType.value === 'Paternity Leave');
 
 
 const minSelectableDate = computed<Date | null>(() => {
@@ -80,6 +82,12 @@ const minSelectableDate = computed<Date | null>(() => {
     }
     return today;
 });
+const maxSelectableDate = computed<Date | null>(() => {
+    if (!isPaternityLeave.value || !leaveRange.value.start) {
+        return null;
+    }
+    return addDays(leaveRange.value.start, 6);
+});
 
 const reason = ref<string>('');
 const commutation = ref<string>('');
@@ -88,8 +96,17 @@ const medicalCertification = ref<File | null>(null);
 const affidavitFile = ref<File | null>(null);
 const medicalFileInput = ref<HTMLInputElement | null>(null);
 const affidavitFileInput = ref<HTMLInputElement | null>(null);
+const birthCertificate = ref<File | null>(null);
+const paternityMedicalCertificate = ref<File | null>(null);
+const marriageContract = ref<File | null>(null);
+const birthCertificateInput = ref<HTMLInputElement | null>(null);
+const paternityMedicalCertificateInput = ref<HTMLInputElement | null>(null);
+const marriageContractInput = ref<HTMLInputElement | null>(null);
 const isMedicalDropActive = ref(false);
 const isAffidavitDropActive = ref(false);
+const isBirthCertificateDropActive = ref(false);
+const isPaternityMedicalDropActive = ref(false);
+const isMarriageContractDropActive = ref(false);
 const submitError = ref<string | null>(null);
 
 const page = usePage();
@@ -240,6 +257,72 @@ const clearAffidavit = () => {
     }
 };
 
+const onBirthCertificateChange = (event: Event) => {
+    const target = event.target as HTMLInputElement;
+    birthCertificate.value = target.files?.[0] ?? null;
+};
+
+const openBirthCertificatePicker = () => {
+    birthCertificateInput.value?.click();
+};
+
+const onBirthCertificateDrop = (event: DragEvent) => {
+    event.preventDefault();
+    isBirthCertificateDropActive.value = false;
+    birthCertificate.value = event.dataTransfer?.files?.[0] ?? null;
+};
+
+const clearBirthCertificate = () => {
+    birthCertificate.value = null;
+    if (birthCertificateInput.value) {
+        birthCertificateInput.value.value = '';
+    }
+};
+
+const onPaternityMedicalCertificateChange = (event: Event) => {
+    const target = event.target as HTMLInputElement;
+    paternityMedicalCertificate.value = target.files?.[0] ?? null;
+};
+
+const openPaternityMedicalCertificatePicker = () => {
+    paternityMedicalCertificateInput.value?.click();
+};
+
+const onPaternityMedicalCertificateDrop = (event: DragEvent) => {
+    event.preventDefault();
+    isPaternityMedicalDropActive.value = false;
+    paternityMedicalCertificate.value = event.dataTransfer?.files?.[0] ?? null;
+};
+
+const clearPaternityMedicalCertificate = () => {
+    paternityMedicalCertificate.value = null;
+    if (paternityMedicalCertificateInput.value) {
+        paternityMedicalCertificateInput.value.value = '';
+    }
+};
+
+const onMarriageContractChange = (event: Event) => {
+    const target = event.target as HTMLInputElement;
+    marriageContract.value = target.files?.[0] ?? null;
+};
+
+const openMarriageContractPicker = () => {
+    marriageContractInput.value?.click();
+};
+
+const onMarriageContractDrop = (event: DragEvent) => {
+    event.preventDefault();
+    isMarriageContractDropActive.value = false;
+    marriageContract.value = event.dataTransfer?.files?.[0] ?? null;
+};
+
+const clearMarriageContract = () => {
+    marriageContract.value = null;
+    if (marriageContractInput.value) {
+        marriageContractInput.value.value = '';
+    }
+};
+
 watch(selectedLeaveType, () => {
     const minimumDate = minSelectableDate.value;
     if (minimumDate && leaveRange.value.start < minimumDate) {
@@ -248,7 +331,26 @@ watch(selectedLeaveType, () => {
             end: minimumDate,
         };
     }
+
+    if (isPaternityLeave.value && noOfDays.value > 7) {
+        leaveRange.value = {
+            start: leaveRange.value.start,
+            end: addDays(leaveRange.value.start, 6),
+        };
+    }
 });
+
+watch(
+    () => leaveRange.value.start,
+    () => {
+        if (isPaternityLeave.value && noOfDays.value > 7) {
+            leaveRange.value = {
+                start: leaveRange.value.start,
+                end: addDays(leaveRange.value.start, 6),
+            };
+        }
+    },
+);
 
 watch(leaveTypeOptions, (options) => {
     const isValid = options.some((option) => option.value === selectedLeaveType.value);
@@ -261,8 +363,24 @@ watch([selectedLeaveType, consultationAvailed], () => {
     submitError.value = null;
     if (!requiresSupportingDoc.value) {
         consultationAvailed.value = '';
-        medicalCertification.value = null;
+        if (!isMaternityLeave.value) {
+            medicalCertification.value = null;
+        }
         affidavitFile.value = null;
+    }
+
+    if (requiresSupportingDoc.value) {
+        if (consultationAvailed.value === 'yes') {
+            affidavitFile.value = null;
+        } else if (consultationAvailed.value === 'no') {
+            medicalCertification.value = null;
+        }
+    }
+
+    if (!isPaternityLeave.value) {
+        birthCertificate.value = null;
+        paternityMedicalCertificate.value = null;
+        marriageContract.value = null;
     }
 });
 
@@ -281,6 +399,11 @@ const submitLeaveApplication = () => {
         return;
     }
 
+    if (isPaternityLeave.value && noOfDays.value > 7) {
+        submitError.value = 'Paternity Leave cannot exceed 7 days.';
+        return;
+    }
+
     if (requiresSupportingDoc.value) {
         if (requiredDocType.value === 'medical' && !medicalCertification.value) {
             submitError.value = 'Medical certificate is required when consultation was availed.';
@@ -296,6 +419,16 @@ const submitLeaveApplication = () => {
         }
     }
 
+    if (isPaternityLeave.value) {
+        const hasBirthCertificate = !!birthCertificate.value;
+        const hasMedicalOrMarriage = !!paternityMedicalCertificate.value || !!marriageContract.value;
+
+        if (!hasBirthCertificate || !hasMedicalOrMarriage) {
+            submitError.value = 'For Paternity Leave, upload the birth certificate plus either a medical certificate (proof of delivery) or a marriage contract.';
+            return;
+        }
+    }
+
     router.post(
         selfServiceRoutes.leaveApplication().url,
         {
@@ -307,6 +440,9 @@ const submitLeaveApplication = () => {
             consultation_availed: consultationAvailed.value || null,
             medical_certificate: medicalCertification.value,
             affidavit: affidavitFile.value,
+            birth_certificate: birthCertificate.value,
+            paternity_medical_certificate: paternityMedicalCertificate.value,
+            marriage_contract: marriageContract.value,
         },
         {
             forceFormData: true,
@@ -489,6 +625,7 @@ onBeforeUnmount(() => {
                                 is-inline
                                 expanded
                                 :min-date="minSelectableDate ?? undefined"
+                                :max-date="maxSelectableDate ?? undefined"
                                 :masks="{ weekdays: 'WWW' }"
                                 class="calendar-inline"
                             />
@@ -510,100 +647,104 @@ onBeforeUnmount(() => {
                                     No medical consultation (affidavit)
                                 </label>
 
-                                <div
-                                    v-if="!medicalCertification"
-                                    class="medical-dropzone"
-                                    :class="{ 'is-active': isMedicalDropActive }"
-                                    @click="openMedicalFilePicker"
-                                    @dragover.prevent="isMedicalDropActive = true"
-                                    @dragleave.prevent="isMedicalDropActive = false"
-                                    @drop="onMedicalDrop"
-                                >
-                                    <div class="dropzone-icon-wrap">
-                                        <ImagePlus :size="30" />
-                                    </div>
-                                    <p class="dropzone-main">
-                                        Drag &amp; drop
-                                        <span>medical certificate</span>
-                                    </p>
-                                    <p class="dropzone-sub">
-                                        or
-                                        <button type="button" class="browse-link" @click.stop="openMedicalFilePicker">
-                                            browse files
-                                        </button>
-                                        on your computer
-                                    </p>
-                                    <input
-                                        ref="medicalFileInput"
-                                        type="file"
-                                        accept=".pdf,.jpg,.jpeg,.png"
-                                        class="sr-only"
-                                        @change="onMedicalCertificationChange"
-                                    />
-                                </div>
-
-                                <div v-if="medicalCertification" class="medical-file-row">
-                                    <div class="file-meta">
-                                        <p class="file-name">{{ medicalCertification.name }}</p>
-                                        <p class="file-info">
-                                            {{ Math.max(1, Math.round(medicalCertification.size / 1024)) }} KB
+                                <template v-if="consultationAvailed === 'yes'">
+                                    <div
+                                        v-if="!medicalCertification"
+                                        class="medical-dropzone"
+                                        :class="{ 'is-active': isMedicalDropActive }"
+                                        @click="openMedicalFilePicker"
+                                        @dragover.prevent="isMedicalDropActive = true"
+                                        @dragleave.prevent="isMedicalDropActive = false"
+                                        @drop="onMedicalDrop"
+                                    >
+                                        <div class="dropzone-icon-wrap">
+                                            <ImagePlus :size="30" />
+                                        </div>
+                                        <p class="dropzone-main">
+                                            Drag &amp; drop
+                                            <span>medical certificate</span>
                                         </p>
-                                    </div>
-                                    <button type="button" class="remove-file-btn" @click="clearMedicalCertification">
-                                        <X :size="16" />
-                                    </button>
-                                </div>
-
-                                <div
-                                    v-if="!affidavitFile"
-                                    class="medical-dropzone"
-                                    :class="{ 'is-active': isAffidavitDropActive }"
-                                    @click="openAffidavitFilePicker"
-                                    @dragover.prevent="isAffidavitDropActive = true"
-                                    @dragleave.prevent="isAffidavitDropActive = false"
-                                    @drop="onAffidavitDrop"
-                                >
-                                    <div class="dropzone-icon-wrap">
-                                        <ImagePlus :size="30" />
-                                    </div>
-                                    <p class="dropzone-main">
-                                        Drag &amp; drop
-                                        <span>affidavit</span>
-                                    </p>
-                                    <p class="dropzone-sub">
-                                        or
-                                        <button type="button" class="browse-link" @click.stop="openAffidavitFilePicker">
-                                            browse files
-                                        </button>
-                                        on your computer
-                                    </p>
-                                    <input
-                                        ref="affidavitFileInput"
-                                        type="file"
-                                        accept=".pdf,.jpg,.jpeg,.png"
-                                        class="sr-only"
-                                        @change="onAffidavitChange"
-                                    />
-                                </div>
-
-                                <div v-if="affidavitFile" class="medical-file-row">
-                                    <div class="file-meta">
-                                        <p class="file-name">{{ affidavitFile.name }}</p>
-                                        <p class="file-info">
-                                            {{ Math.max(1, Math.round(affidavitFile.size / 1024)) }} KB
+                                        <p class="dropzone-sub">
+                                            or
+                                            <button type="button" class="browse-link" @click.stop="openMedicalFilePicker">
+                                                browse files
+                                            </button>
+                                            on your computer
                                         </p>
+                                        <input
+                                            ref="medicalFileInput"
+                                            type="file"
+                                            accept=".pdf,.jpg,.jpeg,.png"
+                                            class="sr-only"
+                                            @change="onMedicalCertificationChange"
+                                        />
                                     </div>
-                                    <button type="button" class="remove-file-btn" @click="clearAffidavit">
-                                        <X :size="16" />
-                                    </button>
-                                </div>
+
+                                    <div v-if="medicalCertification" class="medical-file-row">
+                                        <div class="file-meta">
+                                            <p class="file-name">{{ medicalCertification.name }}</p>
+                                            <p class="file-info">
+                                                {{ Math.max(1, Math.round(medicalCertification.size / 1024)) }} KB
+                                            </p>
+                                        </div>
+                                        <button type="button" class="remove-file-btn" @click="clearMedicalCertification">
+                                            <X :size="16" />
+                                        </button>
+                                    </div>
+                                </template>
+
+                                <template v-else-if="consultationAvailed === 'no'">
+                                    <div
+                                        v-if="!affidavitFile"
+                                        class="medical-dropzone"
+                                        :class="{ 'is-active': isAffidavitDropActive }"
+                                        @click="openAffidavitFilePicker"
+                                        @dragover.prevent="isAffidavitDropActive = true"
+                                        @dragleave.prevent="isAffidavitDropActive = false"
+                                        @drop="onAffidavitDrop"
+                                    >
+                                        <div class="dropzone-icon-wrap">
+                                            <ImagePlus :size="30" />
+                                        </div>
+                                        <p class="dropzone-main">
+                                            Drag &amp; drop
+                                            <span>affidavit</span>
+                                        </p>
+                                        <p class="dropzone-sub">
+                                            or
+                                            <button type="button" class="browse-link" @click.stop="openAffidavitFilePicker">
+                                                browse files
+                                            </button>
+                                            on your computer
+                                        </p>
+                                        <input
+                                            ref="affidavitFileInput"
+                                            type="file"
+                                            accept=".pdf,.jpg,.jpeg,.png"
+                                            class="sr-only"
+                                            @change="onAffidavitChange"
+                                        />
+                                    </div>
+
+                                    <div v-if="affidavitFile" class="medical-file-row">
+                                        <div class="file-meta">
+                                            <p class="file-name">{{ affidavitFile.name }}</p>
+                                            <p class="file-info">
+                                                {{ Math.max(1, Math.round(affidavitFile.size / 1024)) }} KB
+                                            </p>
+                                        </div>
+                                        <button type="button" class="remove-file-btn" @click="clearAffidavit">
+                                            <X :size="16" />
+                                        </button>
+                                    </div>
+                                </template>
                             </div>
 
                             <div
-                                v-else-if="selectedLeaveType === 'Maternity Leave' || selectedLeaveType === 'Paternity Leave'"
+                                v-else-if="isMaternityLeave"
                                 class="medical-cert-panel"
                             >
-                                <p class="upload-title">Medical Certification</p>
+                                <p class="upload-title">Proof of Pregnancy</p>
 
                                 <div
                                     v-if="!medicalCertification"
@@ -649,6 +790,148 @@ onBeforeUnmount(() => {
                                     </button>
                                 </div>
                             </div>
+
+                            <div
+                                v-else-if="isPaternityLeave"
+                                class="medical-cert-panel"
+                            >
+                                <p class="upload-title">Proof of Child's Delivery</p>
+                                <p class="dropzone-sub">
+                                    Required for Paternity Leave (max 7 days). Upload the birth certificate plus either a medical certificate (proof of delivery) or a marriage contract.
+                                </p>
+
+                                <p class="upload-title mt-3">Birth Certificate (Required)</p>
+                                <div
+                                    v-if="!birthCertificate"
+                                    class="medical-dropzone"
+                                    :class="{ 'is-active': isBirthCertificateDropActive }"
+                                    @click="openBirthCertificatePicker"
+                                    @dragover.prevent="isBirthCertificateDropActive = true"
+                                    @dragleave.prevent="isBirthCertificateDropActive = false"
+                                    @drop="onBirthCertificateDrop"
+                                >
+                                    <div class="dropzone-icon-wrap">
+                                        <ImagePlus :size="30" />
+                                    </div>
+                                    <p class="dropzone-main">
+                                        Drag &amp; drop
+                                        <span>birth certificate</span>
+                                    </p>
+                                    <p class="dropzone-sub">
+                                        or
+                                        <button type="button" class="browse-link" @click.stop="openBirthCertificatePicker">
+                                            browse files
+                                        </button>
+                                        on your computer
+                                    </p>
+                                    <input
+                                        ref="birthCertificateInput"
+                                        type="file"
+                                        accept=".pdf,.jpg,.jpeg,.png"
+                                        class="sr-only"
+                                        @change="onBirthCertificateChange"
+                                    />
+                                </div>
+                                <div v-if="birthCertificate" class="medical-file-row">
+                                    <div class="file-meta">
+                                        <p class="file-name">{{ birthCertificate.name }}</p>
+                                        <p class="file-info">
+                                            {{ Math.max(1, Math.round(birthCertificate.size / 1024)) }} KB
+                                        </p>
+                                    </div>
+                                    <button type="button" class="remove-file-btn" @click="clearBirthCertificate">
+                                        <X :size="16" />
+                                    </button>
+                                </div>
+
+                                <p class="upload-title mt-3">Medical Certificate (Proof of Delivery)</p>
+                                <div
+                                    v-if="!paternityMedicalCertificate"
+                                    class="medical-dropzone"
+                                    :class="{ 'is-active': isPaternityMedicalDropActive }"
+                                    @click="openPaternityMedicalCertificatePicker"
+                                    @dragover.prevent="isPaternityMedicalDropActive = true"
+                                    @dragleave.prevent="isPaternityMedicalDropActive = false"
+                                    @drop="onPaternityMedicalCertificateDrop"
+                                >
+                                    <div class="dropzone-icon-wrap">
+                                        <ImagePlus :size="30" />
+                                    </div>
+                                    <p class="dropzone-main">
+                                        Drag &amp; drop
+                                        <span>medical certificate</span>
+                                    </p>
+                                    <p class="dropzone-sub">
+                                        or
+                                        <button type="button" class="browse-link" @click.stop="openPaternityMedicalCertificatePicker">
+                                            browse files
+                                        </button>
+                                        on your computer
+                                    </p>
+                                    <input
+                                        ref="paternityMedicalCertificateInput"
+                                        type="file"
+                                        accept=".pdf,.jpg,.jpeg,.png"
+                                        class="sr-only"
+                                        @change="onPaternityMedicalCertificateChange"
+                                    />
+                                </div>
+                                <div v-if="paternityMedicalCertificate" class="medical-file-row">
+                                    <div class="file-meta">
+                                        <p class="file-name">{{ paternityMedicalCertificate.name }}</p>
+                                        <p class="file-info">
+                                            {{ Math.max(1, Math.round(paternityMedicalCertificate.size / 1024)) }} KB
+                                        </p>
+                                    </div>
+                                    <button type="button" class="remove-file-btn" @click="clearPaternityMedicalCertificate">
+                                        <X :size="16" />
+                                    </button>
+                                </div>
+
+                                <p class="upload-title mt-3">Marriage Contract</p>
+                                <div
+                                    v-if="!marriageContract"
+                                    class="medical-dropzone"
+                                    :class="{ 'is-active': isMarriageContractDropActive }"
+                                    @click="openMarriageContractPicker"
+                                    @dragover.prevent="isMarriageContractDropActive = true"
+                                    @dragleave.prevent="isMarriageContractDropActive = false"
+                                    @drop="onMarriageContractDrop"
+                                >
+                                    <div class="dropzone-icon-wrap">
+                                        <ImagePlus :size="30" />
+                                    </div>
+                                    <p class="dropzone-main">
+                                        Drag &amp; drop
+                                        <span>marriage contract</span>
+                                    </p>
+                                    <p class="dropzone-sub">
+                                        or
+                                        <button type="button" class="browse-link" @click.stop="openMarriageContractPicker">
+                                            browse files
+                                        </button>
+                                        on your computer
+                                    </p>
+                                    <input
+                                        ref="marriageContractInput"
+                                        type="file"
+                                        accept=".pdf,.jpg,.jpeg,.png"
+                                        class="sr-only"
+                                        @change="onMarriageContractChange"
+                                    />
+                                </div>
+                                <div v-if="marriageContract" class="medical-file-row">
+                                    <div class="file-meta">
+                                        <p class="file-name">{{ marriageContract.name }}</p>
+                                        <p class="file-info">
+                                            {{ Math.max(1, Math.round(marriageContract.size / 1024)) }} KB
+                                        </p>
+                                    </div>
+                                    <button type="button" class="remove-file-btn" @click="clearMarriageContract">
+                                        <X :size="16" />
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -659,6 +942,18 @@ onBeforeUnmount(() => {
                         </p>
                         <p v-else-if="$page.props.errors?.affidavit" class="text-sm text-destructive">
                             {{ $page.props.errors.affidavit }}
+                        </p>
+                        <p v-else-if="$page.props.errors?.birth_certificate" class="text-sm text-destructive">
+                            {{ $page.props.errors.birth_certificate }}
+                        </p>
+                        <p v-else-if="$page.props.errors?.paternity_medical_certificate" class="text-sm text-destructive">
+                            {{ $page.props.errors.paternity_medical_certificate }}
+                        </p>
+                        <p v-else-if="$page.props.errors?.marriage_contract" class="text-sm text-destructive">
+                            {{ $page.props.errors.marriage_contract }}
+                        </p>
+                        <p v-else-if="$page.props.errors?.leave_end_date" class="text-sm text-destructive">
+                            {{ $page.props.errors.leave_end_date }}
                         </p>
                         <button class="cancel-btn" type="button">Cancel</button>
                         <button class="apply-btn" type="button" @click="submitLeaveApplication">

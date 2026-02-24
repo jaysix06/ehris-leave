@@ -186,6 +186,9 @@ class LeaveApplicationController extends Controller
             'consultation_availed' => ['nullable', 'in:yes,no'],
             'medical_certificate' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
             'affidavit' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
+            'birth_certificate' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
+            'paternity_medical_certificate' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
+            'marriage_contract' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
         ]);
 
         if ($data['leave_type'] === 'Sick Leave') {
@@ -218,6 +221,34 @@ class LeaveApplicationController extends Controller
                         'medical_certificate' => 'Please upload a medical certificate or an affidavit.',
                     ]);
                 }
+            }
+        }
+
+        if ($data['leave_type'] === 'Paternity Leave') {
+            $start = Carbon::parse($data['leave_start_date'])->startOfDay();
+            $end = Carbon::parse($data['leave_end_date'])->startOfDay();
+            $days = $start->diffInDays($end) + 1;
+
+            if ($days > 7) {
+                throw ValidationException::withMessages([
+                    'leave_end_date' => 'Paternity Leave cannot exceed 7 days per application.',
+                ]);
+            }
+
+            $hasBirthCertificate = $request->hasFile('birth_certificate');
+            $hasPaternityMedical = $request->hasFile('paternity_medical_certificate');
+            $hasMarriageContract = $request->hasFile('marriage_contract');
+
+            if (! $hasBirthCertificate) {
+                throw ValidationException::withMessages([
+                    'birth_certificate' => 'Birth certificate is required for Paternity Leave.',
+                ]);
+            }
+
+            if (! ($hasPaternityMedical || $hasMarriageContract)) {
+                throw ValidationException::withMessages([
+                    'paternity_medical_certificate' => 'Upload either a medical certificate (proof of delivery) or a marriage contract for Paternity Leave.',
+                ]);
             }
         }
 

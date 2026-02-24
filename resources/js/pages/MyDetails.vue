@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { Head, usePage } from '@inertiajs/vue3';
+import { Head, router, usePage } from '@inertiajs/vue3';
+import { echo } from '@laravel/echo-vue';
 import {
     Calendar,
     ChevronDown,
@@ -12,7 +13,7 @@ import {
     Phone,
     User,
 } from 'lucide-vue-next';
-import { computed, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { BreadcrumbItem } from '@/types';
 
@@ -118,6 +119,13 @@ const employeeId = computed(() => {
     return authId !== null && authId !== undefined ? String(authId) : 'N/A';
 });
 
+const currentHrid = computed<number | null>(() => {
+    const rawHrid = props.profile?.hrId ?? props.officialInfo?.hrid ?? authUser.value?.hrId;
+    const parsedHrid = Number(rawHrid);
+
+    return Number.isFinite(parsedHrid) ? parsedHrid : null;
+});
+
 const employeeEmail = computed(() => {
     if (props.profile?.email) return props.profile.email;
     const c = props.contactInfo;
@@ -196,6 +204,51 @@ function familyName(item: Record<string, unknown>): string {
     const parts = [item.firstname, item.middlename, item.lastname, item.extension].filter(Boolean);
     return parts.map(String).join(' ').trim() || '—';
 }
+const myDetailsReloadProps = [
+    'profile',
+    'officialInfo',
+    'personalInfo',
+    'contactInfo',
+    'family',
+    'education',
+    'workExperience',
+    'eligibility',
+    'serviceRecord',
+    'leaveHistory',
+    'documents',
+    'training',
+    'awards',
+    'performance',
+    'researches',
+    'expertise',
+    'affiliation',
+];
+
+const refreshMyDetails = () => {
+    router.reload({
+        only: myDetailsReloadProps,
+        preserveState: true,
+        preserveScroll: true,
+    });
+};
+
+const onMyDetailsUpdated = (event: { hrid?: number | string } = {}) => {
+    const updatedHrid = Number(event.hrid);
+    if (!Number.isFinite(updatedHrid) || currentHrid.value === null || updatedHrid !== currentHrid.value) {
+        return;
+    }
+
+    console.info('[MyDetails] MyDetailsUpdated received. Refreshing details.');
+    refreshMyDetails();
+};
+
+onMounted(() => {
+    echo().channel('my-details').listen('.MyDetailsUpdated', onMyDetailsUpdated);
+});
+
+onBeforeUnmount(() => {
+    echo().channel('my-details').stopListening('MyDetailsUpdated');
+});
 </script>
 
 <template>
