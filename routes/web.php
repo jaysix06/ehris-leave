@@ -289,6 +289,10 @@ Route::delete('utilities/leave-types/{leaveType}', [LeaveTypeController::class, 
     ->middleware(['auth', 'verified'])
     ->name('utilities.leave-types.destroy');
 
+Route::get('reports', function () {
+    return Inertia::render('Reports');
+})->middleware(['auth', 'verified'])->name('reports');
+
 Route::get('survey', function () {
     return Inertia::render('Survey');
 })->middleware(['auth', 'verified'])->name('survey');
