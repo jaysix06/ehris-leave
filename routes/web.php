@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\MyDetails\FamilyController;
+use App\Models\EmpFamilyInfo;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
@@ -123,8 +125,9 @@ Route::get('my-details', function (Request $request) {
     $affiliation = [];
 
     if ($authUser && Schema::hasTable('tbl_user')) {
-        $dbProfile = DB::table('tbl_user')
-            ->select([
+        $profileUser = User::where('email', $authUser->email)->first();
+        if ($profileUser) {
+            $dbProfile = $profileUser->only([
                 'hrId',
                 'email',
                 'lastname',
@@ -135,10 +138,9 @@ Route::get('my-details', function (Request $request) {
                 'job_title',
                 'role',
                 'fullname',
-            ])
-            ->where('email', $authUser->email)
-            ->first();
-        $hrid = $dbProfile->hrId ?? $authUser->hrId ?? null;
+            ]);
+            $hrid = $profileUser->hrId;
+        }
     }
 
     if ($hrid !== null) {
@@ -146,7 +148,7 @@ Route::get('my-details', function (Request $request) {
             'tbl_emp_official_info' => fn () => DB::table('tbl_emp_official_info')->where('hrid', $hrid)->first(),
             'tbl_emp_personal_info' => fn () => DB::table('tbl_emp_personal_info')->where('hrid', $hrid)->first(),
             'tbl_emp_contact_info' => fn () => DB::table('tbl_emp_contact_info')->where('hrid', $hrid)->first(),
-            'tbl_emp_family_info' => fn () => DB::table('tbl_emp_family_info')->where('hrid', $hrid)->get(),
+            'tbl_emp_family_info' => fn () => EmpFamilyInfo::where('hrid', $hrid)->get(),
             'tbl_emp_education_info' => fn () => DB::table('tbl_emp_education_info')->where('hrid', $hrid)->get(),
             'tbl_emp_work_experience_info' => fn () => DB::table('tbl_emp_work_experience_info')->where('hrid', $hrid)->get(),
             'tbl_emp_civil_service_info' => fn () => DB::table('tbl_emp_civil_service_info')->where('hrid', $hrid)->get(),
