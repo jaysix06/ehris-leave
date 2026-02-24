@@ -1,14 +1,12 @@
 <?php
 
-<<<<<<< HEAD
 use App\Http\Controllers\MyDetails\FamilyController;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-=======
 use App\Http\Controllers\MyDetailsController;
 use App\Http\Controllers\SelfService\LeaveApplicationController;
 use App\Http\Controllers\Utilities\LeaveTypeController;
->>>>>>> 28cd2466f1c978f8628c442848035637ca473213
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
@@ -109,7 +107,6 @@ Route::get('request-status/my-leave', function () {
     return Inertia::render('RequestStatus/MyLeave');
 })->middleware(['auth', 'verified'])->name('request-status.my-leave');
 
-<<<<<<< HEAD
 Route::get('my-details', function (Request $request) {
     $authUser = $request->user();
     $dbProfile = null;
@@ -239,11 +236,6 @@ Route::get('my-details', function (Request $request) {
         'familyUpdateUrl' => route('my-details.family.store'),
     ]);
 })->middleware(['auth', 'verified'])->name('my-details');
-=======
-Route::get('my-details', [MyDetailsController::class, 'show'])
-    ->middleware(['auth', 'verified'])
-    ->name('my-details');
->>>>>>> 28cd2466f1c978f8628c442848035637ca473213
 
 Route::post('my-details/family', [FamilyController::class, 'store'])
     ->middleware(['auth', 'verified'])
