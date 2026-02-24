@@ -79,12 +79,6 @@ class LeaveApplicationController extends Controller
                         ->where('office_Id', (int) $rawOffice)
                         ->value('office_name');
 
-                    if (! is_string($officeName) || trim($officeName) === '') {
-                        $officeName = Office::query()
-                            ->where('office_id', (int) $rawOffice)
-                            ->value('office_name');
-                    }
-
                     if (is_string($officeName) && trim($officeName) !== '') {
                         $officeSchool = trim($officeName);
                     }
