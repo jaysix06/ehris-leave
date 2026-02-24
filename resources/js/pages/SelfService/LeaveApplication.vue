@@ -56,23 +56,6 @@ const noOfDays = computed(() => {
 
 const selectedLeaveType = ref<string>('- Select Leave Type -');
 
-const leaveTypeOptions: { label: string; value: string }[] = [
-    { label: '- Select Leave Type -', value: '- Select Leave Type -' },
-    { label: 'Vacation Leave', value: 'Vacation Leave' },
-    { label: 'Mandatory/Force Leave', value: 'Mandatory/Force Leave' },
-    { label: 'Sick Leave', value: 'Sick Leave' },
-    { label: 'Maternity Leave', value: 'Maternity Leave' },
-    { label: 'Paternity Leave', value: 'Paternity Leave' },
-    { label: 'Special Privilege Leave', value: 'Special Privilege Leave' },
-    { label: 'Solo Parent Leave', value: 'Solo Parent Leave' },
-    { label: 'Study Leave', value: 'Study Leave' },
-    { label: '10-Day VAWC Leave', value: '10-Day VAWC Leave' },
-    { label: 'Rehabilitation Privilege', value: 'Rehabilitation Privilege' },
-    { label: 'Special Leave Benefits for Women', value: 'Special Leave Benefits for Women' },
-    { label: 'Special Emergency (Calamity) Leave', value: 'Special Emergency (Calamity) Leave' },
-    { label: 'Others', value: 'Others' },
-];
-
 const minSelectableDate = computed(() => {
     if (selectedLeaveType.value === 'Vacation Leave') {
         return addDays(today, 5);
@@ -89,9 +72,24 @@ const isMedicalDropActive = ref(false);
 const page = usePage();
 const authUser = computed(() => page.props.auth?.user as User | undefined);
 const leaveEmployee = computed(() => page.props.leaveEmployee as Record<string, unknown> | undefined);
+const dbLeaveTypes = computed(() => page.props.leaveTypes as string[] | undefined);
 const salaryFormatter = new Intl.NumberFormat('en-PH', {
     style: 'currency',
     currency: 'PHP',
+});
+const leaveTypeOptions = computed<{ label: string; value: string }[]>(() => {
+    const baseOption = { label: '- Select Leave Type -', value: '- Select Leave Type -' };
+    const types = (dbLeaveTypes.value ?? [])
+        .map((type) => type.trim())
+        .filter((type) => type !== '');
+
+    return [
+        baseOption,
+        ...types.map((type) => ({
+            label: type,
+            value: type,
+        })),
+    ];
 });
 
 const readRecordString = (record: Record<string, unknown> | undefined, keys: string[]) => {
@@ -199,6 +197,13 @@ watch(selectedLeaveType, () => {
             start: minimumDate,
             end: minimumDate,
         };
+    }
+});
+
+watch(leaveTypeOptions, (options) => {
+    const isValid = options.some((option) => option.value === selectedLeaveType.value);
+    if (!isValid) {
+        selectedLeaveType.value = '- Select Leave Type -';
     }
 });
 </script>

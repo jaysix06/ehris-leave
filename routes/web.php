@@ -86,6 +86,7 @@ Route::get('self-service/service-record', function () {
 Route::get('self-service/leave-application', function (Request $request) {
     $authUser = $request->user();
     $leaveEmployee = null;
+    $leaveTypes = [];
 
     if ($authUser && Schema::hasTable('tbl_user')) {
         $profile = DB::table('tbl_user')
@@ -176,8 +177,23 @@ Route::get('self-service/leave-application', function (Request $request) {
         ];
     }
 
+    if (Schema::hasTable('tbl_leave_type')) {
+        $leaveTypes = DB::table('tbl_leave_type')
+            ->select('leave_type')
+            ->whereNotNull('leave_type')
+            ->where('leave_type', '!=', '')
+            ->distinct()
+            ->orderBy('id')
+            ->pluck('leave_type')
+            ->map(fn ($type) => trim((string) $type))
+            ->filter(fn ($type) => $type !== '')
+            ->values()
+            ->all();
+    }
+
     return Inertia::render('SelfService/LeaveApplication', [
         'leaveEmployee' => $leaveEmployee,
+        'leaveTypes' => $leaveTypes,
     ]);
 })->middleware(['auth', 'verified'])->name('self-service.leave-application');
 Route::get('self-service/deped-email-requests', function () {
