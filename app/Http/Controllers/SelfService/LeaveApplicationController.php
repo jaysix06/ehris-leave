@@ -97,10 +97,56 @@ class LeaveApplicationController extends Controller
                 $fullName = $nameParts !== [] ? trim(implode(' ', $nameParts)) : '';
             }
 
+            $reportingManager = null;
+            if ($officialInfo !== null && Schema::hasTable('tbl_emp_official_info')) {
+                $reportingQuery = EmpOfficialInfo::query()->where('role', 'Reporting Manager');
+
+                $departmentId = trim((string) ($officialInfo->department_id ?? ''));
+                $rawOffice = trim((string) ($officialInfo->office ?? ''));
+
+                if ($departmentId !== '' && ctype_digit($departmentId)) {
+                    $reportingQuery->where('department_id', $departmentId);
+                } elseif ($officeSchool !== null && Schema::hasTable('tbl_department')) {
+                    $deptId = Department::query()
+                        ->where('department_name', $officeSchool)
+                        ->value('department_id');
+                    if ($deptId !== null) {
+                        $reportingQuery->where('department_id', (string) $deptId);
+                    }
+                }
+
+                if ($rawOffice !== '') {
+                    $reportingQuery->where('office', $rawOffice);
+                } elseif ($officeSchool !== null && Schema::hasTable('tbl_office')) {
+                    $officeId = Office::query()
+                        ->where('office_name', $officeSchool)
+                        ->value('office_Id');
+                    if ($officeId !== null) {
+                        $reportingQuery->where('office', (string) $officeId);
+                    } else {
+                        $reportingQuery->where('office', $officeSchool);
+                    }
+                } elseif ($officeSchool !== null) {
+                    $reportingQuery->where('office', $officeSchool);
+                }
+
+                $reportingRecord = $reportingQuery->first();
+                if ($reportingRecord !== null) {
+                    $nameParts = array_filter([
+                        $reportingRecord->firstname ?? null,
+                        $reportingRecord->middlename ?? null,
+                        $reportingRecord->lastname ?? null,
+                        $reportingRecord->extension ?? null,
+                    ], fn ($part) => is_string($part) && trim($part) !== '');
+                    $reportingManager = $nameParts !== [] ? trim(implode(' ', $nameParts)) : null;
+                }
+            }
+
             $leaveEmployee = [
                 'name' => $fullName !== '' ? $fullName : ($authUser->name ?? null),
                 'position' => $officialInfo->job_title ?? $profile?->job_title ?? null,
                 'officeSchool' => $officeSchool,
+                'reportingManager' => $reportingManager,
                 'salaryGrade' => $officialInfo->salary_grade ?? null,
                 'salaryStep' => $officialInfo->salary_step ?? $officialInfo->step ?? null,
                 'salaryAmount' => $officialInfo->salary_actual ?? $officialInfo->salary_authorized ?? null,

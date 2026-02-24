@@ -159,6 +159,9 @@ const employeeDetails = computed(() => ({
     name:
         readRecordString(leaveEmployee.value, ['name', 'fullname']) ??
         pickUserValue(['name', 'firstname', 'lastname', 'middlename', 'extension']),
+    reportingManager:
+        readRecordString(leaveEmployee.value, ['reportingManager', 'reporting_manager']) ??
+        pickUserValue(['reporting_manager', 'reportingManager']),
     position:
         readRecordString(leaveEmployee.value, ['position', 'job_title', 'designation']) ??
         pickUserValue(['position', 'job_title', 'designation']),
@@ -375,7 +378,7 @@ watch(leaveTypeOptions, (options) => {
                                 class="calendar-inline"
                             />
                             <div
-                                v-if="selectedLeaveType === 'Sick Leave' && noOfDays >= 6"
+                                v-if="selectedLeaveType === 'Sick Leave' && noOfDays >= 6 || selectedLeaveType === 'Maternity Leave' || selectedLeaveType === 'Paternity Leave'"
                                 class="medical-cert-panel"
                             >
                                 <p class="upload-title">Medical Certification</p>
@@ -459,7 +462,7 @@ watch(leaveTypeOptions, (options) => {
                     </label>
                     <label>
                         Reporting
-                        <div class="info-readonly">{{ employeeDetails.position }}</div>
+                        <div class="info-readonly">{{ employeeDetails.reportingManager }}</div>
                     </label>
                 </aside>
             </section>
