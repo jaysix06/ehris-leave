@@ -292,4 +292,8 @@ Route::get('survey/gad', function () {
     return Inertia::render('Survey/Gad');
 })->middleware(['auth', 'verified'])->name('survey.gad');
 
+Route::get('reports/employee-listing', [App\Http\Controllers\Reports\EmployeeListingController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('reports.employee-listing');
+
 require __DIR__.'/settings.php';

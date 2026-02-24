@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
+<<<<<<< HEAD
 import { LayoutGrid, ChartColumnBig, ChartLine, UsersRound, UserRoundCog, FileClock, BookUser, Wrench, NotepadText, FileBarChart } from 'lucide-vue-next';
+=======
+import { LayoutGrid, ChartColumnBig, ChartLine, UsersRound, UserRoundCog, FileClock, BookUser, Wrench, NotepadText, Anchor, FileText } from 'lucide-vue-next';
+>>>>>>> f334045bdbfb7af38d1071f21bd9dd7e0aab64ec
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';
@@ -22,6 +26,7 @@ import requestStatusRoutes from '@/routes/request-status';
 import satSummaryRoutes from '@/routes/sat-summary';
 import selfServiceRoutes from '@/routes/self-service';
 import surveyRoutes from '@/routes/survey';
+import reportsRoutes from '@/routes/reports';
 import utilitiesRoutes from '@/routes/utilities';
 import leaveTypesRoutes from '@/routes/utilities/leave-types';
 
@@ -204,8 +209,18 @@ const mainNavItems: NavItem[] = [
     },
     {
         title: 'Reports',
+<<<<<<< HEAD
         href: '/reports',
         icon: FileBarChart,
+=======
+        icon: FileText,
+        children: [
+            {
+                title: 'Employee Listing',
+                href: reportsRoutes.employeeListing(),
+            },
+        ],
+>>>>>>> f334045bdbfb7af38d1071f21bd9dd7e0aab64ec
     },
 ];
 
