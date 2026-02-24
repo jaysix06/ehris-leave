@@ -54,7 +54,9 @@ const noOfDays = computed(() => {
     return differenceInDays(leaveRange.value.end, leaveRange.value.start) + 1;
 });
 
-const selectedLeaveType = ref<string>('- Select Leave Type -');
+const defaultLeaveTypeLabel = '- Select Leave Type -';
+const selectedLeaveType = ref<string>(defaultLeaveTypeLabel);
+
 
 const minSelectableDate = computed(() => {
     if (selectedLeaveType.value === 'Vacation Leave') {
@@ -77,8 +79,9 @@ const salaryFormatter = new Intl.NumberFormat('en-PH', {
     style: 'currency',
     currency: 'PHP',
 });
+
 const leaveTypeOptions = computed<{ label: string; value: string }[]>(() => {
-    const baseOption = { label: '- Select Leave Type -', value: '- Select Leave Type -' };
+    const baseOption = { label: defaultLeaveTypeLabel, value: defaultLeaveTypeLabel };
     const types = (dbLeaveTypes.value ?? [])
         .map((type) => type.trim())
         .filter((type) => type !== '');
@@ -203,7 +206,7 @@ watch(selectedLeaveType, () => {
 watch(leaveTypeOptions, (options) => {
     const isValid = options.some((option) => option.value === selectedLeaveType.value);
     if (!isValid) {
-        selectedLeaveType.value = '- Select Leave Type -';
+        selectedLeaveType.value = defaultLeaveTypeLabel;
     }
 });
 </script>
@@ -452,6 +455,10 @@ watch(leaveTypeOptions, (options) => {
                     </label>
                     <label>
                         Position
+                        <div class="info-readonly">{{ employeeDetails.position }}</div>
+                    </label>
+                    <label>
+                        Reporting
                         <div class="info-readonly">{{ employeeDetails.position }}</div>
                     </label>
                 </aside>
