@@ -86,6 +86,9 @@ Route::get('self-service/service-record', function () {
 Route::get('self-service/leave-application', [LeaveApplicationController::class, 'show'])
     ->middleware(['auth', 'verified'])
     ->name('self-service.leave-application');
+Route::post('self-service/leave-application', [LeaveApplicationController::class, 'store'])
+    ->middleware(['auth', 'verified'])
+    ->name('self-service.leave-application.store');
 Route::get('self-service/deped-email-requests', function () {
     return Inertia::render('SelfService/DepedEmailRequests');
 })->middleware(['auth', 'verified'])->name('self-service.deped-email-requests');

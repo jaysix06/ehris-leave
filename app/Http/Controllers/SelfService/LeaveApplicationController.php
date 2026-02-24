@@ -8,8 +8,10 @@ use App\Models\EmpOfficialInfo;
 use App\Models\LeaveType;
 use App\Models\Office;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class LeaveApplicationController extends Controller
@@ -171,5 +173,54 @@ class LeaveApplicationController extends Controller
             'leaveEmployee' => $leaveEmployee,
             'leaveTypes' => $leaveTypes,
         ]);
+    }
+
+    public function store(Request $request)
+    {
+        $data = $request->validate([
+            'leave_type' => ['required', 'string', 'max:255'],
+            'leave_start_date' => ['required', 'date'],
+            'leave_end_date' => ['required', 'date', 'after_or_equal:leave_start_date'],
+            'reason' => ['nullable', 'string', 'max:2000'],
+            'commutation' => ['nullable', 'string', 'max:255'],
+            'consultation_availed' => ['nullable', 'in:yes,no'],
+            'medical_certificate' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
+            'affidavit' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
+        ]);
+
+        if ($data['leave_type'] === 'Sick Leave') {
+            $start = Carbon::parse($data['leave_start_date'])->startOfDay();
+            $end = Carbon::parse($data['leave_end_date'])->startOfDay();
+            $today = now()->startOfDay();
+            $filedInAdvance = $start->gt($today);
+            $days = $start->diffInDays($end) + 1;
+            $requiresSupportingDoc = $filedInAdvance || $days > 5;
+
+            if ($requiresSupportingDoc) {
+                $hasMedical = $request->hasFile('medical_certificate');
+                $hasAffidavit = $request->hasFile('affidavit');
+                $consultation = $data['consultation_availed'] ?? null;
+
+                if ($consultation === 'yes' && ! $hasMedical) {
+                    throw ValidationException::withMessages([
+                        'medical_certificate' => 'Medical certificate is required when medical consultation was availed.',
+                    ]);
+                }
+
+                if ($consultation === 'no' && ! $hasAffidavit) {
+                    throw ValidationException::withMessages([
+                        'affidavit' => 'Affidavit is required when medical consultation was not availed.',
+                    ]);
+                }
+
+                if ($consultation === null && ! ($hasMedical || $hasAffidavit)) {
+                    throw ValidationException::withMessages([
+                        'medical_certificate' => 'Please upload a medical certificate or an affidavit.',
+                    ]);
+                }
+            }
+        }
+
+        return back()->with('status', 'Leave application submitted.');
     }
 }

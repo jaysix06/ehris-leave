@@ -55,11 +55,26 @@ const noOfDays = computed(() => {
     return differenceInDays(leaveRange.value.end, leaveRange.value.start) + 1;
 });
 
+const isFiledInAdvance = computed(() => leaveRange.value.start > today);
+const requiresSupportingDoc = computed(
+    () => isSickLeave.value && (isFiledInAdvance.value || noOfDays.value > 5),
+);
+const requiredDocType = computed(() => {
+    if (!requiresSupportingDoc.value) return null;
+    if (consultationAvailed.value === 'yes') return 'medical';
+    if (consultationAvailed.value === 'no') return 'affidavit';
+    return null;
+});
+
 const defaultLeaveTypeLabel = '- Select Leave Type -';
 const selectedLeaveType = ref<string>(defaultLeaveTypeLabel);
+const isSickLeave = computed(() => selectedLeaveType.value === 'Sick Leave');
 
 
-const minSelectableDate = computed(() => {
+const minSelectableDate = computed<Date | null>(() => {
+    if (isSickLeave.value) {
+        return null;
+    }
     if (selectedLeaveType.value === 'Vacation Leave') {
         return addDays(today, 5);
     }
@@ -68,9 +83,14 @@ const minSelectableDate = computed(() => {
 
 const reason = ref<string>('');
 const commutation = ref<string>('');
+const consultationAvailed = ref<'yes' | 'no' | ''>('');
 const medicalCertification = ref<File | null>(null);
+const affidavitFile = ref<File | null>(null);
 const medicalFileInput = ref<HTMLInputElement | null>(null);
+const affidavitFileInput = ref<HTMLInputElement | null>(null);
 const isMedicalDropActive = ref(false);
+const isAffidavitDropActive = ref(false);
+const submitError = ref<string | null>(null);
 
 const page = usePage();
 const authUser = computed(() => page.props.auth?.user as User | undefined);
@@ -197,9 +217,32 @@ const clearMedicalCertification = () => {
     }
 };
 
+const onAffidavitChange = (event: Event) => {
+    const target = event.target as HTMLInputElement;
+    affidavitFile.value = target.files?.[0] ?? null;
+};
+
+const openAffidavitFilePicker = () => {
+    affidavitFileInput.value?.click();
+};
+
+const onAffidavitDrop = (event: DragEvent) => {
+    event.preventDefault();
+    isAffidavitDropActive.value = false;
+    const file = event.dataTransfer?.files?.[0] ?? null;
+    affidavitFile.value = file;
+};
+
+const clearAffidavit = () => {
+    affidavitFile.value = null;
+    if (affidavitFileInput.value) {
+        affidavitFileInput.value.value = '';
+    }
+};
+
 watch(selectedLeaveType, () => {
     const minimumDate = minSelectableDate.value;
-    if (leaveRange.value.start < minimumDate) {
+    if (minimumDate && leaveRange.value.start < minimumDate) {
         leaveRange.value = {
             start: minimumDate,
             end: minimumDate,
@@ -213,6 +256,64 @@ watch(leaveTypeOptions, (options) => {
         selectedLeaveType.value = defaultLeaveTypeLabel;
     }
 });
+
+watch([selectedLeaveType, consultationAvailed], () => {
+    submitError.value = null;
+    if (!requiresSupportingDoc.value) {
+        consultationAvailed.value = '';
+        medicalCertification.value = null;
+        affidavitFile.value = null;
+    }
+});
+
+const formatDateForSubmit = (date: Date) => {
+    const year = date.getFullYear();
+    const month = `${date.getMonth() + 1}`.padStart(2, '0');
+    const day = `${date.getDate()}`.padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
+const submitLeaveApplication = () => {
+    submitError.value = null;
+
+    if (selectedLeaveType.value === defaultLeaveTypeLabel) {
+        submitError.value = 'Please select a leave type.';
+        return;
+    }
+
+    if (requiresSupportingDoc.value) {
+        if (requiredDocType.value === 'medical' && !medicalCertification.value) {
+            submitError.value = 'Medical certificate is required when consultation was availed.';
+            return;
+        }
+        if (requiredDocType.value === 'affidavit' && !affidavitFile.value) {
+            submitError.value = 'Affidavit is required when consultation was not availed.';
+            return;
+        }
+        if (!requiredDocType.value && !medicalCertification.value && !affidavitFile.value) {
+            submitError.value = 'Please upload a medical certificate or an affidavit.';
+            return;
+        }
+    }
+
+    router.post(
+        selfServiceRoutes.leaveApplication().url,
+        {
+            leave_type: selectedLeaveType.value,
+            leave_start_date: formatDateForSubmit(leaveRange.value.start),
+            leave_end_date: formatDateForSubmit(leaveRange.value.end),
+            reason: reason.value || null,
+            commutation: commutation.value || null,
+            consultation_availed: consultationAvailed.value || null,
+            medical_certificate: medicalCertification.value,
+            affidavit: affidavitFile.value,
+        },
+        {
+            forceFormData: true,
+            preserveScroll: true,
+        },
+    );
+};
 
 const refreshLeaveTypes = () => {
     console.info('[LeaveApplication] LeaveTypeUpdated received. Refreshing leave types.');
@@ -387,12 +488,119 @@ onBeforeUnmount(() => {
                                 is-range
                                 is-inline
                                 expanded
-                                :min-date="minSelectableDate"
+                                :min-date="minSelectableDate ?? undefined"
                                 :masks="{ weekdays: 'WWW' }"
                                 class="calendar-inline"
                             />
                             <div
-                                v-if="selectedLeaveType === 'Sick Leave' && noOfDays >= 6 || selectedLeaveType === 'Maternity Leave' || selectedLeaveType === 'Paternity Leave'"
+                                v-if="isSickLeave && requiresSupportingDoc"
+                                class="medical-cert-panel"
+                            >
+                                <p class="upload-title">Supporting Documents Required</p>
+                                <p class="dropzone-sub">
+                                    Required when filed in advance or exceeding 5 days. Provide a medical certificate or an affidavit.
+                                </p>
+
+                                <label class="radio-option inline-flex gap-2 cursor-pointer">
+                                    <input type="radio" v-model="consultationAvailed" name="consultation" value="yes" />
+                                    Medical consultation availed
+                                </label>
+                                <label class="radio-option inline-flex gap-2 cursor-pointer">
+                                    <input type="radio" v-model="consultationAvailed" name="consultation" value="no" />
+                                    No medical consultation (affidavit)
+                                </label>
+
+                                <div
+                                    v-if="!medicalCertification"
+                                    class="medical-dropzone"
+                                    :class="{ 'is-active': isMedicalDropActive }"
+                                    @click="openMedicalFilePicker"
+                                    @dragover.prevent="isMedicalDropActive = true"
+                                    @dragleave.prevent="isMedicalDropActive = false"
+                                    @drop="onMedicalDrop"
+                                >
+                                    <div class="dropzone-icon-wrap">
+                                        <ImagePlus :size="30" />
+                                    </div>
+                                    <p class="dropzone-main">
+                                        Drag &amp; drop
+                                        <span>medical certificate</span>
+                                    </p>
+                                    <p class="dropzone-sub">
+                                        or
+                                        <button type="button" class="browse-link" @click.stop="openMedicalFilePicker">
+                                            browse files
+                                        </button>
+                                        on your computer
+                                    </p>
+                                    <input
+                                        ref="medicalFileInput"
+                                        type="file"
+                                        accept=".pdf,.jpg,.jpeg,.png"
+                                        class="sr-only"
+                                        @change="onMedicalCertificationChange"
+                                    />
+                                </div>
+
+                                <div v-if="medicalCertification" class="medical-file-row">
+                                    <div class="file-meta">
+                                        <p class="file-name">{{ medicalCertification.name }}</p>
+                                        <p class="file-info">
+                                            {{ Math.max(1, Math.round(medicalCertification.size / 1024)) }} KB
+                                        </p>
+                                    </div>
+                                    <button type="button" class="remove-file-btn" @click="clearMedicalCertification">
+                                        <X :size="16" />
+                                    </button>
+                                </div>
+
+                                <div
+                                    v-if="!affidavitFile"
+                                    class="medical-dropzone"
+                                    :class="{ 'is-active': isAffidavitDropActive }"
+                                    @click="openAffidavitFilePicker"
+                                    @dragover.prevent="isAffidavitDropActive = true"
+                                    @dragleave.prevent="isAffidavitDropActive = false"
+                                    @drop="onAffidavitDrop"
+                                >
+                                    <div class="dropzone-icon-wrap">
+                                        <ImagePlus :size="30" />
+                                    </div>
+                                    <p class="dropzone-main">
+                                        Drag &amp; drop
+                                        <span>affidavit</span>
+                                    </p>
+                                    <p class="dropzone-sub">
+                                        or
+                                        <button type="button" class="browse-link" @click.stop="openAffidavitFilePicker">
+                                            browse files
+                                        </button>
+                                        on your computer
+                                    </p>
+                                    <input
+                                        ref="affidavitFileInput"
+                                        type="file"
+                                        accept=".pdf,.jpg,.jpeg,.png"
+                                        class="sr-only"
+                                        @change="onAffidavitChange"
+                                    />
+                                </div>
+
+                                <div v-if="affidavitFile" class="medical-file-row">
+                                    <div class="file-meta">
+                                        <p class="file-name">{{ affidavitFile.name }}</p>
+                                        <p class="file-info">
+                                            {{ Math.max(1, Math.round(affidavitFile.size / 1024)) }} KB
+                                        </p>
+                                    </div>
+                                    <button type="button" class="remove-file-btn" @click="clearAffidavit">
+                                        <X :size="16" />
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div
+                                v-else-if="selectedLeaveType === 'Maternity Leave' || selectedLeaveType === 'Paternity Leave'"
                                 class="medical-cert-panel"
                             >
                                 <p class="upload-title">Medical Certification</p>
@@ -445,8 +653,15 @@ onBeforeUnmount(() => {
                     </div>
 
                     <div class="request-actions">
+                        <p v-if="submitError" class="text-sm text-destructive">{{ submitError }}</p>
+                        <p v-else-if="$page.props.errors?.medical_certificate" class="text-sm text-destructive">
+                            {{ $page.props.errors.medical_certificate }}
+                        </p>
+                        <p v-else-if="$page.props.errors?.affidavit" class="text-sm text-destructive">
+                            {{ $page.props.errors.affidavit }}
+                        </p>
                         <button class="cancel-btn" type="button">Cancel</button>
-                        <button class="apply-btn" type="button">
+                        <button class="apply-btn" type="button" @click="submitLeaveApplication">
                             Apply Leave
                             <SendHorizontal :size="14" />
                         </button>
