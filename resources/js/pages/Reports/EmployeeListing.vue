@@ -11,6 +11,17 @@ import {
     ChevronLeft,
     ChevronRight,
 } from 'lucide-vue-next';
+import { Doughnut, Bar } from 'vue-chartjs';
+import {
+    ArcElement,
+    BarElement,
+    CategoryScale,
+    Chart as ChartJS,
+    Legend,
+    LinearScale,
+    Title,
+    Tooltip,
+} from 'chart.js';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,6 +29,8 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { employeeListing } from '@/routes/reports';
 import type { BreadcrumbItem } from '@/types';
+
+ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, Title, Tooltip, Legend);
 
 const pageTitle = 'Employee Listing & Reports';
 
@@ -59,12 +72,19 @@ type PaginatedData = {
     links: Array<{ url: string | null; label: string; active: boolean }>;
 };
 
+type ChartItem = { label: string; count: number };
+
 type Props = {
     employees: PaginatedData;
     summaryStats: {
         total: number;
         permanent: number;
         avgLeaveBalance: string;
+    };
+    chartData?: {
+        employmentStatus: ChartItem[];
+        jobTitle: ChartItem[];
+        school: ChartItem[];
     };
     filterOptions: {
         schools: string[];
@@ -84,6 +104,20 @@ type Props = {
     };
 };
 
+const CHART_COLORS = [
+    'hsl(217, 91%, 60%)',
+    'hsl(262, 83%, 58%)',
+    'hsl(24, 95%, 53%)',
+    'hsl(142, 71%, 45%)',
+    'hsl(199, 89%, 48%)',
+    'hsl(280, 67%, 58%)',
+    'hsl(0, 72%, 51%)',
+    'hsl(47, 96%, 53%)',
+];
+function getColors(n: number) {
+    return Array.from({ length: n }, (_, i) => CHART_COLORS[i % CHART_COLORS.length]);
+}
+
 const props = defineProps<Props>();
 
 const page = usePage();
@@ -101,6 +135,77 @@ const searchQuery = ref<string>(props.filters.search || '');
 const fullName = (emp: Employee) => {
     const parts = [emp.firstname, emp.middlename, emp.lastname, emp.extension].filter(Boolean);
     return parts.join(' ');
+};
+
+const chartDataSafe = computed(() => ({
+    employmentStatus: props.chartData?.employmentStatus ?? [],
+    jobTitle: props.chartData?.jobTitle ?? [],
+    school: props.chartData?.school ?? [],
+}));
+
+const employmentStatusChartData = computed(() => {
+    const items = chartDataSafe.value.employmentStatus;
+    return {
+        labels: items.map((i) => i.label),
+        datasets: [
+            {
+                data: items.map((i) => i.count),
+                backgroundColor: getColors(items.length),
+                borderWidth: 1,
+            },
+        ],
+    };
+});
+
+const jobTitleChartData = computed(() => {
+    const items = chartDataSafe.value.jobTitle;
+    return {
+        labels: items.map((i) => i.label),
+        datasets: [
+            {
+                label: 'Employees',
+                data: items.map((i) => i.count),
+                backgroundColor: CHART_COLORS[0],
+                borderWidth: 0,
+            },
+        ],
+    };
+});
+
+const schoolChartData = computed(() => {
+    const items = chartDataSafe.value.school;
+    return {
+        labels: items.map((i) => i.label),
+        datasets: [
+            {
+                data: items.map((i) => i.count),
+                backgroundColor: getColors(items.length),
+                borderWidth: 1,
+            },
+        ],
+    };
+});
+
+const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+        legend: { position: 'bottom' as const },
+        tooltip: { enabled: true },
+    },
+};
+
+const doughnutOptions = {
+    ...chartOptions,
+    cutout: '60%',
+};
+
+const barOptions = {
+    ...chartOptions,
+    indexAxis: 'y' as const,
+    scales: {
+        x: { beginAtZero: true },
+    },
 };
 
 // Methods
@@ -353,47 +458,77 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                     </div>
                 </div>
 
+                <!-- Charts -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                    <div class="rounded-lg border p-4 bg-card">
+                        <h3 class="text-sm font-semibold text-muted-foreground mb-3">Employment Status</h3>
+                        <div class="h-[240px]">
+                            <Doughnut
+                                v-if="employmentStatusChartData.labels.length"
+                                :data="employmentStatusChartData"
+                                :options="doughnutOptions"
+                            />
+                            <div
+                                v-else
+                                class="h-full flex items-center justify-center text-muted-foreground text-sm"
+                            >
+                                No data
+                            </div>
+                        </div>
+                    </div>
+                    <div class="rounded-lg border p-4 bg-card">
+                        <h3 class="text-sm font-semibold text-muted-foreground mb-3">By School/Office</h3>
+                        <div class="h-[240px]">
+                            <Doughnut
+                                v-if="schoolChartData.labels.length"
+                                :data="schoolChartData"
+                                :options="doughnutOptions"
+                            />
+                            <div
+                                v-else
+                                class="h-full flex items-center justify-center text-muted-foreground text-sm"
+                            >
+                                No data
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 gap-6 mb-6">
+                    <div class="rounded-lg border p-4 bg-card">
+                        <h3 class="text-sm font-semibold text-muted-foreground mb-3">Count per Job Title (top 12)</h3>
+                        <div class="h-[320px]">
+                            <Bar
+                                v-if="jobTitleChartData.labels.length"
+                                :data="jobTitleChartData"
+                                :options="barOptions"
+                            />
+                            <div
+                                v-else
+                                class="h-full flex items-center justify-center text-muted-foreground text-sm"
+                            >
+                                No data
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Data Table -->
-                <div class="rounded-md border overflow-x-auto">
-                    <table class="w-full border-collapse">
+                <div class="rounded-md border overflow-x-auto w-full" style="max-width: 100%;">
+                    <table class="ehris-employee-table w-full border-collapse">
                         <thead class="bg-muted/50">
                             <tr>
-                                <th class="px-4 py-3 text-left text-xs font-semibold text-muted-foreground border-b">
-                                    HRID
-                                </th>
-                                <th class="px-4 py-3 text-left text-xs font-semibold text-muted-foreground border-b">
-                                    Employee ID
-                                </th>
-                                <th class="px-4 py-3 text-left text-xs font-semibold text-muted-foreground border-b">
-                                    Name
-                                </th>
-                                <th class="px-4 py-3 text-left text-xs font-semibold text-muted-foreground border-b">
-                                    Job Title
-                                </th>
-                                <th class="px-4 py-3 text-left text-xs font-semibold text-muted-foreground border-b">
-                                    Subject
-                                </th>
-                                <th class="px-4 py-3 text-left text-xs font-semibold text-muted-foreground border-b">
-                                    Grade Level
-                                </th>
-                                <th class="px-4 py-3 text-left text-xs font-semibold text-muted-foreground border-b">
-                                    School/Office
-                                </th>
-                                <th class="px-4 py-3 text-left text-xs font-semibold text-muted-foreground border-b">
-                                    Station Code
-                                </th>
-                                <th class="px-4 py-3 text-left text-xs font-semibold text-muted-foreground border-b">
-                                    Salary Grade
-                                </th>
-                                <th class="px-4 py-3 text-left text-xs font-semibold text-muted-foreground border-b">
-                                    Salary Step
-                                </th>
-                                <th class="px-4 py-3 text-left text-xs font-semibold text-muted-foreground border-b">
-                                    Status
-                                </th>
-                                <th class="px-4 py-3 text-left text-xs font-semibold text-muted-foreground border-b">
-                                    Leave Balance
-                                </th>
+                                <th class="ehris-th">HRID</th>
+                                <th class="ehris-th">Employee ID</th>
+                                <th class="ehris-th ehris-col-name">Name</th>
+                                <th class="ehris-th ehris-col-job">Job Title</th>
+                                <th class="ehris-th">Subject</th>
+                                <th class="ehris-th">Grade Level</th>
+                                <th class="ehris-th ehris-col-office">School/Office</th>
+                                <th class="ehris-th">Station Code</th>
+                                <th class="ehris-th">Salary Grade</th>
+                                <th class="ehris-th">Salary Step</th>
+                                <th class="ehris-th">Status</th>
+                                <th class="ehris-th ehris-col-leave">Leave Balance</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -402,32 +537,32 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                                 :key="employee.hrid"
                                 class="hover:bg-muted/50 border-b"
                             >
-                                <td class="px-4 py-3 text-sm font-medium">{{ employee.hrid }}</td>
-                                <td class="px-4 py-3 text-sm">{{ employee.employee_id }}</td>
-                                <td class="px-4 py-3 text-sm">{{ fullName(employee) }}</td>
-                                <td class="px-4 py-3 text-sm">
-                                    <Badge variant="outline">{{ employee.job_title || '-' }}</Badge>
+                                <td class="ehris-td whitespace-nowrap">{{ employee.hrid }}</td>
+                                <td class="ehris-td whitespace-nowrap">{{ employee.employee_id }}</td>
+                                <td class="ehris-td ehris-col-name" :title="fullName(employee)">{{ fullName(employee) }}</td>
+                                <td class="ehris-td ehris-col-job">
+                                    <Badge variant="outline" class="whitespace-nowrap max-w-full truncate inline-block">{{ employee.job_title || '-' }}</Badge>
                                 </td>
-                                <td class="px-4 py-3 text-sm">{{ employee.subject_taught || '-' }}</td>
-                                <td class="px-4 py-3 text-sm">{{ employee.grade_level || '-' }}</td>
-                                <td class="px-4 py-3 text-sm max-w-[200px] truncate">{{ employee.office || '-' }}</td>
-                                <td class="px-4 py-3 text-sm">{{ employee.station_code || '-' }}</td>
-                                <td class="px-4 py-3 text-sm">
+                                <td class="ehris-td whitespace-nowrap">{{ employee.subject_taught || '-' }}</td>
+                                <td class="ehris-td whitespace-nowrap">{{ employee.grade_level || '-' }}</td>
+                                <td class="ehris-td ehris-col-office" :title="employee.office || ''">{{ employee.office || '-' }}</td>
+                                <td class="ehris-td whitespace-nowrap">{{ employee.station_code || '-' }}</td>
+                                <td class="ehris-td whitespace-nowrap">
                                     {{ employee.salary_grade ? 'SG ' + employee.salary_grade : '-' }}
                                 </td>
-                                <td class="px-4 py-3 text-sm">{{ employee.salary_step || '-' }}</td>
-                                <td class="px-4 py-3 text-sm">
+                                <td class="ehris-td whitespace-nowrap">{{ employee.salary_step || '-' }}</td>
+                                <td class="ehris-td whitespace-nowrap">
                                     <Badge
                                         :variant="employee.employ_status === 'Permanent' ? 'default' : 'secondary'"
                                     >
                                         {{ employee.employ_status || '-' }}
                                     </Badge>
                                 </td>
-                                <td class="px-4 py-3 text-sm">
+                                <td class="ehris-td ehris-col-leave whitespace-nowrap">
                                     <Badge
                                         :variant="(employee.leave_balance || 0) < 5 ? 'destructive' : 'outline'"
                                     >
-                                        {{ employee.leave_balance || 0 }} days
+                                        {{ employee.leave_balance ?? 0 }} days
                                     </Badge>
                                 </td>
                             </tr>
@@ -511,5 +646,55 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
     border-radius: 0.5rem;
     background: hsl(var(--card));
     padding: 1.5rem;
+}
+
+.ehris-employee-table {
+    table-layout: fixed;
+    min-width: 0;
+}
+
+.ehris-employee-table th,
+.ehris-employee-table td {
+    vertical-align: middle;
+}
+
+.ehris-th {
+    padding: 0.375rem 0.5rem;
+    text-align: left;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: hsl(var(--muted-foreground));
+    border-bottom: 1px solid hsl(var(--border));
+    white-space: nowrap;
+}
+
+.ehris-td {
+    padding: 0.375rem 0.5rem;
+    font-size: 0.875rem;
+}
+
+.ehris-col-name {
+    max-width: 10rem;
+    min-width: 8rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ehris-col-job {
+    max-width: 9rem;
+    min-width: 6rem;
+}
+
+.ehris-col-office {
+    max-width: 10rem;
+    min-width: 7rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ehris-col-leave {
+    min-width: 5.5rem;
 }
 </style>

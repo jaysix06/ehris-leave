@@ -1,10 +1,6 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-<<<<<<< HEAD
-import { LayoutGrid, ChartColumnBig, ChartLine, UsersRound, UserRoundCog, FileClock, BookUser, Wrench, NotepadText, FileBarChart } from 'lucide-vue-next';
-=======
-import { LayoutGrid, ChartColumnBig, ChartLine, UsersRound, UserRoundCog, FileClock, BookUser, Wrench, NotepadText, Anchor, FileText } from 'lucide-vue-next';
->>>>>>> f334045bdbfb7af38d1071f21bd9dd7e0aab64ec
+import { LayoutGrid, ChartColumnBig, ChartLine, UsersRound, UserRoundCog, FileClock, BookUser, Wrench, NotepadText, FileText } from 'lucide-vue-next';
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';
@@ -209,10 +205,6 @@ const mainNavItems: NavItem[] = [
     },
     {
         title: 'Reports',
-<<<<<<< HEAD
-        href: '/reports',
-        icon: FileBarChart,
-=======
         icon: FileText,
         children: [
             {
@@ -220,7 +212,6 @@ const mainNavItems: NavItem[] = [
                 href: reportsRoutes.employeeListing(),
             },
         ],
->>>>>>> f334045bdbfb7af38d1071f21bd9dd7e0aab64ec
     },
 ];
 
