@@ -186,9 +186,7 @@ class LeaveApplicationController extends Controller
             'consultation_availed' => ['nullable', 'in:yes,no'],
             'medical_certificate' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
             'affidavit' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
-            'birth_certificate' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
-            'paternity_medical_certificate' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
-            'marriage_contract' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
+            'proof_of_delivery' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
         ]);
 
         if ($data['leave_type'] === 'Sick Leave') {
@@ -235,19 +233,9 @@ class LeaveApplicationController extends Controller
                 ]);
             }
 
-            $hasBirthCertificate = $request->hasFile('birth_certificate');
-            $hasPaternityMedical = $request->hasFile('paternity_medical_certificate');
-            $hasMarriageContract = $request->hasFile('marriage_contract');
-
-            if (! $hasBirthCertificate) {
+            if (! $request->hasFile('proof_of_delivery')) {
                 throw ValidationException::withMessages([
-                    'birth_certificate' => 'Birth certificate is required for Paternity Leave.',
-                ]);
-            }
-
-            if (! ($hasPaternityMedical || $hasMarriageContract)) {
-                throw ValidationException::withMessages([
-                    'paternity_medical_certificate' => 'Upload either a medical certificate (proof of delivery) or a marriage contract for Paternity Leave.',
+                    'proof_of_delivery' => 'Proof of child\'s delivery is required for Paternity Leave (e.g. birth certificate, medical certificate, or marriage contract).',
                 ]);
             }
         }
