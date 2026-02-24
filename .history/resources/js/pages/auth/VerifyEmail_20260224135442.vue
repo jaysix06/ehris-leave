@@ -12,18 +12,12 @@ defineProps<{
 
 <template>
     <AuthLayout title="Verify email" description="Check your inbox to verify your account.">
-        <Head title="Email verification">
-            <link rel="preload" as="image" href="/dous.png" />
-        </Head>
+        <Head title="Email verification" />
         <template #header>
             <div class="overflow-hidden rounded-xl">
                 <img
                     src="/dous.png"
                     alt="DepEd Ozamiz Unit School Division"
-                    width="1024"
-                    height="512"
-                    loading="eager"
-                    fetchpriority="high"
                     class="h-28 w-full max-w-xs object-contain object-center"
                 />
             </div>
@@ -48,7 +42,7 @@ defineProps<{
             >
                 <Button :disabled="processing" class="w-full">
                     <Spinner v-if="processing" />
-                    Resend verification email
+                    Resend verificatiosn email
                 </Button>
             </Form>
         </div>

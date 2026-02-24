@@ -5,6 +5,7 @@ use App\Http\Controllers\MyDetailsController;
 use App\Http\Controllers\SelfService\LeaveApplicationController;
 use App\Models\FamilyInfo;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
@@ -16,6 +17,16 @@ Route::get('/', function () {
         'canRegister' => Features::enabled(Features::registration()),
     ]);
 })->name('home');
+
+Route::get('email/verified-success', function (Request $request) {
+    if ($request->user()) {
+        Auth::guard('web')->logout();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+    }
+
+    return Inertia::render('auth/EmailVerifiedSuccess');
+})->name('verification.success');
 
 Route::get('dashboard', function () {
     return Inertia::render('Dashboard');
