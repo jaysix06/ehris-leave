@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # EHRIS
 
 Laravel 12 + Vue 3 (Inertia) application.
@@ -82,3 +83,32 @@ Open:
 - If key is missing, run: `php artisan key:generate`
 - If DB tables are missing, run: `php artisan migrate`
 
+=======
+# EHRIS Leave - Setup
+
+## Clone And Install
+1. Clone the repository.
+2. Change directory into the project:
+```bash
+cd ehris-leave
+```
+3. Copy the environment file:
+```bash
+cp .env.example .env
+```
+4. Install PHP dependencies:
+```bash
+composer install
+```
+5. Generate the app key:
+```bash
+php artisan key:generate
+```
+6. Install Node dependencies:
+```bash
+npm install
+```
+
+## Next
+Set the correct database credentials in `.env`, then run the app using your preferred local environment.
+>>>>>>> 28cd2466f1c978f8628c442848035637ca473213

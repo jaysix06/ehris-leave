@@ -6,6 +6,11 @@ import { setupCalendar } from 'v-calendar';
 import '../css/app.css';
 import 'v-calendar/style.css';
 import { initializeTheme } from './composables/useAppearance';
+import { configureEcho } from '@laravel/echo-vue';
+
+configureEcho({
+    broadcaster: 'reverb',
+});
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 
