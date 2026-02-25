@@ -5,6 +5,7 @@ import { User } from 'lucide-vue-next';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { BreadcrumbItem } from '@/types';
+import { useSidebar } from '@/components/ui/sidebar/utils';
 import Affiliation from '@/pages/MyDetails/Affiliation.vue';
 import EducationBackground from '@/pages/MyDetails/EducationBackground.vue';
 import Eligibility from '@/pages/MyDetails/Eligibility.vue';
@@ -88,6 +89,9 @@ const props = defineProps<{
 
 const page = usePage();
 const authUser = computed(() => page.props.auth.user);
+
+// Close mobile sidebar when page loads to prevent overlay from blocking clicks
+const { isMobile, openMobile, setOpenMobile } = useSidebar();
 
 const employeeName = computed(() => {
     if (props.profile?.fullname) {
@@ -232,6 +236,13 @@ const onMyDetailsUpdated = (event: { hrid?: number | string } = {}) => {
 };
 
 onMounted(() => {
+    // Close mobile sidebar if open to prevent overlay from blocking clicks
+    // Use nextTick to ensure the sidebar context is available
+    setTimeout(() => {
+        if (isMobile.value && openMobile.value) {
+            setOpenMobile(false);
+        }
+    }, 0);
     echo().channel('my-details').listen('.MyDetailsUpdated', onMyDetailsUpdated);
 });
 
