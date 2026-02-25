@@ -84,7 +84,6 @@ const props = defineProps<{
     researches?: Record<string, unknown>[];
     expertise?: Record<string, unknown>[];
     affiliation?: Record<string, unknown>[];
-    familyUpdateUrl?: string;
 }>();
 
 const page = usePage();
@@ -164,9 +163,14 @@ function sectionProps(index: number): Record<string, unknown> {
         case 0:
             return { officialInfo: props.officialInfo };
         case 1:
-            return { personalInfo: props.personalInfo };
+            return {
+                personalInfo: props.personalInfo,
+                officialInfo: props.officialInfo,
+                contactInfo: props.contactInfo,
+                profile: props.profile,
+            };
         case 2:
-            return { family: props.family, familyUpdateUrl: props.familyUpdateUrl };
+            return { family: props.family };
         case 3:
             return { education: props.education };
         case 4:

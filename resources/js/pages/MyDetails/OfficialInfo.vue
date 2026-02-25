@@ -2,8 +2,9 @@
 import { Pencil } from 'lucide-vue-next';
 
 function val(v: unknown): string {
-    if (v == null || v === '') return '—';
-    return String(v);
+    if (v == null || v === '') return 'N/A';
+    const s = String(v).trim();
+    return s === '' ? 'N/A' : s;
 }
 
 defineProps<{
@@ -39,7 +40,7 @@ defineProps<{
                         :href="`mailto:${officialInfo.email}`"
                         class="ehris-email-link"
                     >{{ val(officialInfo.email) }}</a>
-                    <span v-else>—</span>
+                    <span v-else>N/A</span>
                 </dd></div>
             </dl>
             <dl class="ehris-official-info-col">

@@ -1,6 +1,5 @@
 <?php
 
-use App\Http\Controllers\MyDetails\FamilyController;
 use App\Http\Controllers\MyDetailsController;
 use App\Http\Controllers\Auth\PasswordResetOtpController;
 use App\Http\Controllers\SelfService\LeaveApplicationController;
@@ -261,13 +260,8 @@ Route::get('my-details', function (Request $request) {
         'researches' => $researches,
         'expertise' => $expertise,
         'affiliation' => $affiliation,
-        'familyUpdateUrl' => route('my-details.family.store'),
     ]);
 })->middleware(['auth', 'verified'])->name('my-details');
-
-Route::post('my-details/family', [FamilyController::class, 'store'])
-    ->middleware(['auth', 'verified'])
-    ->name('my-details.family.store');
 
 Route::get('utilities', function () {
     return Inertia::render('Utilities');
