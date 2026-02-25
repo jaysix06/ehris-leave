@@ -35,6 +35,7 @@ const leaveRange = ref<{ start: Date | null; end: Date | null }>({
     end: null,
 });
 type LeaveRange = { start: Date | null; end: Date | null };
+type CalendarRangeModel = { start: Date; end: Date };
 
 const formatter = new Intl.DateTimeFormat('en-GB', {
     day: '2-digit',
@@ -122,14 +123,20 @@ const clampLeaveRange = (value: LeaveRange): LeaveRange => {
     return { start, end };
 };
 
-const calendarLeaveRange = computed<LeaveRange>({
-    get: () => leaveRange.value,
+const calendarLeaveRange = computed<CalendarRangeModel | undefined>({
+    get: () => {
+        const { start, end } = leaveRange.value;
+        if (!start || !end) {
+            return undefined;
+        }
+        return { start, end };
+    },
     set: (value) => {
         const incomingStart = value?.start ? normalizeDate(value.start) : null;
         const incomingEnd = value?.end ? normalizeDate(value.end) : null;
         const clamped = clampLeaveRange({
-            start: value?.start ?? null,
-            end: value?.end ?? null,
+            start: incomingStart,
+            end: incomingEnd,
         });
 
         leaveRange.value = clamped;
