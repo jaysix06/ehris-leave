@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Form, Head } from '@inertiajs/vue3';
+import { onBeforeUnmount, onMounted } from 'vue';
 import InputError from '@/components/InputError.vue';
 import TextLink from '@/components/TextLink.vue';
 import { Button } from '@/components/ui/button';
@@ -16,6 +17,22 @@ defineProps<{
     canResetPassword: boolean;
     canRegister: boolean;
 }>();
+
+const handlePageShow = (event: PageTransitionEvent) => {
+    // When browser restores this page from BFCache, force reload
+    // so auth/session middleware runs before another login attempt.
+    if (event.persisted) {
+        window.location.reload();
+    }
+};
+
+onMounted(() => {
+    window.addEventListener('pageshow', handlePageShow);
+});
+
+onBeforeUnmount(() => {
+    window.removeEventListener('pageshow', handlePageShow);
+});
 </script>
 
 <template>
