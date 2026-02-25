@@ -1,18 +1,18 @@
 <script setup lang="ts">
 import { Head, router, usePage } from '@inertiajs/vue3';
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { DatePicker } from 'v-calendar';
+import { echo } from '@laravel/echo-vue';
+import { addDays, differenceInDays } from 'date-fns';
 import {
     CheckCircle2,
     ImagePlus,
     SendHorizontal,
     X,
 } from 'lucide-vue-next';
+import { DatePicker } from 'v-calendar';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import selfServiceRoutes from '@/routes/self-service';
 import { type BreadcrumbItem, type User } from '@/types';
-import { addDays, differenceInDays } from 'date-fns';
-import { echo } from '@laravel/echo-vue';
 
 const pageTitle = 'Leave Application';
 
@@ -30,10 +30,12 @@ const breadcrumbs: BreadcrumbItem[] = [
 const today = new Date();
 today.setHours(0, 0, 0, 0);
 
-const leaveRange = ref<{ start: Date; end: Date }>({
-    start: today,
-    end: today,
+const leaveRange = ref<{ start: Date | null; end: Date | null }>({
+    start: null,
+    end: null,
 });
+type LeaveRange = { start: Date | null; end: Date | null };
+type CalendarRangeModel = { start: Date; end: Date };
 
 const formatter = new Intl.DateTimeFormat('en-GB', {
     day: '2-digit',
@@ -55,7 +57,7 @@ const noOfDays = computed(() => {
     return differenceInDays(leaveRange.value.end, leaveRange.value.start) + 1;
 });
 
-const isFiledInAdvance = computed(() => leaveRange.value.start > today);
+const isFiledInAdvance = computed(() => !!leaveRange.value.start && leaveRange.value.start > today);
 const requiresSupportingDoc = computed(
     () => isSickLeave.value && (isFiledInAdvance.value || noOfDays.value > 5),
 );
@@ -68,7 +70,16 @@ const requiredDocType = computed(() => {
 
 const defaultLeaveTypeLabel = '- Select Leave Type -';
 const selectedLeaveType = ref<string>(defaultLeaveTypeLabel);
+const isLeaveTypeUnselected = computed(() => selectedLeaveType.value === defaultLeaveTypeLabel);
+const calendarKey = ref(0);
 const isSickLeave = computed(() => selectedLeaveType.value === 'Sick Leave');
+const isMaternityLeave = computed(() => selectedLeaveType.value === 'Maternity Leave');
+const isPaternityLeave = computed(() => selectedLeaveType.value === 'Paternity Leave');
+const leaveTypeDayLimit = computed<number | null>(() => {
+    if (isPaternityLeave.value) return 7;
+    if (isMaternityLeave.value) return 105;
+    return null;
+});
 
 
 const minSelectableDate = computed<Date | null>(() => {
@@ -81,6 +92,66 @@ const minSelectableDate = computed<Date | null>(() => {
     return today;
 });
 
+const normalizeDate = (date: Date) => {
+    const normalized = new Date(date);
+    normalized.setHours(0, 0, 0, 0);
+    return normalized;
+};
+
+const clampLeaveRange = (value: LeaveRange): LeaveRange => {
+    let start = value.start ? normalizeDate(value.start) : null;
+    let end = value.end ? normalizeDate(value.end) : null;
+
+    if (!start || !end) {
+        return { start, end };
+    }
+
+    const minimumDate = minSelectableDate.value ? normalizeDate(minSelectableDate.value) : null;
+    if (minimumDate && start < minimumDate) {
+        start = minimumDate;
+        end = minimumDate;
+    }
+
+    const limit = leaveTypeDayLimit.value;
+    if (limit) {
+        const maxAllowedEnd = addDays(start, limit - 1);
+        if (end > maxAllowedEnd) {
+            end = maxAllowedEnd;
+        }
+    }
+
+    return { start, end };
+};
+
+const calendarLeaveRange = computed<CalendarRangeModel | undefined>({
+    get: () => {
+        const { start, end } = leaveRange.value;
+        if (!start || !end) {
+            return undefined;
+        }
+        return { start, end };
+    },
+    set: (value) => {
+        const incomingStart = value?.start ? normalizeDate(value.start) : null;
+        const incomingEnd = value?.end ? normalizeDate(value.end) : null;
+        const clamped = clampLeaveRange({
+            start: incomingStart,
+            end: incomingEnd,
+        });
+
+        leaveRange.value = clamped;
+
+        const wasClamped =
+            !!incomingStart &&
+            !!incomingEnd &&
+            (!!clamped.start && incomingStart.getTime() !== clamped.start.getTime() ||
+                !!clamped.end && incomingEnd.getTime() !== clamped.end.getTime());
+
+        if (wasClamped) {
+            calendarKey.value += 1;
+        }
+    },
+});
 const reason = ref<string>('');
 const commutation = ref<string>('');
 const consultationAvailed = ref<'yes' | 'no' | ''>('');
@@ -88,8 +159,11 @@ const medicalCertification = ref<File | null>(null);
 const affidavitFile = ref<File | null>(null);
 const medicalFileInput = ref<HTMLInputElement | null>(null);
 const affidavitFileInput = ref<HTMLInputElement | null>(null);
+const proofOfDelivery = ref<File | null>(null);
+const proofOfDeliveryInput = ref<HTMLInputElement | null>(null);
 const isMedicalDropActive = ref(false);
 const isAffidavitDropActive = ref(false);
+const isProofOfDeliveryDropActive = ref(false);
 const submitError = ref<string | null>(null);
 
 const page = usePage();
@@ -240,13 +314,35 @@ const clearAffidavit = () => {
     }
 };
 
-watch(selectedLeaveType, () => {
-    const minimumDate = minSelectableDate.value;
-    if (minimumDate && leaveRange.value.start < minimumDate) {
+const onProofOfDeliveryChange = (event: Event) => {
+    const target = event.target as HTMLInputElement;
+    proofOfDelivery.value = target.files?.[0] ?? null;
+};
+
+const openProofOfDeliveryPicker = () => {
+    proofOfDeliveryInput.value?.click();
+};
+
+const onProofOfDeliveryDrop = (event: DragEvent) => {
+    event.preventDefault();
+    isProofOfDeliveryDropActive.value = false;
+    proofOfDelivery.value = event.dataTransfer?.files?.[0] ?? null;
+};
+
+const clearProofOfDelivery = () => {
+    proofOfDelivery.value = null;
+    if (proofOfDeliveryInput.value) {
+        proofOfDeliveryInput.value.value = '';
+    }
+};
+
+watch(selectedLeaveType, (newType, oldType) => {
+    if (newType !== oldType || newType === defaultLeaveTypeLabel) {
         leaveRange.value = {
-            start: minimumDate,
-            end: minimumDate,
+            start: null,
+            end: null,
         };
+        calendarKey.value += 1;
     }
 });
 
@@ -261,8 +357,22 @@ watch([selectedLeaveType, consultationAvailed], () => {
     submitError.value = null;
     if (!requiresSupportingDoc.value) {
         consultationAvailed.value = '';
-        medicalCertification.value = null;
+        if (!isMaternityLeave.value) {
+            medicalCertification.value = null;
+        }
         affidavitFile.value = null;
+    }
+
+    if (requiresSupportingDoc.value) {
+        if (consultationAvailed.value === 'yes') {
+            affidavitFile.value = null;
+        } else if (consultationAvailed.value === 'no') {
+            medicalCertification.value = null;
+        }
+    }
+
+    if (!isPaternityLeave.value) {
+        proofOfDelivery.value = null;
     }
 });
 
@@ -278,6 +388,20 @@ const submitLeaveApplication = () => {
 
     if (selectedLeaveType.value === defaultLeaveTypeLabel) {
         submitError.value = 'Please select a leave type.';
+        return;
+    }
+    if (!leaveRange.value.start || !leaveRange.value.end) {
+        submitError.value = 'Please select both start and end dates.';
+        return;
+    }
+
+    if (isPaternityLeave.value && noOfDays.value > 7) {
+        submitError.value = 'Paternity Leave cannot exceed 7 days.';
+        return;
+    }
+
+    if (isMaternityLeave.value && noOfDays.value > 105) {
+        submitError.value = 'Maternity Leave cannot exceed 105 days.';
         return;
     }
 
@@ -296,6 +420,13 @@ const submitLeaveApplication = () => {
         }
     }
 
+    if (isPaternityLeave.value) {
+        if (!proofOfDelivery.value) {
+            submitError.value = 'Please upload proof of child\'s delivery (e.g. birth certificate, medical certificate, or marriage contract).';
+            return;
+        }
+    }
+
     router.post(
         selfServiceRoutes.leaveApplication().url,
         {
@@ -307,6 +438,7 @@ const submitLeaveApplication = () => {
             consultation_availed: consultationAvailed.value || null,
             medical_certificate: medicalCertification.value,
             affidavit: affidavitFile.value,
+            proof_of_delivery: proofOfDelivery.value,
         },
         {
             forceFormData: true,
@@ -483,19 +615,20 @@ onBeforeUnmount(() => {
                         </div>
 
                         <div class="calendar-box">
-                            <DatePicker
-                                v-model="leaveRange"
-                                is-range
-                                is-inline
-                                expanded
+                            <div class="calendar-picker-wrap" :class="{ 'is-disabled': isLeaveTypeUnselected }">
+                                <DatePicker
+                                    :key="calendarKey"
+                                    v-model="calendarLeaveRange"
+                                    is-range
+                                    is-inline
+                                    expanded
                                 :min-date="minSelectableDate ?? undefined"
                                 :masks="{ weekdays: 'WWW' }"
                                 class="calendar-inline"
                             />
+                                <div v-if="isLeaveTypeUnselected" class="calendar-disabled-overlay" />
+                            </div>
                             <div
-<<<<<<< HEAD
-                                v-if="selectedLeaveType === 'Sick Leave' && noOfDays >= 6 || selectedLeaveType === 'Maternity Leave' || selectedLeaveType === 'Paternity Leave'"
-=======
                                 v-if="isSickLeave && requiresSupportingDoc"
                                 class="medical-cert-panel"
                             >
@@ -513,101 +646,104 @@ onBeforeUnmount(() => {
                                     No medical consultation (affidavit)
                                 </label>
 
-                                <div
-                                    v-if="!medicalCertification"
-                                    class="medical-dropzone"
-                                    :class="{ 'is-active': isMedicalDropActive }"
-                                    @click="openMedicalFilePicker"
-                                    @dragover.prevent="isMedicalDropActive = true"
-                                    @dragleave.prevent="isMedicalDropActive = false"
-                                    @drop="onMedicalDrop"
-                                >
-                                    <div class="dropzone-icon-wrap">
-                                        <ImagePlus :size="30" />
-                                    </div>
-                                    <p class="dropzone-main">
-                                        Drag &amp; drop
-                                        <span>medical certificate</span>
-                                    </p>
-                                    <p class="dropzone-sub">
-                                        or
-                                        <button type="button" class="browse-link" @click.stop="openMedicalFilePicker">
-                                            browse files
-                                        </button>
-                                        on your computer
-                                    </p>
-                                    <input
-                                        ref="medicalFileInput"
-                                        type="file"
-                                        accept=".pdf,.jpg,.jpeg,.png"
-                                        class="sr-only"
-                                        @change="onMedicalCertificationChange"
-                                    />
-                                </div>
-
-                                <div v-if="medicalCertification" class="medical-file-row">
-                                    <div class="file-meta">
-                                        <p class="file-name">{{ medicalCertification.name }}</p>
-                                        <p class="file-info">
-                                            {{ Math.max(1, Math.round(medicalCertification.size / 1024)) }} KB
+                                <template v-if="consultationAvailed === 'yes'">
+                                    <div
+                                        v-if="!medicalCertification"
+                                        class="medical-dropzone"
+                                        :class="{ 'is-active': isMedicalDropActive }"
+                                        @click="openMedicalFilePicker"
+                                        @dragover.prevent="isMedicalDropActive = true"
+                                        @dragleave.prevent="isMedicalDropActive = false"
+                                        @drop="onMedicalDrop"
+                                    >
+                                        <div class="dropzone-icon-wrap">
+                                            <ImagePlus :size="30" />
+                                        </div>
+                                        <p class="dropzone-main">
+                                            Drag &amp; drop
+                                            <span>medical certificate</span>
                                         </p>
-                                    </div>
-                                    <button type="button" class="remove-file-btn" @click="clearMedicalCertification">
-                                        <X :size="16" />
-                                    </button>
-                                </div>
-
-                                <div
-                                    v-if="!affidavitFile"
-                                    class="medical-dropzone"
-                                    :class="{ 'is-active': isAffidavitDropActive }"
-                                    @click="openAffidavitFilePicker"
-                                    @dragover.prevent="isAffidavitDropActive = true"
-                                    @dragleave.prevent="isAffidavitDropActive = false"
-                                    @drop="onAffidavitDrop"
-                                >
-                                    <div class="dropzone-icon-wrap">
-                                        <ImagePlus :size="30" />
-                                    </div>
-                                    <p class="dropzone-main">
-                                        Drag &amp; drop
-                                        <span>affidavit</span>
-                                    </p>
-                                    <p class="dropzone-sub">
-                                        or
-                                        <button type="button" class="browse-link" @click.stop="openAffidavitFilePicker">
-                                            browse files
-                                        </button>
-                                        on your computer
-                                    </p>
-                                    <input
-                                        ref="affidavitFileInput"
-                                        type="file"
-                                        accept=".pdf,.jpg,.jpeg,.png"
-                                        class="sr-only"
-                                        @change="onAffidavitChange"
-                                    />
-                                </div>
-
-                                <div v-if="affidavitFile" class="medical-file-row">
-                                    <div class="file-meta">
-                                        <p class="file-name">{{ affidavitFile.name }}</p>
-                                        <p class="file-info">
-                                            {{ Math.max(1, Math.round(affidavitFile.size / 1024)) }} KB
+                                        <p class="dropzone-sub">
+                                            or
+                                            <button type="button" class="browse-link" @click.stop="openMedicalFilePicker">
+                                                browse files
+                                            </button>
+                                            on your computer
                                         </p>
+                                        <input
+                                            ref="medicalFileInput"
+                                            type="file"
+                                            accept=".pdf,.jpg,.jpeg,.png"
+                                            class="sr-only"
+                                            @change="onMedicalCertificationChange"
+                                        />
                                     </div>
-                                    <button type="button" class="remove-file-btn" @click="clearAffidavit">
-                                        <X :size="16" />
-                                    </button>
-                                </div>
+
+                                    <div v-if="medicalCertification" class="medical-file-row">
+                                        <div class="file-meta">
+                                            <p class="file-name">{{ medicalCertification.name }}</p>
+                                            <p class="file-info">
+                                                {{ Math.max(1, Math.round(medicalCertification.size / 1024)) }} KB
+                                            </p>
+                                        </div>
+                                        <button type="button" class="remove-file-btn" @click="clearMedicalCertification">
+                                            <X :size="16" />
+                                        </button>
+                                    </div>
+                                </template>
+
+                                <template v-else-if="consultationAvailed === 'no'">
+                                    <div
+                                        v-if="!affidavitFile"
+                                        class="medical-dropzone"
+                                        :class="{ 'is-active': isAffidavitDropActive }"
+                                        @click="openAffidavitFilePicker"
+                                        @dragover.prevent="isAffidavitDropActive = true"
+                                        @dragleave.prevent="isAffidavitDropActive = false"
+                                        @drop="onAffidavitDrop"
+                                    >
+                                        <div class="dropzone-icon-wrap">
+                                            <ImagePlus :size="30" />
+                                        </div>
+                                        <p class="dropzone-main">
+                                            Drag &amp; drop
+                                            <span>affidavit</span>
+                                        </p>
+                                        <p class="dropzone-sub">
+                                            or
+                                            <button type="button" class="browse-link" @click.stop="openAffidavitFilePicker">
+                                                browse files
+                                            </button>
+                                            on your computer
+                                        </p>
+                                        <input
+                                            ref="affidavitFileInput"
+                                            type="file"
+                                            accept=".pdf,.jpg,.jpeg,.png"
+                                            class="sr-only"
+                                            @change="onAffidavitChange"
+                                        />
+                                    </div>
+
+                                    <div v-if="affidavitFile" class="medical-file-row">
+                                        <div class="file-meta">
+                                            <p class="file-name">{{ affidavitFile.name }}</p>
+                                            <p class="file-info">
+                                                {{ Math.max(1, Math.round(affidavitFile.size / 1024)) }} KB
+                                            </p>
+                                        </div>
+                                        <button type="button" class="remove-file-btn" @click="clearAffidavit">
+                                            <X :size="16" />
+                                        </button>
+                                    </div>
+                                </template>
                             </div>
 
                             <div
-                                v-else-if="selectedLeaveType === 'Maternity Leave' || selectedLeaveType === 'Paternity Leave'"
->>>>>>> 28cd2466f1c978f8628c442848035637ca473213
+                                v-else-if="isMaternityLeave"
                                 class="medical-cert-panel"
                             >
-                                <p class="upload-title">Medical Certification</p>
+                                <p class="upload-title">Proof of Pregnancy</p>
 
                                 <div
                                     v-if="!medicalCertification"
@@ -653,6 +789,58 @@ onBeforeUnmount(() => {
                                     </button>
                                 </div>
                             </div>
+
+                            <div
+                                v-else-if="isPaternityLeave"
+                                class="medical-cert-panel"
+                            >
+                                <p class="upload-title">Proof of Child's Delivery</p>
+                                <p class="dropzone-sub">
+                                    Required for Paternity Leave (max 7 days). Upload one document as proof (e.g. birth certificate, medical certificate, or marriage contract).
+                                </p>
+                                <div
+                                    v-if="!proofOfDelivery"
+                                    class="medical-dropzone"
+                                    :class="{ 'is-active': isProofOfDeliveryDropActive }"
+                                    @click="openProofOfDeliveryPicker"
+                                    @dragover.prevent="isProofOfDeliveryDropActive = true"
+                                    @dragleave.prevent="isProofOfDeliveryDropActive = false"
+                                    @drop="onProofOfDeliveryDrop"
+                                >
+                                    <div class="dropzone-icon-wrap">
+                                        <ImagePlus :size="30" />
+                                    </div>
+                                    <p class="dropzone-main">
+                                        Drag &amp; drop
+                                        <span>proof of child's delivery</span>
+                                    </p>
+                                    <p class="dropzone-sub">
+                                        or
+                                        <button type="button" class="browse-link" @click.stop="openProofOfDeliveryPicker">
+                                            browse files
+                                        </button>
+                                        on your computer
+                                    </p>
+                                    <input
+                                        ref="proofOfDeliveryInput"
+                                        type="file"
+                                        accept=".pdf,.jpg,.jpeg,.png"
+                                        class="sr-only"
+                                        @change="onProofOfDeliveryChange"
+                                    />
+                                </div>
+                                <div v-if="proofOfDelivery" class="medical-file-row">
+                                    <div class="file-meta">
+                                        <p class="file-name">{{ proofOfDelivery.name }}</p>
+                                        <p class="file-info">
+                                            {{ Math.max(1, Math.round(proofOfDelivery.size / 1024)) }} KB
+                                        </p>
+                                    </div>
+                                    <button type="button" class="remove-file-btn" @click="clearProofOfDelivery">
+                                        <X :size="16" />
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -663,6 +851,12 @@ onBeforeUnmount(() => {
                         </p>
                         <p v-else-if="$page.props.errors?.affidavit" class="text-sm text-destructive">
                             {{ $page.props.errors.affidavit }}
+                        </p>
+                        <p v-else-if="$page.props.errors?.proof_of_delivery" class="text-sm text-destructive">
+                            {{ $page.props.errors.proof_of_delivery }}
+                        </p>
+                        <p v-else-if="$page.props.errors?.leave_end_date" class="text-sm text-destructive">
+                            {{ $page.props.errors.leave_end_date }}
                         </p>
                         <button class="cancel-btn" type="button">Cancel</button>
                         <button class="apply-btn" type="button" @click="submitLeaveApplication">
@@ -1010,6 +1204,22 @@ onBeforeUnmount(() => {
     padding: 0.7rem;
     min-width: 0;
     overflow: hidden;
+}
+
+.calendar-picker-wrap {
+    position: relative;
+}
+
+.calendar-picker-wrap.is-disabled {
+    opacity: 0.6;
+}
+
+.calendar-disabled-overlay {
+    position: absolute;
+    inset: 0;
+    cursor: not-allowed;
+    background: transparent;
+    z-index: 10;
 }
 
 .calendar-inline :deep(.vc-container) {

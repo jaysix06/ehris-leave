@@ -186,6 +186,7 @@ class LeaveApplicationController extends Controller
             'consultation_availed' => ['nullable', 'in:yes,no'],
             'medical_certificate' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
             'affidavit' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
+            'proof_of_delivery' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
         ]);
 
         if ($data['leave_type'] === 'Sick Leave') {
@@ -218,6 +219,24 @@ class LeaveApplicationController extends Controller
                         'medical_certificate' => 'Please upload a medical certificate or an affidavit.',
                     ]);
                 }
+            }
+        }
+
+        if ($data['leave_type'] === 'Paternity Leave') {
+            $start = Carbon::parse($data['leave_start_date'])->startOfDay();
+            $end = Carbon::parse($data['leave_end_date'])->startOfDay();
+            $days = $start->diffInDays($end) + 1;
+
+            if ($days > 7) {
+                throw ValidationException::withMessages([
+                    'leave_end_date' => 'Paternity Leave cannot exceed 7 days per application.',
+                ]);
+            }
+
+            if (! $request->hasFile('proof_of_delivery')) {
+                throw ValidationException::withMessages([
+                    'proof_of_delivery' => 'Proof of child\'s delivery is required for Paternity Leave (e.g. birth certificate, medical certificate, or marriage contract).',
+                ]);
             }
         }
 

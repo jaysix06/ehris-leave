@@ -8,10 +8,7 @@
     "sail": false,
     "skills": [
         "wayfinder-development",
-<<<<<<< HEAD
-=======
         "livewire-development",
->>>>>>> f334045bdbfb7af38d1071f21bd9dd7e0aab64ec
         "pest-testing",
         "inertia-vue-development",
         "tailwindcss-development"
