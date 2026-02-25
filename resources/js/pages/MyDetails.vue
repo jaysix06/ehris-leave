@@ -214,8 +214,6 @@ const myDetailsReloadProps = [
 const refreshMyDetails = () => {
     router.reload({
         only: myDetailsReloadProps,
-        preserveState: true,
-        preserveScroll: true,
     });
 };
 
