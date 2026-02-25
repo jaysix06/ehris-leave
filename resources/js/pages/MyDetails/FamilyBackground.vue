@@ -1,330 +1,142 @@
 <script setup lang="ts">
-import { router } from '@inertiajs/vue3';
-import { Pencil, Plus, Trash2 } from 'lucide-vue-next';
-import { computed, ref, watch } from 'vue';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Spinner } from '@/components/ui/spinner';
+import { Pencil } from 'lucide-vue-next';
+import { computed } from 'vue';
 
 function val(v: unknown): string {
-    if (v == null || v === '') return '—';
-    return String(v);
+    if (v == null || v === '') return 'N/A';
+    const s = String(v).trim();
+    return s === '' ? 'N/A' : s;
 }
 
-function familyName(item: Record<string, unknown>): string {
+function fullName(item: Record<string, unknown>): string {
     const parts = [item.firstname, item.middlename, item.lastname, item.extension].filter(Boolean);
-    return parts.map(String).join(' ').trim() || '—';
-}
-
-type FamilyRow = {
-    relationship: string;
-    firstname: string;
-    middlename: string;
-    lastname: string;
-    extension: string;
-    dob: string;
-    occupation: string;
-    employer_name: string;
-    business_add: string;
-    tel_num: string;
-};
-
-function emptyRow(): FamilyRow {
-    return {
-        relationship: '',
-        firstname: '',
-        middlename: '',
-        lastname: '',
-        extension: '',
-        dob: '',
-        occupation: '',
-        employer_name: '',
-        business_add: '',
-        tel_num: '',
-    };
-}
-
-function normalizeRow(item: Record<string, unknown>): FamilyRow {
-    return {
-        relationship: val(item.relationship).replace('—', ''),
-        firstname: val(item.firstname).replace('—', ''),
-        middlename: val(item.middlename).replace('—', ''),
-        lastname: val(item.lastname).replace('—', ''),
-        extension: val(item.extension).replace('—', ''),
-        dob: val(item.dob).replace('—', ''),
-        occupation: val(item.occupation).replace('—', ''),
-        employer_name: val(item.employer_name).replace('—', ''),
-        business_add: val(item.business_add).replace('—', ''),
-        tel_num: val(item.tel_num).replace('—', ''),
-    };
+    return parts.map(String).join(' ').trim() || 'N/A';
 }
 
 const props = defineProps<{
     family?: Record<string, unknown>[];
-    familyUpdateUrl?: string;
 }>();
 
-const isEditing = ref(false);
-const formRows = ref<FamilyRow[]>([]);
-const processing = ref(false);
-const errors = ref<Record<string, string>>({});
+const familyList = computed(() => props.family ?? []);
 
-function openEdit(): void {
-    if (props.family && props.family.length > 0) {
-        formRows.value = props.family.map((item) => normalizeRow(item));
-    } else {
-        formRows.value = [emptyRow()];
-    }
-    errors.value = {};
-    isEditing.value = true;
-}
+const spouse = computed(() =>
+    familyList.value.find((r) => String(r?.relationship ?? '').toLowerCase() === 'spouse') as Record<string, unknown> | undefined
+);
 
-function cancelEdit(): void {
-    isEditing.value = false;
-}
+const children = computed(() =>
+    familyList.value.filter((r) => {
+        const rel = String(r?.relationship ?? '').toLowerCase();
+        return rel === 'child' || rel === 'children';
+    })
+);
 
-function addRow(): void {
-    formRows.value = [...formRows.value, emptyRow()];
-}
+const father = computed(() =>
+    familyList.value.find((r) => String(r?.relationship ?? '').toLowerCase() === 'father') as Record<string, unknown> | undefined
+);
 
-function removeRow(index: number): void {
-    if (formRows.value.length <= 1) return;
-    formRows.value = formRows.value.filter((_, i) => i !== index);
-}
+const mother = computed(() =>
+    familyList.value.find((r) => String(r?.relationship ?? '').toLowerCase() === 'mother') as Record<string, unknown> | undefined
+);
 
-function submit(): void {
-    if (!props.familyUpdateUrl) return;
-    processing.value = true;
-    errors.value = {};
-    router.post(props.familyUpdateUrl, {
-        family: formRows.value,
-    }, {
-        preserveScroll: true,
-        onFinish: () => {
-            processing.value = false;
-        },
-        onSuccess: () => {
-            isEditing.value = false;
-        },
-        onError: (errs) => {
-            errors.value = (errs as Record<string, string>) || {};
-        },
-    });
-}
-
-watch(() => props.family, (next) => {
-    if (!isEditing.value && next && next.length > 0) {
-        formRows.value = next.map((item) => normalizeRow(item));
-    }
-}, { immediate: true });
-
-const canEdit = computed(() => Boolean(props.familyUpdateUrl));
-const hasFamily = computed(() => props.family && props.family.length > 0);
+const hasAnyFamily = computed(() => familyList.value.length > 0);
 </script>
 
 <template>
     <section class="ehris-card">
-        <div class="ehris-card-header">
-            <h3>Family Background</h3>
+        <div class="ehris-official-info-header">
+            <h3>Family information</h3>
             <button
-                v-if="canEdit && !isEditing"
                 type="button"
-                class="ehris-edit-btn"
-                aria-label="Edit family"
-                @click="openEdit"
+                class="ehris-btn-grade-subject"
+                aria-label="Edit family information"
             >
                 <Pencil class="size-4" />
+                <span>Edit</span>
             </button>
         </div>
 
-        <!-- View mode -->
-        <template v-if="!isEditing">
-            <div class="ehris-table-wrap" v-if="hasFamily">
-                <table class="ehris-table">
-                    <thead>
-                        <tr>
-                            <th>Relationship</th>
-                            <th>Name</th>
-                            <th>DOB</th>
-                            <th>Occupation</th>
-                            <th>Employer / Business</th>
-                            <th>Telephone</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr v-for="(item, i) in family" :key="i">
-                            <td>{{ val(item.relationship) }}</td>
-                            <td>{{ familyName(item) }}</td>
-                            <td>{{ val(item.dob) }}</td>
-                            <td>{{ val(item.occupation) }}</td>
-                            <td>{{ val(item.employer_name) }} <span v-if="item.business_add" class="ehris-muted"> – {{ val(item.business_add) }}</span></td>
-                            <td>{{ val(item.tel_num) }}</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-            <p v-else class="ehris-muted">No family information on file.</p>
-        </template>
-
-        <!-- Edit mode -->
-        <template v-else>
-            <form @submit.prevent="submit" class="ehris-family-edit-form">
-                <div v-if="Object.keys(errors).length" class="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/30 dark:text-red-300">
-                    <p v-for="(msg, key) in errors" :key="key">{{ msg }}</p>
+        <template v-if="hasAnyFamily">
+            <div class="ehris-family-section">
+                <h4 class="ehris-family-subtitle">Spouse</h4>
+                <div class="ehris-official-info-grid">
+                    <dl class="ehris-official-info-col">
+                        <div class="ehris-details-row"><dt>Surname</dt><dd>{{ spouse ? val(spouse.lastname) : 'N/A' }}</dd></div>
+                        <div class="ehris-details-row"><dt>First name</dt><dd>{{ spouse ? val(spouse.firstname) : 'N/A' }}</dd></div>
+                        <div class="ehris-details-row"><dt>Middle name</dt><dd>{{ spouse ? val(spouse.middlename) : 'N/A' }}</dd></div>
+                        <div class="ehris-details-row"><dt>Extension</dt><dd>{{ spouse ? val(spouse.extension) : 'N/A' }}</dd></div>
+                    </dl>
+                    <dl class="ehris-official-info-col">
+                        <div class="ehris-details-row"><dt>Occupation</dt><dd>{{ spouse ? val(spouse.occupation) : 'N/A' }}</dd></div>
+                        <div class="ehris-details-row"><dt>Employer</dt><dd>{{ spouse ? val(spouse.employer_name) : 'N/A' }}</dd></div>
+                        <div class="ehris-details-row"><dt>Business address</dt><dd>{{ spouse ? val(spouse.business_add) : 'N/A' }}</dd></div>
+                        <div class="ehris-details-row"><dt>Telephone</dt><dd>{{ spouse ? val(spouse.tel_num) : 'N/A' }}</dd></div>
+                    </dl>
                 </div>
+            </div>
+
+            <div class="ehris-family-section">
+                <h4 class="ehris-family-subtitle">Children</h4>
                 <div class="ehris-table-wrap">
                     <table class="ehris-table">
                         <thead>
                             <tr>
-                                <th>Relationship</th>
-                                <th>First name</th>
-                                <th>Middle name</th>
-                                <th>Last name</th>
-                                <th>Ext.</th>
-                                <th>DOB</th>
-                                <th>Occupation</th>
-                                <th>Employer</th>
-                                <th>Business address</th>
-                                <th>Tel. no.</th>
-                                <th></th>
+                                <th>Name</th>
+                                <th>Date of birth</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <tr v-for="(row, index) in formRows" :key="index">
-                                <td>
-                                    <Input
-                                        v-model="row.relationship"
-                                        type="text"
-                                        :name="`family[${index}][relationship]`"
-                                        placeholder="e.g. Spouse, Child"
-                                        class="min-w-[100px]"
-                                    />
-                                </td>
-                                <td>
-                                    <Input
-                                        v-model="row.firstname"
-                                        type="text"
-                                        :name="`family[${index}][firstname]`"
-                                        placeholder="First name"
-                                    />
-                                </td>
-                                <td>
-                                    <Input
-                                        v-model="row.middlename"
-                                        type="text"
-                                        :name="`family[${index}][middlename]`"
-                                        placeholder="Middle name"
-                                    />
-                                </td>
-                                <td>
-                                    <Input
-                                        v-model="row.lastname"
-                                        type="text"
-                                        :name="`family[${index}][lastname]`"
-                                        placeholder="Last name"
-                                    />
-                                </td>
-                                <td>
-                                    <Input
-                                        v-model="row.extension"
-                                        type="text"
-                                        :name="`family[${index}][extension]`"
-                                        placeholder="Jr., Sr."
-                                        class="w-16"
-                                    />
-                                </td>
-                                <td>
-                                    <Input
-                                        v-model="row.dob"
-                                        type="text"
-                                        :name="`family[${index}][dob]`"
-                                        placeholder="dd/mm/yyyy"
-                                        class="min-w-[100px]"
-                                    />
-                                </td>
-                                <td>
-                                    <Input
-                                        v-model="row.occupation"
-                                        type="text"
-                                        :name="`family[${index}][occupation]`"
-                                        placeholder="Occupation"
-                                    />
-                                </td>
-                                <td>
-                                    <Input
-                                        v-model="row.employer_name"
-                                        type="text"
-                                        :name="`family[${index}][employer_name]`"
-                                        placeholder="Employer"
-                                    />
-                                </td>
-                                <td>
-                                    <Input
-                                        v-model="row.business_add"
-                                        type="text"
-                                        :name="`family[${index}][business_add]`"
-                                        placeholder="Business address"
-                                    />
-                                </td>
-                                <td>
-                                    <Input
-                                        v-model="row.tel_num"
-                                        type="text"
-                                        :name="`family[${index}][tel_num]`"
-                                        placeholder="Tel. no."
-                                    />
-                                </td>
-                                <td class="w-10">
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon"
-                                        aria-label="Remove row"
-                                        :disabled="formRows.length <= 1"
-                                        @click="removeRow(index)"
-                                    >
-                                        <Trash2 class="size-4" />
-                                    </Button>
-                                </td>
+                            <tr v-if="children.length === 0">
+                                <td>N/A</td>
+                                <td>N/A</td>
+                            </tr>
+                            <tr v-for="(child, i) in children" :key="i">
+                                <td>{{ fullName(child) }}</td>
+                                <td>{{ val(child.dob) }}</td>
                             </tr>
                         </tbody>
                     </table>
                 </div>
-                <div class="mt-4 flex flex-wrap items-center gap-3">
-                    <Button
-                        type="button"
-                        variant="outline"
-                        :disabled="processing"
-                        @click="addRow"
-                    >
-                        <Plus class="size-4 mr-1" />
-                        Add row
-                    </Button>
-                    <Button
-                        type="submit"
-                        :disabled="processing"
-                    >
-                        <Spinner v-if="processing" class="size-4 mr-1" />
-                        Save
-                    </Button>
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        :disabled="processing"
-                        @click="cancelEdit"
-                    >
-                        Cancel
-                    </Button>
+            </div>
+
+            <div class="ehris-family-section">
+                <h4 class="ehris-family-subtitle">Father</h4>
+                <div class="ehris-official-info-grid">
+                    <dl class="ehris-official-info-col">
+                        <div class="ehris-details-row"><dt>Surname</dt><dd>{{ father ? val(father.lastname) : 'N/A' }}</dd></div>
+                        <div class="ehris-details-row"><dt>First name</dt><dd>{{ father ? val(father.firstname) : 'N/A' }}</dd></div>
+                        <div class="ehris-details-row"><dt>Middle name</dt><dd>{{ father ? val(father.middlename) : 'N/A' }}</dd></div>
+                        <div class="ehris-details-row"><dt>Extension</dt><dd>{{ father ? val(father.extension) : 'N/A' }}</dd></div>
+                    </dl>
                 </div>
-            </form>
+            </div>
+
+            <div class="ehris-family-section">
+                <h4 class="ehris-family-subtitle">Mother</h4>
+                <div class="ehris-official-info-grid">
+                    <dl class="ehris-official-info-col">
+                        <div class="ehris-details-row"><dt>Surname</dt><dd>{{ mother ? val(mother.lastname) : 'N/A' }}</dd></div>
+                        <div class="ehris-details-row"><dt>First name</dt><dd>{{ mother ? val(mother.firstname) : 'N/A' }}</dd></div>
+                        <div class="ehris-details-row"><dt>Middle name</dt><dd>{{ mother ? val(mother.middlename) : 'N/A' }}</dd></div>
+                    </dl>
+                </div>
+            </div>
         </template>
+
+        <p v-else class="ehris-muted">No family information on file.</p>
     </section>
 </template>
 
 <style scoped>
-.ehris-family-edit-form :deep(.ehris-table input) {
-    width: 100%;
-    min-width: 0;
+.ehris-family-section {
+    margin-bottom: 1.5rem;
+}
+.ehris-family-section:last-of-type {
+    margin-bottom: 0;
+}
+.ehris-family-subtitle {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: hsl(var(--foreground));
+    margin: 0 0 0.5rem 0;
 }
 </style>

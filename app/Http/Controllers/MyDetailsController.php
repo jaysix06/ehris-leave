@@ -7,7 +7,6 @@ use App\Models\Awards;
 use App\Models\Document;
 use App\Models\EmpContactInfo;
 use App\Models\EmpEducationInfo;
-use App\Models\EmpFamilyInfo;
 use App\Models\EmpOfficialInfo;
 use App\Models\EmpPersonalInfo;
 use App\Models\EmpServiceRecord;
@@ -35,7 +34,6 @@ class MyDetailsController extends Controller
             'officialInfo' => null,
             'personalInfo' => null,
             'contactInfo' => null,
-            'family' => [],
             'education' => [],
             'workExperience' => [],
             'eligibility' => [],
@@ -85,11 +83,6 @@ class MyDetailsController extends Controller
                     'key' => 'contactInfo',
                     'type' => 'single',
                     'query' => fn () => EmpContactInfo::query()->where('hrid', $hrid)->first(),
-                ],
-                'tbl_emp_family_info' => [
-                    'key' => 'family',
-                    'type' => 'collection',
-                    'query' => fn () => EmpFamilyInfo::query()->where('hrid', $hrid)->get(),
                 ],
                 'tbl_emp_education_info' => [
                     'key' => 'education',
