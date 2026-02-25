@@ -452,12 +452,26 @@ const refreshLeaveTypes = () => {
     router.reload({ only: ['leaveTypes'] });
 };
 
+const reverbEnabled = import.meta.env.VITE_REVERB_ENABLED !== 'false';
+
 onMounted(() => {
-    echo().channel('leave-types').listen('.LeaveTypeUpdated', refreshLeaveTypes);
+    if (reverbEnabled) {
+        try {
+            echo().channel('leave-types').listen('.LeaveTypeUpdated', refreshLeaveTypes);
+        } catch {
+            // Reverb not connected; real-time updates disabled
+        }
+    }
 });
 
 onBeforeUnmount(() => {
-    echo().channel('leave-types').stopListening('LeaveTypeUpdated');
+    if (reverbEnabled) {
+        try {
+            echo().channel('leave-types').stopListening('LeaveTypeUpdated');
+        } catch {
+            // ignore
+        }
+    }
 });
 </script>
 

@@ -233,12 +233,26 @@ const onMyDetailsUpdated = (event: { hrid?: number | string } = {}) => {
     refreshMyDetails();
 };
 
+const reverbEnabled = import.meta.env.VITE_REVERB_ENABLED !== 'false';
+
 onMounted(() => {
-    echo().channel('my-details').listen('.MyDetailsUpdated', onMyDetailsUpdated);
+    if (reverbEnabled) {
+        try {
+            echo().channel('my-details').listen('.MyDetailsUpdated', onMyDetailsUpdated);
+        } catch {
+            // Reverb not connected; real-time updates disabled
+        }
+    }
 });
 
 onBeforeUnmount(() => {
-    echo().channel('my-details').stopListening('MyDetailsUpdated');
+    if (reverbEnabled) {
+        try {
+            echo().channel('my-details').stopListening('MyDetailsUpdated');
+        } catch {
+            // ignore
+        }
+    }
 });
 </script>
 
