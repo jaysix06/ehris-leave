@@ -467,7 +467,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                         <select
                             v-model="selectedSchool"
                             @change="applyFilters"
-                            class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            class="w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
                             <option value="">All Schools/Offices</option>
                             <option v-for="school in filterOptions.schools" :key="school" :value="school">
@@ -482,7 +482,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                         <select
                             v-model="selectedJobTitle"
                             @change="applyFilters"
-                            class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            class="w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
                             <option value="">All Job Titles</option>
                             <option v-for="title in filterOptions.jobTitles" :key="title" :value="title">
@@ -497,7 +497,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                         <select
                             v-model="selectedSubject"
                             @change="applyFilters"
-                            class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            class="w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
                             <option value="">All Subjects</option>
                             <option v-for="subject in filterOptions.subjects" :key="subject" :value="subject">
@@ -512,7 +512,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                         <select
                             v-model="selectedGradeLevel"
                             @change="applyFilters"
-                            class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            class="w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
                             <option value="">All Grade Levels</option>
                             <option v-for="level in filterOptions.gradeLevels" :key="level" :value="level">
@@ -527,7 +527,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                         <select
                             v-model="selectedEmploymentStatus"
                             @change="applyFilters"
-                            class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            class="w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
                             <option value="">All Status</option>
                             <option
@@ -546,7 +546,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                         <select
                             v-model="selectedSalaryGrade"
                             @change="applyFilters"
-                            class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            class="w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
                             <option value="">All Salary Grades</option>
                             <option v-for="grade in [11, 12, 13, 14, 15, 16, 17, 18, 19, 20]" :key="grade" :value="grade.toString()">
@@ -566,7 +566,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                                 v-model="searchQuery"
                                 @keyup.enter="applyFilters"
                                 placeholder="Search by name or employee ID..."
-                                class="pl-10"
+                                class="pl-10 bg-white"
                             />
                         </div>
                     </div>
@@ -604,15 +604,15 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
 
                 <!-- Summary Statistics -->
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                    <div class="rounded-lg border p-4 bg-card">
+                    <div class="rounded-lg border p-4 bg-white">
                         <div class="text-sm text-muted-foreground">Total Employees</div>
                         <div class="text-2xl font-bold mt-1 text-primary">{{ summaryStats.total }}</div>
                     </div>
-                    <div class="rounded-lg border p-4 bg-card">
+                    <div class="rounded-lg border p-4 bg-white">
                         <div class="text-sm text-muted-foreground">Permanent</div>
                         <div class="text-2xl font-bold mt-1 text-primary">{{ summaryStats.permanent }}</div>
                     </div>
-                    <div class="rounded-lg border p-4 bg-card">
+                    <div class="rounded-lg border p-4 bg-white">
                         <div class="text-sm text-muted-foreground">Avg Leave Balance</div>
                         <div class="text-2xl font-bold mt-1 text-primary">{{ summaryStats.avgLeaveBalance }}</div>
                     </div>
@@ -620,7 +620,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
 
                 <!-- Charts -->
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 items-start">
-                    <div class="rounded-lg border p-4 bg-card">
+                    <div class="rounded-lg border p-4 bg-white">
                         <h3 class="text-sm font-semibold text-muted-foreground mb-3">Employment Status</h3>
                         <div class="h-[240px]">
                             <Doughnut
@@ -677,11 +677,11 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                             >
                                 <div
                                     v-if="showEmploymentStatusOthers && chartDataSafe.employmentStatus.chart.length > 0"
-                                    class="mt-2 max-h-48 overflow-y-auto overflow-x-hidden border rounded-md bg-background"
+                                    class="mt-2 max-h-48 overflow-y-auto overflow-x-hidden border rounded-md bg-white"
                                     style="max-height: 12rem;"
                                 >
                                 <table class="w-full text-sm" style="table-layout: fixed;">
-                                    <thead class="sticky top-0 z-20 bg-background border-b">
+                                    <thead class="sticky top-0 z-20 bg-white border-b">
                                         <tr>
                                             <th class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground whitespace-nowrap" style="width: 3rem; min-width: 3rem;">
                                                 Show
@@ -733,7 +733,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                             </transition>
                         </div>
                     </div>
-                    <div class="rounded-lg border p-4 bg-card">
+                    <div class="rounded-lg border p-4 bg-white">
                         <h3 class="text-sm font-semibold text-muted-foreground mb-3">By School/Office</h3>
                         <div class="h-[240px]">
                             <Doughnut
@@ -790,11 +790,11 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                             >
                                 <div
                                     v-if="showSchoolOthers && chartDataSafe.school.chart.length > 0"
-                                    class="mt-2 max-h-48 overflow-y-auto overflow-x-hidden border rounded-md bg-background"
+                                    class="mt-2 max-h-48 overflow-y-auto overflow-x-hidden border rounded-md bg-white"
                                     style="max-height: 12rem;"
                                 >
                                 <table class="w-full text-sm" style="table-layout: fixed;">
-                                    <thead class="sticky top-0 z-20 bg-background border-b">
+                                    <thead class="sticky top-0 z-20 bg-white border-b">
                                         <tr>
                                             <th class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground whitespace-nowrap" style="width: 3rem; min-width: 3rem;">
                                                 Show
@@ -848,7 +848,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                     </div>
                 </div>
                 <div class="grid grid-cols-1 gap-6 mb-6">
-                    <div class="rounded-lg border p-4 bg-card">
+                    <div class="rounded-lg border p-4 bg-white">
                         <h3 class="text-sm font-semibold text-muted-foreground mb-3">Count per Job Title (top 10)</h3>
                         <div class="h-[320px]">
                             <Bar
@@ -998,8 +998,9 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
 .ehris-card {
     border: 1px solid hsl(var(--border));
     border-radius: 0.5rem;
-    background: hsl(var(--card));
+    background: white;
     padding: 1.5rem;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
 }
 
 .ehris-employee-table {
