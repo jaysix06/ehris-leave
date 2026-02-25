@@ -1,11 +1,14 @@
 <?php
 
 use App\Http\Controllers\MyDetailsController;
+use App\Http\Controllers\Auth\PasswordResetOtpController;
 use App\Http\Controllers\SelfService\LeaveApplicationController;
 use App\Http\Controllers\Utilities\LeaveTypeController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use App\Models\FamilyInfo;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
@@ -15,6 +18,31 @@ Route::get('/', function () {
         'canRegister' => Features::enabled(Features::registration()),
     ]);
 })->name('home');
+
+Route::middleware('guest')->group(function () {
+    Route::post('forgot-password/otp/send', [PasswordResetOtpController::class, 'send'])
+        ->name('password.otp.send');
+    Route::get('forgot-password/otp/verify', [PasswordResetOtpController::class, 'showVerify'])
+        ->name('password.otp.verify.form');
+    Route::post('forgot-password/otp/verify', [PasswordResetOtpController::class, 'verify'])
+        ->name('password.otp.verify');
+    Route::get('forgot-password/otp/reset', [PasswordResetOtpController::class, 'showReset'])
+        ->name('password.otp.reset.form');
+    Route::post('forgot-password/otp/reset', [PasswordResetOtpController::class, 'reset'])
+        ->name('password.otp.reset');
+    Route::get('forgot-password/otp/success', [PasswordResetOtpController::class, 'success'])
+        ->name('password.otp.success');
+});
+
+Route::get('email/verified-success', function (Request $request) {
+    if ($request->user()) {
+        Auth::guard('web')->logout();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+    }
+
+    return Inertia::render('auth/EmailVerifiedSuccess');
+})->name('verification.success');
 
 Route::get('dashboard', function () {
     return Inertia::render('Dashboard');
@@ -151,7 +179,7 @@ Route::get('my-details', function (Request $request) {
             'tbl_emp_official_info' => fn () => DB::table('tbl_emp_official_info')->where('hrid', $hrid)->first(),
             'tbl_emp_personal_info' => fn () => DB::table('tbl_emp_personal_info')->where('hrid', $hrid)->first(),
             'tbl_emp_contact_info' => fn () => DB::table('tbl_emp_contact_info')->where('hrid', $hrid)->first(),
-            'tbl_emp_family_info' => fn () => DB::table('tbl_emp_family_info')->where('hrid', $hrid)->get(),
+            'tbl_emp_family_info' => fn () => FamilyInfo::query()->where('hrid', $hrid)->get(),
             'tbl_emp_education_info' => fn () => DB::table('tbl_emp_education_info')->where('hrid', $hrid)->get(),
             'tbl_emp_work_experience_info' => fn () => DB::table('tbl_emp_work_experience_info')->where('hrid', $hrid)->get(),
             'tbl_emp_civil_service_info' => fn () => DB::table('tbl_emp_civil_service_info')->where('hrid', $hrid)->get(),
@@ -220,6 +248,7 @@ Route::get('my-details', function (Request $request) {
         'personalInfo' => $personalInfo,
         'contactInfo' => $contactInfo,
         'family' => $family,
+        'familyUpdateUrl' => route('my-details.family.store'),
         'education' => $education,
         'workExperience' => $workExperience,
         'eligibility' => $eligibility,
@@ -234,6 +263,10 @@ Route::get('my-details', function (Request $request) {
         'affiliation' => $affiliation,
     ]);
 })->middleware(['auth', 'verified'])->name('my-details');
+
+Route::post('my-details/family', [\App\Http\Controllers\MyDetails\FamilyController::class, 'store'])
+    ->middleware(['auth', 'verified'])
+    ->name('my-details.family.store');
 
 Route::get('utilities', function () {
     return Inertia::render('Utilities');
