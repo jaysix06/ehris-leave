@@ -112,17 +112,73 @@ type Props = {
     };
 };
 
+// Extended color palette with distinct, non-similar colors
 const CHART_COLORS = [
-    'hsl(217, 91%, 60%)',
-    'hsl(262, 83%, 58%)',
-    'hsl(24, 95%, 53%)',
-    'hsl(142, 71%, 45%)',
-    'hsl(199, 89%, 48%)',
-    'hsl(280, 67%, 58%)',
-    'hsl(0, 72%, 51%)',
-    'hsl(47, 96%, 53%)',
+    'hsl(217, 91%, 60%)',   // Blue
+    'hsl(142, 71%, 45%)',   // Green
+    'hsl(24, 95%, 53%)',    // Orange
+    'hsl(280, 67%, 58%)',  // Purple
+    'hsl(0, 72%, 51%)',     // Red
+    'hsl(199, 89%, 48%)',   // Cyan
+    'hsl(47, 96%, 53%)',    // Yellow
+    'hsl(262, 83%, 58%)',   // Violet
+    'hsl(330, 75%, 55%)',   // Pink
+    'hsl(195, 85%, 50%)',   // Teal
+    'hsl(30, 90%, 55%)',    // Orange-Red
+    'hsl(160, 70%, 50%)',   // Turquoise
+    'hsl(270, 70%, 60%)',   // Lavender
+    'hsl(15, 95%, 50%)',    // Red-Orange
+    'hsl(180, 75%, 45%)',   // Aqua
+    'hsl(300, 65%, 55%)',   // Magenta
+    'hsl(60, 90%, 50%)',    // Bright Yellow
+    'hsl(210, 85%, 55%)',   // Sky Blue
+    'hsl(120, 65%, 50%)',   // Lime Green
+    'hsl(340, 80%, 55%)',   // Rose
+    'hsl(240, 75%, 60%)',   // Indigo
+    'hsl(50, 95%, 55%)',    // Gold
+    'hsl(150, 60%, 45%)',   // Sea Green
+    'hsl(290, 70%, 55%)',   // Orchid
+    'hsl(20, 100%, 55%)',   // Bright Orange
+    'hsl(200, 80%, 50%)',   // Ocean Blue
+    'hsl(100, 70%, 50%)',   // Chartreuse
+    'hsl(310, 75%, 60%)',   // Hot Pink
+    'hsl(230, 80%, 55%)',   // Royal Blue
+    'hsl(40, 95%, 50%)',    // Amber
+    'hsl(170, 65%, 50%)',   // Mint
+    'hsl(250, 70%, 60%)',   // Blue-Violet
+    'hsl(10, 90%, 55%)',    // Coral
+    'hsl(190, 75%, 50%)',   // Steel Blue
+    'hsl(80, 75%, 50%)',    // Yellow-Green
+    'hsl(320, 70%, 55%)',   // Deep Pink
+    'hsl(220, 85%, 60%)',   // Light Blue
+    'hsl(130, 60%, 50%)',   // Forest Green
+    'hsl(260, 75%, 58%)',   // Blue-Purple
+    'hsl(35, 90%, 55%)',    // Peach
+    'hsl(140, 75%, 45%)',   // Emerald
+    'hsl(275, 65%, 58%)',   // Plum
+    'hsl(5, 85%, 55%)',     // Cherry Red
+    'hsl(205, 80%, 55%)',   // Powder Blue
+    'hsl(90, 70%, 50%)',    // Spring Green
+    'hsl(315, 75%, 58%)',   // Fuchsia
+    'hsl(225, 75%, 60%)',   // Periwinkle
+    'hsl(55, 95%, 55%)',    // Canary Yellow
+    'hsl(165, 70%, 50%)',   // Jade
+    'hsl(255, 70%, 60%)',   // Slate Blue
+    'hsl(25, 100%, 55%)',   // Tangerine
+    'hsl(185, 75%, 50%)',   // Turquoise Blue
+    'hsl(110, 65%, 50%)',   // Olive Green
+    'hsl(285, 70%, 58%)',   // Medium Purple
+    'hsl(0, 85%, 60%)',     // Light Red
+    'hsl(215, 90%, 55%)',   // Cornflower Blue
+    'hsl(125, 70%, 50%)',   // Medium Green
+    'hsl(265, 75%, 60%)',   // Medium Slate Blue
+    'hsl(45, 95%, 55%)',    // Bright Yellow-Orange
+    'hsl(175, 65%, 50%)',   // Medium Turquoise
+    'hsl(295, 70%, 58%)',   // Medium Orchid
 ];
+
 function getColors(n: number) {
+    // Use distinct colors from the palette, cycling only if we have more items than colors
     return Array.from({ length: n }, (_, i) => CHART_COLORS[i % CHART_COLORS.length]);
 }
 
@@ -343,9 +399,33 @@ const clearFilters = () => {
     applyFilters();
 };
 
+// Helper function to clean HTML entities from pagination labels
+const cleanPaginationLabel = (label: string): string => {
+    return label
+        .replace(/&laquo;/g, '')
+        .replace(/&raquo;/g, '')
+        .replace(/&lsaquo;/g, '')
+        .replace(/&rsaquo;/g, '')
+        .trim();
+};
+
+// Helper function to check if a link is a Previous/Next navigation link
+const isNavigationLink = (label: string): boolean => {
+    const cleaned = cleanPaginationLabel(label).toLowerCase();
+    return cleaned === 'previous' || cleaned === 'next';
+};
+
 const changePage = (url: string | null) => {
     if (url) {
-        router.get(url, {}, { preserveState: true, preserveScroll: true });
+        router.get(url, {}, { 
+            preserveState: false, // Don't preserve state to ensure fresh data
+            preserveScroll: false, // Don't preserve scroll position
+            replace: false, // Allow browser history
+            onSuccess: () => {
+                // Re-initialize hidden items after new data loads
+                initializeHiddenItems();
+            },
+        });
     }
 };
 
@@ -411,7 +491,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                         <select
                             v-model="selectedSchool"
                             @change="applyFilters"
-                            class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            class="w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
                             <option value="">All Schools/Offices</option>
                             <option v-for="school in filterOptions.schools" :key="school" :value="school">
@@ -426,7 +506,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                         <select
                             v-model="selectedJobTitle"
                             @change="applyFilters"
-                            class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            class="w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
                             <option value="">All Job Titles</option>
                             <option v-for="title in filterOptions.jobTitles" :key="title" :value="title">
@@ -441,7 +521,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                         <select
                             v-model="selectedSubject"
                             @change="applyFilters"
-                            class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            class="w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
                             <option value="">All Subjects</option>
                             <option v-for="subject in filterOptions.subjects" :key="subject" :value="subject">
@@ -456,7 +536,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                         <select
                             v-model="selectedGradeLevel"
                             @change="applyFilters"
-                            class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            class="w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
                             <option value="">All Grade Levels</option>
                             <option v-for="level in filterOptions.gradeLevels" :key="level" :value="level">
@@ -471,7 +551,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                         <select
                             v-model="selectedEmploymentStatus"
                             @change="applyFilters"
-                            class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            class="w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
                             <option value="">All Status</option>
                             <option
@@ -490,7 +570,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                         <select
                             v-model="selectedSalaryGrade"
                             @change="applyFilters"
-                            class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            class="w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
                             <option value="">All Salary Grades</option>
                             <option v-for="grade in [11, 12, 13, 14, 15, 16, 17, 18, 19, 20]" :key="grade" :value="grade.toString()">
@@ -510,7 +590,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                                 v-model="searchQuery"
                                 @keyup.enter="applyFilters"
                                 placeholder="Search by name or employee ID..."
-                                class="pl-10"
+                                class="pl-10 bg-white"
                             />
                         </div>
                     </div>
@@ -548,23 +628,23 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
 
                 <!-- Summary Statistics -->
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                    <div class="rounded-lg border p-4 bg-card">
+                    <div class="rounded-lg border p-4 bg-white">
                         <div class="text-sm text-muted-foreground">Total Employees</div>
                         <div class="text-2xl font-bold mt-1 text-primary">{{ summaryStats.total }}</div>
                     </div>
-                    <div class="rounded-lg border p-4 bg-card">
+                    <div class="rounded-lg border p-4 bg-white">
                         <div class="text-sm text-muted-foreground">Permanent</div>
                         <div class="text-2xl font-bold mt-1 text-primary">{{ summaryStats.permanent }}</div>
                     </div>
-                    <div class="rounded-lg border p-4 bg-card">
+                    <div class="rounded-lg border p-4 bg-white">
                         <div class="text-sm text-muted-foreground">Avg Leave Balance</div>
                         <div class="text-2xl font-bold mt-1 text-primary">{{ summaryStats.avgLeaveBalance }}</div>
                     </div>
                 </div>
 
                 <!-- Charts -->
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                    <div class="rounded-lg border p-4 bg-card">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 items-start">
+                    <div class="rounded-lg border p-4 bg-white">
                         <h3 class="text-sm font-semibold text-muted-foreground mb-3">Employment Status</h3>
                         <div class="h-[240px]">
                             <Doughnut
@@ -621,19 +701,19 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                             >
                                 <div
                                     v-if="showEmploymentStatusOthers && chartDataSafe.employmentStatus.chart.length > 0"
-                                    class="mt-2 max-h-48 overflow-y-auto overflow-x-hidden border rounded-md bg-background"
+                                    class="mt-2 max-h-48 overflow-y-auto overflow-x-hidden border rounded-md bg-white"
                                     style="max-height: 12rem;"
                                 >
-                                <table class="w-full text-sm">
-                                    <thead class="bg-muted/30 sticky top-0">
+                                <table class="w-full text-sm" style="table-layout: fixed;">
+                                    <thead class="sticky top-0 z-20 bg-white border-b">
                                         <tr>
-                                            <th class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground w-12">
+                                            <th class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground whitespace-nowrap" style="width: 3rem; min-width: 3rem;">
                                                 Show
                                             </th>
-                                            <th class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground w-16">
+                                            <th class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground whitespace-nowrap" style="width: 4rem; min-width: 4rem;">
                                                 Color
                                             </th>
-                                            <th class="px-3 py-2 text-left text-xs font-semibold text-muted-foreground">
+                                            <th class="px-3 py-2 text-left text-xs font-semibold text-muted-foreground whitespace-nowrap" style="min-width: 8rem;">
                                                 Status
                                             </th>
                                         </tr>
@@ -647,7 +727,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                                                 'opacity-50': hiddenEmploymentStatus.includes(item.label),
                                             }"
                                         >
-                                            <td class="px-3 py-2 text-center">
+                                            <td class="px-3 py-2 text-center" style="width: 3rem; min-width: 3rem;">
                                                 <input
                                                     type="checkbox"
                                                     :checked="!hiddenEmploymentStatus.includes(item.label)"
@@ -655,7 +735,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                                                     class="w-4 h-4 rounded border-input cursor-pointer"
                                                 />
                                             </td>
-                                            <td class="px-3 py-2 text-center">
+                                            <td class="px-3 py-2 text-center" style="width: 4rem; min-width: 4rem;">
                                                 <div
                                                     class="w-4 h-4 rounded mx-auto"
                                                     :style="{
@@ -669,7 +749,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                                                     }"
                                                 ></div>
                                             </td>
-                                            <td class="px-3 py-2">{{ item.label }}</td>
+                                            <td class="px-3 py-2" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ item.label }}</td>
                                         </tr>
                                     </tbody>
                                 </table>
@@ -677,7 +757,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                             </transition>
                         </div>
                     </div>
-                    <div class="rounded-lg border p-4 bg-card">
+                    <div class="rounded-lg border p-4 bg-white">
                         <h3 class="text-sm font-semibold text-muted-foreground mb-3">By School/Office</h3>
                         <div class="h-[240px]">
                             <Doughnut
@@ -734,19 +814,19 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                             >
                                 <div
                                     v-if="showSchoolOthers && chartDataSafe.school.chart.length > 0"
-                                    class="mt-2 max-h-48 overflow-y-auto overflow-x-hidden border rounded-md bg-background"
+                                    class="mt-2 max-h-48 overflow-y-auto overflow-x-hidden border rounded-md bg-white"
                                     style="max-height: 12rem;"
                                 >
-                                <table class="w-full text-sm">
-                                    <thead class="bg-muted/30 sticky top-0">
+                                <table class="w-full text-sm" style="table-layout: fixed;">
+                                    <thead class="sticky top-0 z-20 bg-white border-b">
                                         <tr>
-                                            <th class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground w-12">
+                                            <th class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground whitespace-nowrap" style="width: 3rem; min-width: 3rem;">
                                                 Show
                                             </th>
-                                            <th class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground w-16">
+                                            <th class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground whitespace-nowrap" style="width: 4rem; min-width: 4rem;">
                                                 Color
                                             </th>
-                                            <th class="px-3 py-2 text-left text-xs font-semibold text-muted-foreground">
+                                            <th class="px-3 py-2 text-left text-xs font-semibold text-muted-foreground whitespace-nowrap" style="min-width: 8rem;">
                                                 School/Office
                                             </th>
                                         </tr>
@@ -760,7 +840,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                                                 'opacity-50': hiddenSchools.includes(item.label),
                                             }"
                                         >
-                                            <td class="px-3 py-2 text-center">
+                                            <td class="px-3 py-2 text-center" style="width: 3rem; min-width: 3rem;">
                                                 <input
                                                     type="checkbox"
                                                     :checked="!hiddenSchools.includes(item.label)"
@@ -768,7 +848,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                                                     class="w-4 h-4 rounded border-input cursor-pointer"
                                                 />
                                             </td>
-                                            <td class="px-3 py-2 text-center">
+                                            <td class="px-3 py-2 text-center" style="width: 4rem; min-width: 4rem;">
                                                 <div
                                                     class="w-4 h-4 rounded mx-auto"
                                                     :style="{
@@ -782,7 +862,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                                                     }"
                                                 ></div>
                                             </td>
-                                            <td class="px-3 py-2">{{ item.label }}</td>
+                                            <td class="px-3 py-2" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ item.label }}</td>
                                         </tr>
                                     </tbody>
                                 </table>
@@ -792,8 +872,8 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                     </div>
                 </div>
                 <div class="grid grid-cols-1 gap-6 mb-6">
-                    <div class="rounded-lg border p-4 bg-card">
-                        <h3 class="text-sm font-semibold text-muted-foreground mb-3">Count per Job Title (top 12)</h3>
+                    <div class="rounded-lg border p-4 bg-white">
+                        <h3 class="text-sm font-semibold text-muted-foreground mb-3">Count per Job Title (top 10)</h3>
                         <div class="h-[320px]">
                             <Bar
                                 v-if="jobTitleChartData.labels.length"
@@ -898,28 +978,28 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                             variant="outline"
                             size="sm"
                             :disabled="employees.current_page === 1"
-                            @click="changePage(employees.links.find((l) => l.label === '&laquo; Previous')?.url || null)"
+                            @click="changePage(employees.links.find((l) => isNavigationLink(l.label) && cleanPaginationLabel(l.label).toLowerCase() === 'previous')?.url || null)"
                         >
                             <ChevronLeft class="h-4 w-4" />
                             Previous
                         </Button>
                         <template v-for="(link, index) in employees.links" :key="index">
                             <Button
-                                v-if="link.label !== '&laquo; Previous' && link.label !== 'Next &raquo;'"
+                                v-if="!isNavigationLink(link.label)"
                                 variant="outline"
                                 size="sm"
                                 :class="{ 'bg-primary text-primary-foreground': link.active }"
                                 :disabled="!link.url"
                                 @click="changePage(link.url)"
                             >
-                                {{ link.label }}
+                                {{ cleanPaginationLabel(link.label) }}
                             </Button>
                         </template>
                         <Button
                             variant="outline"
                             size="sm"
                             :disabled="employees.current_page === employees.last_page"
-                            @click="changePage(employees.links.find((l) => l.label === 'Next &raquo;')?.url || null)"
+                            @click="changePage(employees.links.find((l) => isNavigationLink(l.label) && cleanPaginationLabel(l.label).toLowerCase() === 'next')?.url || null)"
                         >
                             Next
                             <ChevronRight class="h-4 w-4" />
@@ -942,8 +1022,9 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
 .ehris-card {
     border: 1px solid hsl(var(--border));
     border-radius: 0.5rem;
-    background: hsl(var(--card));
+    background: white;
     padding: 1.5rem;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
 }
 
 .ehris-employee-table {

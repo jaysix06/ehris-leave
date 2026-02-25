@@ -2,9 +2,10 @@
 import { Head, router, usePage } from '@inertiajs/vue3';
 import { echo } from '@laravel/echo-vue';
 import { User } from 'lucide-vue-next';
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { BreadcrumbItem } from '@/types';
+import { useSidebar } from '@/components/ui/sidebar/utils';
 import Affiliation from '@/pages/MyDetails/Affiliation.vue';
 import EducationBackground from '@/pages/MyDetails/EducationBackground.vue';
 import Eligibility from '@/pages/MyDetails/Eligibility.vue';
@@ -88,6 +89,16 @@ const props = defineProps<{
 
 const page = usePage();
 const authUser = computed(() => page.props.auth.user);
+
+// Close mobile sidebar when page loads to prevent overlay from blocking clicks
+// Wrap in try-catch to handle cases where sidebar context might not be available
+let sidebarContext: ReturnType<typeof useSidebar> | null = null;
+try {
+    sidebarContext = useSidebar();
+} catch (error) {
+    // Sidebar context not available, which is fine - page will work without it
+    console.debug('[MyDetails] Sidebar context not available');
+}
 
 const employeeName = computed(() => {
     if (props.profile?.fullname) {
@@ -231,7 +242,24 @@ const onMyDetailsUpdated = (event: { hrid?: number | string } = {}) => {
     refreshMyDetails();
 };
 
-onMounted(() => {
+onMounted(async () => {
+    // Close mobile sidebar if open to prevent overlay from blocking clicks
+    // Only if sidebar context is available
+    if (sidebarContext) {
+        // Wait for next tick to ensure DOM and sidebar are fully initialized
+        await nextTick();
+        // Always close mobile sidebar on page load to prevent overlay blocking
+        // Check multiple times to ensure it closes (in case it opens after initial check)
+        if (sidebarContext.isMobile.value) {
+            sidebarContext.setOpenMobile(false);
+            // Also check after a short delay to catch any late-opening sidebars
+            setTimeout(() => {
+                if (sidebarContext && sidebarContext.isMobile.value && sidebarContext.openMobile.value) {
+                    sidebarContext.setOpenMobile(false);
+                }
+            }, 200);
+        }
+    }
     echo().channel('my-details').listen('.MyDetailsUpdated', onMyDetailsUpdated);
 });
 
