@@ -75,19 +75,51 @@ const calendarKey = ref(0);
 const isSickLeave = computed(() => selectedLeaveType.value === 'Sick Leave');
 const isMaternityLeave = computed(() => selectedLeaveType.value === 'Maternity Leave');
 const isPaternityLeave = computed(() => selectedLeaveType.value === 'Paternity Leave');
+const isVacationLeave = computed(() => selectedLeaveType.value === 'Vacation Leave');
+const isSpecialPrivilegeLeave = computed(() => selectedLeaveType.value === 'Special Privilege Leave');
+const isSoloParentLeave = computed(() => selectedLeaveType.value === 'Solo Parent Leave');
+const isStudyLeave = computed(() => selectedLeaveType.value === 'Study Leave');
+const isVawcLeave = computed(
+    () => selectedLeaveType.value === 'VAWC Leave' || selectedLeaveType.value === '10-Day VAWC Leave',
+);
+const isRehabilitationLeave = computed(
+    () => selectedLeaveType.value === 'Rehabilitation Leave' || selectedLeaveType.value === 'Rehabilitation Privilege',
+);
+const isSpecialWomenLeave = computed(() => selectedLeaveType.value === 'Special Leave Benefits for Women');
+const isCalamityLeave = computed(() => selectedLeaveType.value === 'Special Emergency (Calamity) Leave');
+const isMonetizationLeave = computed(() => selectedLeaveType.value === 'Monetization of Leave Credits');
+const isTerminalLeave = computed(() => selectedLeaveType.value === 'Terminal Leave');
+const isAdoptionLeave = computed(() => selectedLeaveType.value === 'Adoption Leave');
+const isMandatoryForceLeave = computed(
+    () =>
+        selectedLeaveType.value === 'Mandatory/Force Leave' ||
+        selectedLeaveType.value === 'Mandatory Leave' ||
+        selectedLeaveType.value === 'Forced Leave',
+);
 const leaveTypeDayLimit = computed<number | null>(() => {
     if (isPaternityLeave.value) return 7;
     if (isMaternityLeave.value) return 105;
+    if (isSpecialPrivilegeLeave.value) return 3;
+    if (isSoloParentLeave.value) return 7;
+    if (isStudyLeave.value) return 180;
+    if (isVawcLeave.value) return 10;
+    if (isRehabilitationLeave.value) return 180;
+    if (isSpecialWomenLeave.value) return 60;
+    if (isCalamityLeave.value) return 5;
+    if (isMandatoryForceLeave.value) return 5;
     return null;
 });
 
 
 const minSelectableDate = computed<Date | null>(() => {
-    if (isSickLeave.value) {
+    if (isSickLeave.value || isVawcLeave.value || isSpecialWomenLeave.value) {
         return null;
     }
-    if (selectedLeaveType.value === 'Vacation Leave') {
+    if (isVacationLeave.value || isSoloParentLeave.value) {
         return addDays(today, 5);
+    }
+    if (isSpecialPrivilegeLeave.value) {
+        return addDays(today, 7);
     }
     return today;
 });
@@ -164,12 +196,42 @@ const proofOfDeliveryInput = ref<HTMLInputElement | null>(null);
 const isMedicalDropActive = ref(false);
 const isAffidavitDropActive = ref(false);
 const isProofOfDeliveryDropActive = ref(false);
+const supportingDocuments = ref<File[]>([]);
+const supportingDocumentsInput = ref<HTMLInputElement | null>(null);
+const destinationScope = ref<'within_ph' | 'abroad' | ''>('');
+const destinationDetails = ref('');
+const travelAuthorityNo = ref('');
+const isEmergencySpl = ref(false);
+const emergencyReason = ref('');
+const isTimingOverride = ref(false);
+const timingOverrideReason = ref('');
+const accidentDate = ref('');
+const surgeryDate = ref('');
+const calamityDate = ref('');
+const calamityType = ref('');
+const calamityArea = ref('');
+const residenceAddressSnapshot = ref('');
+const soloParentIdNo = ref('');
+const soloParentIdValidUntil = ref('');
+const studyContractId = ref('');
+const isPrivatePhysician = ref(false);
+const supervisorNotes = ref('');
+const separationType = ref('');
+const separationEffectiveDate = ref('');
+const creditsMonetized = ref<number | null>(null);
+const isMandatoryLeave = ref(false);
 const submitError = ref<string | null>(null);
 
 const page = usePage();
 const authUser = computed(() => page.props.auth?.user as User | undefined);
 const leaveEmployee = computed(() => page.props.leaveEmployee as Record<string, unknown> | undefined);
 const dbLeaveTypes = computed(() => page.props.leaveTypes as string[] | undefined);
+const mandatoryLeaveSummary = computed(
+    () =>
+        page.props.mandatoryLeaveSummary as
+            | { year: number; usedDays: number; remainingDays: number; forfeitedDays: number }
+            | undefined,
+);
 const salaryFormatter = new Intl.NumberFormat('en-PH', {
     style: 'currency',
     currency: 'PHP',
@@ -336,6 +398,22 @@ const clearProofOfDelivery = () => {
     }
 };
 
+const onSupportingDocumentsChange = (event: Event) => {
+    const target = event.target as HTMLInputElement;
+    supportingDocuments.value = target.files ? Array.from(target.files) : [];
+};
+
+const openSupportingDocumentsPicker = () => {
+    supportingDocumentsInput.value?.click();
+};
+
+const clearSupportingDocuments = () => {
+    supportingDocuments.value = [];
+    if (supportingDocumentsInput.value) {
+        supportingDocumentsInput.value.value = '';
+    }
+};
+
 watch(selectedLeaveType, (newType, oldType) => {
     if (newType !== oldType || newType === defaultLeaveTypeLabel) {
         leaveRange.value = {
@@ -374,6 +452,60 @@ watch([selectedLeaveType, consultationAvailed], () => {
     if (!isPaternityLeave.value) {
         proofOfDelivery.value = null;
     }
+
+    if (!(isVacationLeave.value || isSpecialPrivilegeLeave.value)) {
+        destinationScope.value = '';
+        destinationDetails.value = '';
+        travelAuthorityNo.value = '';
+    }
+
+    if (!isSpecialPrivilegeLeave.value) {
+        isEmergencySpl.value = false;
+        emergencyReason.value = '';
+    }
+
+    if (!(isVacationLeave.value || isSoloParentLeave.value || isRehabilitationLeave.value)) {
+        isTimingOverride.value = false;
+        timingOverrideReason.value = '';
+    }
+
+    if (!isRehabilitationLeave.value) {
+        accidentDate.value = '';
+        isPrivatePhysician.value = false;
+    }
+
+    if (!isSpecialWomenLeave.value) {
+        surgeryDate.value = '';
+    }
+
+    if (!isCalamityLeave.value) {
+        calamityDate.value = '';
+        calamityType.value = '';
+        calamityArea.value = '';
+        residenceAddressSnapshot.value = '';
+    }
+
+    if (!isSoloParentLeave.value) {
+        soloParentIdNo.value = '';
+        soloParentIdValidUntil.value = '';
+    }
+
+    if (!isStudyLeave.value) {
+        studyContractId.value = '';
+    }
+
+    if (!isMonetizationLeave.value) {
+        creditsMonetized.value = null;
+    }
+
+    if (!isTerminalLeave.value) {
+        separationType.value = '';
+        separationEffectiveDate.value = '';
+    }
+
+    if (!(isVacationLeave.value || isMandatoryForceLeave.value)) {
+        isMandatoryLeave.value = false;
+    }
 });
 
 const formatDateForSubmit = (date: Date) => {
@@ -395,13 +527,8 @@ const submitLeaveApplication = () => {
         return;
     }
 
-    if (isPaternityLeave.value && noOfDays.value > 7) {
-        submitError.value = 'Paternity Leave cannot exceed 7 days.';
-        return;
-    }
-
-    if (isMaternityLeave.value && noOfDays.value > 105) {
-        submitError.value = 'Maternity Leave cannot exceed 105 days.';
+    if (leaveTypeDayLimit.value !== null && noOfDays.value > leaveTypeDayLimit.value) {
+        submitError.value = `${selectedLeaveType.value} cannot exceed ${leaveTypeDayLimit.value} days.`;
         return;
     }
 
@@ -427,6 +554,36 @@ const submitLeaveApplication = () => {
         }
     }
 
+    if ((isVacationLeave.value || isSpecialPrivilegeLeave.value) && !destinationScope.value) {
+        submitError.value = 'Please indicate if your destination is within the Philippines or abroad.';
+        return;
+    }
+
+    if (isSpecialPrivilegeLeave.value && isEmergencySpl.value && !emergencyReason.value.trim()) {
+        submitError.value = 'Please provide emergency reason for Special Privilege Leave.';
+        return;
+    }
+
+    if (isRehabilitationLeave.value && !accidentDate.value) {
+        submitError.value = 'Accident date is required for Rehabilitation Leave.';
+        return;
+    }
+
+    if (isCalamityLeave.value && !calamityDate.value) {
+        submitError.value = 'Calamity date is required for Special Emergency (Calamity) Leave.';
+        return;
+    }
+
+    if (isMonetizationLeave.value && (!creditsMonetized.value || creditsMonetized.value <= 0)) {
+        submitError.value = 'Please provide credits to monetize.';
+        return;
+    }
+
+    if (isTerminalLeave.value && (!separationType.value || !separationEffectiveDate.value)) {
+        submitError.value = 'Please provide separation type and effective date for Terminal Leave.';
+        return;
+    }
+
     router.post(
         selfServiceRoutes.leaveApplication().url,
         {
@@ -439,6 +596,29 @@ const submitLeaveApplication = () => {
             medical_certificate: medicalCertification.value,
             affidavit: affidavitFile.value,
             proof_of_delivery: proofOfDelivery.value,
+            destination_scope: destinationScope.value || null,
+            destination_details: destinationDetails.value || null,
+            travel_authority_no: travelAuthorityNo.value || null,
+            is_emergency_spl: isEmergencySpl.value,
+            emergency_reason: emergencyReason.value || null,
+            is_timing_override: isTimingOverride.value,
+            timing_override_reason: timingOverrideReason.value || null,
+            accident_date: accidentDate.value || null,
+            surgery_date: surgeryDate.value || null,
+            calamity_date: calamityDate.value || null,
+            calamity_type: calamityType.value || null,
+            calamity_area: calamityArea.value || null,
+            residence_address_snapshot: residenceAddressSnapshot.value || null,
+            solo_parent_id_no: soloParentIdNo.value || null,
+            solo_parent_id_valid_until: soloParentIdValidUntil.value || null,
+            study_contract_id: studyContractId.value || null,
+            is_private_physician: isPrivatePhysician.value,
+            supervisor_notes: supervisorNotes.value || null,
+            separation_type: separationType.value || null,
+            separation_effective_date: separationEffectiveDate.value || null,
+            credits_monetized: creditsMonetized.value ?? null,
+            is_mandatory_leave: isMandatoryLeave.value,
+            supporting_documents: supportingDocuments.value,
         },
         {
             forceFormData: true,
@@ -479,13 +659,17 @@ onBeforeUnmount(() => {
                 </article>
 
                 <article class="ehris-card mini-stat">
-                    <p class="mini-num">27/30</p>
-                    <p class="mini-label">Leaves remaining</p>
+                    <p class="mini-num">
+                        {{ mandatoryLeaveSummary ? `${mandatoryLeaveSummary.remainingDays}/5` : '--/5' }}
+                    </p>
+                    <p class="mini-label">Mandatory VL remaining</p>
                 </article>
 
                 <article class="ehris-card mini-stat">
-                    <p class="mini-num">03/30</p>
-                    <p class="mini-label">Leaves used</p>
+                    <p class="mini-num">
+                        {{ mandatoryLeaveSummary ? `${mandatoryLeaveSummary.usedDays}/5` : '--/5' }}
+                    </p>
+                    <p class="mini-label">Mandatory VL used</p>
                 </article>
             </section>
 
@@ -611,6 +795,128 @@ onBeforeUnmount(() => {
                                         Not Requested
                                     </label>
                                 </div>
+                            </label>
+
+                            <label v-if="isVacationLeave || isSpecialPrivilegeLeave">
+                                Destination Scope
+                                <div class="flex flex-wrap gap-12 mt-2">
+                                    <label class="radio-option inline-flex gap-2 cursor-pointer">
+                                        <input type="radio" v-model="destinationScope" value="within_ph" />
+                                        Within Philippines
+                                    </label>
+                                    <label class="radio-option inline-flex gap-2 cursor-pointer">
+                                        <input type="radio" v-model="destinationScope" value="abroad" />
+                                        Abroad
+                                    </label>
+                                </div>
+                            </label>
+                            <label v-if="isVacationLeave || isSpecialPrivilegeLeave">
+                                Destination Details (Optional)
+                                <input v-model="destinationDetails" type="text" />
+                            </label>
+                            <label v-if="isVacationLeave || isSpecialPrivilegeLeave">
+                                Travel Authority No. (Optional)
+                                <input v-model="travelAuthorityNo" type="text" />
+                            </label>
+
+                            <label v-if="isSpecialPrivilegeLeave">
+                                <span class="inline-flex items-center gap-2">
+                                    <input v-model="isEmergencySpl" type="checkbox" />
+                                    Emergency filing
+                                </span>
+                            </label>
+                            <label v-if="isSpecialPrivilegeLeave && isEmergencySpl">
+                                Emergency Reason
+                                <textarea v-model="emergencyReason" placeholder="Provide emergency justification..." />
+                            </label>
+
+                            <label v-if="isVacationLeave || isSoloParentLeave || isRehabilitationLeave">
+                                <span class="inline-flex items-center gap-2">
+                                    <input v-model="isTimingOverride" type="checkbox" />
+                                    Timing exception override
+                                </span>
+                            </label>
+                            <label v-if="(isVacationLeave || isSoloParentLeave || isRehabilitationLeave) && isTimingOverride">
+                                Timing Override Reason
+                                <textarea v-model="timingOverrideReason" placeholder="Explain why normal filing window is not possible..." />
+                            </label>
+
+                            <label v-if="isRehabilitationLeave">
+                                Accident Date
+                                <input v-model="accidentDate" type="date" />
+                            </label>
+                            <label v-if="isRehabilitationLeave">
+                                <span class="inline-flex items-center gap-2">
+                                    <input v-model="isPrivatePhysician" type="checkbox" />
+                                    Attending physician is private
+                                </span>
+                            </label>
+
+                            <label v-if="isSpecialWomenLeave">
+                                Surgery Date
+                                <input v-model="surgeryDate" type="date" />
+                            </label>
+
+                            <label v-if="isCalamityLeave">
+                                Calamity Date
+                                <input v-model="calamityDate" type="date" />
+                            </label>
+                            <label v-if="isCalamityLeave">
+                                Calamity Type
+                                <input v-model="calamityType" type="text" />
+                            </label>
+                            <label v-if="isCalamityLeave">
+                                Calamity Area
+                                <input v-model="calamityArea" type="text" />
+                            </label>
+                            <label v-if="isCalamityLeave">
+                                Residence Address Snapshot
+                                <input v-model="residenceAddressSnapshot" type="text" />
+                            </label>
+
+                            <label v-if="isSoloParentLeave">
+                                Solo Parent ID No. (Optional)
+                                <input v-model="soloParentIdNo" type="text" />
+                            </label>
+                            <label v-if="isSoloParentLeave">
+                                Solo Parent ID Valid Until (Optional)
+                                <input v-model="soloParentIdValidUntil" type="date" />
+                            </label>
+
+                            <label v-if="isStudyLeave">
+                                Study Contract ID (Optional)
+                                <input v-model="studyContractId" type="text" />
+                            </label>
+
+                            <label v-if="isMonetizationLeave">
+                                Credits Monetized
+                                <input v-model.number="creditsMonetized" type="number" min="0" step="0.01" />
+                            </label>
+
+                            <label v-if="isTerminalLeave">
+                                Separation Type
+                                <select v-model="separationType">
+                                    <option value="">Select separation type</option>
+                                    <option value="resignation">Resignation</option>
+                                    <option value="retirement">Retirement</option>
+                                    <option value="separation">Separation</option>
+                                </select>
+                            </label>
+                            <label v-if="isTerminalLeave">
+                                Separation Effective Date
+                                <input v-model="separationEffectiveDate" type="date" />
+                            </label>
+
+                            <label v-if="isVacationLeave || isMandatoryForceLeave">
+                                <span class="inline-flex items-center gap-2">
+                                    <input v-model="isMandatoryLeave" type="checkbox" />
+                                    Count toward mandatory VL
+                                </span>
+                            </label>
+
+                            <label>
+                                Supervisor/Reviewer Notes (Optional)
+                                <textarea v-model="supervisorNotes" placeholder="Optional notes for approving officers..." />
                             </label>
                         </div>
 
@@ -841,6 +1147,48 @@ onBeforeUnmount(() => {
                                     </button>
                                 </div>
                             </div>
+
+                            <div class="medical-cert-panel">
+                                <p class="upload-title">Supporting Documents</p>
+                                <p class="dropzone-sub">
+                                    Upload required documentary support for the selected leave type.
+                                </p>
+                                <div v-if="supportingDocuments.length === 0" class="medical-dropzone" @click="openSupportingDocumentsPicker">
+                                    <div class="dropzone-icon-wrap">
+                                        <ImagePlus :size="30" />
+                                    </div>
+                                    <p class="dropzone-main">
+                                        Drag &amp; drop
+                                        <span>supporting documents</span>
+                                    </p>
+                                    <p class="dropzone-sub">
+                                        or
+                                        <button type="button" class="browse-link" @click.stop="openSupportingDocumentsPicker">
+                                            browse files
+                                        </button>
+                                        on your computer
+                                    </p>
+                                    <input
+                                        ref="supportingDocumentsInput"
+                                        type="file"
+                                        multiple
+                                        accept=".pdf,.jpg,.jpeg,.png"
+                                        class="sr-only"
+                                        @change="onSupportingDocumentsChange"
+                                    />
+                                </div>
+                                <div v-else class="medical-file-row">
+                                    <div class="file-meta">
+                                        <p class="file-name">{{ supportingDocuments.length }} file(s) selected</p>
+                                        <p class="file-info">
+                                            {{ supportingDocuments.map((file) => file.name).join(', ') }}
+                                        </p>
+                                    </div>
+                                    <button type="button" class="remove-file-btn" @click="clearSupportingDocuments">
+                                        <X :size="16" />
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -857,6 +1205,19 @@ onBeforeUnmount(() => {
                         </p>
                         <p v-else-if="$page.props.errors?.leave_end_date" class="text-sm text-destructive">
                             {{ $page.props.errors.leave_end_date }}
+                        </p>
+                        <p
+                            v-else-if="
+                                Object.keys(($page.props.errors as Record<string, string>) ?? {}).length > 0
+                            "
+                            class="text-sm text-destructive"
+                        >
+                            {{
+                                (
+                                    Object.values(($page.props.errors as Record<string, string>) ?? {})[0] ??
+                                    'Please review your inputs.'
+                                )
+                            }}
                         </p>
                         <button class="cancel-btn" type="button">Cancel</button>
                         <button class="apply-btn" type="button" @click="submitLeaveApplication">
@@ -1057,6 +1418,7 @@ onBeforeUnmount(() => {
 }
 
 .left-form select,
+.left-form input,
 .left-form textarea,
 .date-readonly {
     border-radius: 0.7rem;
