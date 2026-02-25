@@ -91,14 +91,18 @@ class EmployeeListingController extends Controller
 
         // Chart data: distributions from the same filtered query (before pagination)
         // Use explicit select() and groupBy(column) to satisfy MySQL ONLY_FULL_GROUP_BY
-        $employmentStatusDistribution = (clone $query)
+
+        // Employment Status: Get all records, split for legend (top 4) and others
+        $allEmploymentStatus = (clone $query)
             ->select(DB::raw('COALESCE(employ_status, \'(Blank)\') as label'), DB::raw('count(*) as count'))
             ->groupBy('employ_status')
             ->orderByDesc('count')
             ->get()
             ->map(fn ($row) => ['label' => $row->label ?? '(Blank)', 'count' => (int) $row->count])
-            ->values()
-            ->all();
+            ->values();
+
+        $employmentStatusTop = $allEmploymentStatus->take(5)->all();
+        $employmentStatusOthers = $allEmploymentStatus->skip(5)->all();
 
         $jobTitleDistribution = (clone $query)
             ->select(DB::raw('COALESCE(job_title, \'(Blank)\') as label'), DB::raw('count(*) as count'))
@@ -110,15 +114,17 @@ class EmployeeListingController extends Controller
             ->values()
             ->all();
 
-        $schoolDistribution = (clone $query)
+        // School/Office: Get all records, split for legend (top 4) and others
+        $allSchoolDistribution = (clone $query)
             ->select(DB::raw('COALESCE(office, \'(Blank)\') as label'), DB::raw('count(*) as count'))
             ->groupBy('office')
             ->orderByDesc('count')
-            ->limit(15)
             ->get()
             ->map(fn ($row) => ['label' => (string) ($row->label ?? '(Blank)'), 'count' => (int) $row->count])
-            ->values()
-            ->all();
+            ->values();
+
+        $schoolTop = $allSchoolDistribution->take(5)->all();
+        $schoolOthers = $allSchoolDistribution->skip(5)->all();
 
         // Pagination
         $perPage = $request->get('per_page', 25);
@@ -132,9 +138,17 @@ class EmployeeListingController extends Controller
                 'avgLeaveBalance' => number_format($avgLeaveBalance, 1),
             ],
             'chartData' => [
-                'employmentStatus' => $employmentStatusDistribution,
+                'employmentStatus' => [
+                    'chart' => $allEmploymentStatus->all(),
+                    'legend' => $employmentStatusTop,
+                    'others' => $employmentStatusOthers,
+                ],
                 'jobTitle' => $jobTitleDistribution,
-                'school' => $schoolDistribution,
+                'school' => [
+                    'chart' => $allSchoolDistribution->all(),
+                    'legend' => $schoolTop,
+                    'others' => $schoolOthers,
+                ],
             ],
             'filterOptions' => [
                 'schools' => $schools,
