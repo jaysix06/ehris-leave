@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { LayoutGrid, ChartColumnBig, ChartLine, UsersRound, UserRoundCog, FileClock, BookUser, Wrench, NotepadText, Anchor, FileText } from 'lucide-vue-next';
+import { LayoutGrid, ChartColumnBig, ChartLine, UsersRound, UserRoundCog, FileClock, BookUser, Wrench, NotepadText, FileText } from 'lucide-vue-next';
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';
@@ -24,6 +24,7 @@ import selfServiceRoutes from '@/routes/self-service';
 import surveyRoutes from '@/routes/survey';
 import reportsRoutes from '@/routes/reports';
 import utilitiesRoutes from '@/routes/utilities';
+import leaveTypesRoutes from '@/routes/utilities/leave-types';
 
 const mainNavItems: NavItem[] = [
     {
@@ -161,6 +162,10 @@ const mainNavItems: NavItem[] = [
             {
                 title: 'User List',
                 href: utilitiesRoutes.userList(),
+            },
+            {
+                title: 'Leave Types List',
+                href: leaveTypesRoutes.index(),
             },
             {
                 title: 'Business & Department List',
