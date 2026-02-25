@@ -563,7 +563,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                 </div>
 
                 <!-- Charts -->
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 items-start">
                     <div class="rounded-lg border p-4 bg-card">
                         <h3 class="text-sm font-semibold text-muted-foreground mb-3">Employment Status</h3>
                         <div class="h-[240px]">
@@ -624,16 +624,16 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                                     class="mt-2 max-h-48 overflow-y-auto overflow-x-hidden border rounded-md bg-background"
                                     style="max-height: 12rem;"
                                 >
-                                <table class="w-full text-sm">
-                                    <thead class="bg-muted/30 sticky top-0">
+                                <table class="w-full text-sm" style="table-layout: fixed;">
+                                    <thead class="sticky top-0 z-20 bg-background border-b">
                                         <tr>
-                                            <th class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground w-12">
+                                            <th class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground whitespace-nowrap" style="width: 3rem; min-width: 3rem;">
                                                 Show
                                             </th>
-                                            <th class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground w-16">
+                                            <th class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground whitespace-nowrap" style="width: 4rem; min-width: 4rem;">
                                                 Color
                                             </th>
-                                            <th class="px-3 py-2 text-left text-xs font-semibold text-muted-foreground">
+                                            <th class="px-3 py-2 text-left text-xs font-semibold text-muted-foreground whitespace-nowrap" style="min-width: 8rem;">
                                                 Status
                                             </th>
                                         </tr>
@@ -647,7 +647,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                                                 'opacity-50': hiddenEmploymentStatus.includes(item.label),
                                             }"
                                         >
-                                            <td class="px-3 py-2 text-center">
+                                            <td class="px-3 py-2 text-center" style="width: 3rem; min-width: 3rem;">
                                                 <input
                                                     type="checkbox"
                                                     :checked="!hiddenEmploymentStatus.includes(item.label)"
@@ -655,7 +655,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                                                     class="w-4 h-4 rounded border-input cursor-pointer"
                                                 />
                                             </td>
-                                            <td class="px-3 py-2 text-center">
+                                            <td class="px-3 py-2 text-center" style="width: 4rem; min-width: 4rem;">
                                                 <div
                                                     class="w-4 h-4 rounded mx-auto"
                                                     :style="{
@@ -669,7 +669,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                                                     }"
                                                 ></div>
                                             </td>
-                                            <td class="px-3 py-2">{{ item.label }}</td>
+                                            <td class="px-3 py-2" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ item.label }}</td>
                                         </tr>
                                     </tbody>
                                 </table>
@@ -737,16 +737,16 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                                     class="mt-2 max-h-48 overflow-y-auto overflow-x-hidden border rounded-md bg-background"
                                     style="max-height: 12rem;"
                                 >
-                                <table class="w-full text-sm">
-                                    <thead class="bg-muted/30 sticky top-0">
+                                <table class="w-full text-sm" style="table-layout: fixed;">
+                                    <thead class="sticky top-0 z-20 bg-background border-b">
                                         <tr>
-                                            <th class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground w-12">
+                                            <th class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground whitespace-nowrap" style="width: 3rem; min-width: 3rem;">
                                                 Show
                                             </th>
-                                            <th class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground w-16">
+                                            <th class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground whitespace-nowrap" style="width: 4rem; min-width: 4rem;">
                                                 Color
                                             </th>
-                                            <th class="px-3 py-2 text-left text-xs font-semibold text-muted-foreground">
+                                            <th class="px-3 py-2 text-left text-xs font-semibold text-muted-foreground whitespace-nowrap" style="min-width: 8rem;">
                                                 School/Office
                                             </th>
                                         </tr>
@@ -760,7 +760,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                                                 'opacity-50': hiddenSchools.includes(item.label),
                                             }"
                                         >
-                                            <td class="px-3 py-2 text-center">
+                                            <td class="px-3 py-2 text-center" style="width: 3rem; min-width: 3rem;">
                                                 <input
                                                     type="checkbox"
                                                     :checked="!hiddenSchools.includes(item.label)"
@@ -768,7 +768,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                                                     class="w-4 h-4 rounded border-input cursor-pointer"
                                                 />
                                             </td>
-                                            <td class="px-3 py-2 text-center">
+                                            <td class="px-3 py-2 text-center" style="width: 4rem; min-width: 4rem;">
                                                 <div
                                                     class="w-4 h-4 rounded mx-auto"
                                                     :style="{
@@ -782,7 +782,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                                                     }"
                                                 ></div>
                                             </td>
-                                            <td class="px-3 py-2">{{ item.label }}</td>
+                                            <td class="px-3 py-2" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ item.label }}</td>
                                         </tr>
                                     </tbody>
                                 </table>
@@ -793,7 +793,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                 </div>
                 <div class="grid grid-cols-1 gap-6 mb-6">
                     <div class="rounded-lg border p-4 bg-card">
-                        <h3 class="text-sm font-semibold text-muted-foreground mb-3">Count per Job Title (top 12)</h3>
+                        <h3 class="text-sm font-semibold text-muted-foreground mb-3">Count per Job Title (top 10)</h3>
                         <div class="h-[320px]">
                             <Bar
                                 v-if="jobTitleChartData.labels.length"

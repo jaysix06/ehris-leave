@@ -56,10 +56,9 @@ class EmployeeListingController extends Controller
             ->sort()
             ->values();
 
-        $jobTitles = Employee::whereNotNull('job_title')
-            ->distinct()
+        $jobTitles = DB::table('tbl_job_title')
+            ->orderBy('job_title')
             ->pluck('job_title')
-            ->sort()
             ->values();
 
         $subjects = Employee::whereNotNull('subject_taught')
@@ -108,7 +107,7 @@ class EmployeeListingController extends Controller
             ->select(DB::raw('COALESCE(job_title, \'(Blank)\') as label'), DB::raw('count(*) as count'))
             ->groupBy('job_title')
             ->orderByDesc('count')
-            ->limit(12)
+            ->limit(10)
             ->get()
             ->map(fn ($row) => ['label' => $row->label ?? '(Blank)', 'count' => (int) $row->count])
             ->values()
