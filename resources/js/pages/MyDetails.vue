@@ -156,7 +156,12 @@ function sectionProps(index: number): Record<string, unknown> {
         case 0:
             return { officialInfo: props.officialInfo };
         case 1:
-            return { personalInfo: props.personalInfo };
+            return {
+                personalInfo: props.personalInfo,
+                officialInfo: props.officialInfo,
+                contactInfo: props.contactInfo,
+                profile: props.profile,
+            };
         case 2:
             return { family: props.family, familyUpdateUrl: props.familyUpdateUrl };
         case 3:
