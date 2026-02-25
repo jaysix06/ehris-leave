@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\MyDetails\FamilyController;
 use App\Http\Controllers\MyDetailsController;
+use App\Http\Controllers\Auth\PasswordResetOtpController;
 use App\Http\Controllers\SelfService\LeaveApplicationController;
 use App\Models\FamilyInfo;
 use Illuminate\Http\Request;
@@ -17,6 +18,21 @@ Route::get('/', function () {
         'canRegister' => Features::enabled(Features::registration()),
     ]);
 })->name('home');
+
+Route::middleware('guest')->group(function () {
+    Route::post('forgot-password/otp/send', [PasswordResetOtpController::class, 'send'])
+        ->name('password.otp.send');
+    Route::get('forgot-password/otp/verify', [PasswordResetOtpController::class, 'showVerify'])
+        ->name('password.otp.verify.form');
+    Route::post('forgot-password/otp/verify', [PasswordResetOtpController::class, 'verify'])
+        ->name('password.otp.verify');
+    Route::get('forgot-password/otp/reset', [PasswordResetOtpController::class, 'showReset'])
+        ->name('password.otp.reset.form');
+    Route::post('forgot-password/otp/reset', [PasswordResetOtpController::class, 'reset'])
+        ->name('password.otp.reset');
+    Route::get('forgot-password/otp/success', [PasswordResetOtpController::class, 'success'])
+        ->name('password.otp.success');
+});
 
 Route::get('email/verified-success', function (Request $request) {
     if ($request->user()) {
