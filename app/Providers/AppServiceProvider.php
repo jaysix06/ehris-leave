@@ -20,12 +20,18 @@ use App\Models\LeaveHistory;
 use App\Models\Performance;
 use App\Models\Researches;
 use App\Models\User;
+use App\Http\Responses\LoginResponse;
+use App\Http\Responses\VerifyEmailResponse;
+use Illuminate\Auth\Notifications\VerifyEmail;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
+use Illuminate\Notifications\Messages\MailMessage;
+use Laravel\Fortify\Contracts\LoginResponse as LoginResponseContract;
+use Laravel\Fortify\Contracts\VerifyEmailResponse as VerifyEmailResponseContract;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -34,7 +40,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->singleton(LoginResponseContract::class, LoginResponse::class);
+        $this->app->singleton(VerifyEmailResponseContract::class, VerifyEmailResponse::class);
     }
 
     /**
@@ -44,6 +51,7 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->configureDefaults();
         $this->registerMyDetailsRealtimeBroadcasts();
+        $this->configureVerifyEmailNotification();
     }
 
     /**
@@ -123,5 +131,16 @@ class AppServiceProvider extends ServiceProvider
         }
 
         return (int) $rawHrid;
+    }
+    protected function configureVerifyEmailNotification(): void
+    {
+        VerifyEmail::toMailUsing(function (object $notifiable, string $url) {
+            return (new MailMessage)
+                ->subject('Verify Email Address')
+                ->view('emails.verify-email', [
+                    'url' => $url,
+                    'name' => $notifiable->name ?? 'there',
+                ]);
+        });
     }
 }

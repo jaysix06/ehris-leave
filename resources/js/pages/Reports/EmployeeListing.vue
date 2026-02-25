@@ -112,17 +112,73 @@ type Props = {
     };
 };
 
+// Extended color palette with distinct, non-similar colors
 const CHART_COLORS = [
-    'hsl(217, 91%, 60%)',
-    'hsl(262, 83%, 58%)',
-    'hsl(24, 95%, 53%)',
-    'hsl(142, 71%, 45%)',
-    'hsl(199, 89%, 48%)',
-    'hsl(280, 67%, 58%)',
-    'hsl(0, 72%, 51%)',
-    'hsl(47, 96%, 53%)',
+    'hsl(217, 91%, 60%)',   // Blue
+    'hsl(142, 71%, 45%)',   // Green
+    'hsl(24, 95%, 53%)',    // Orange
+    'hsl(280, 67%, 58%)',  // Purple
+    'hsl(0, 72%, 51%)',     // Red
+    'hsl(199, 89%, 48%)',   // Cyan
+    'hsl(47, 96%, 53%)',    // Yellow
+    'hsl(262, 83%, 58%)',   // Violet
+    'hsl(330, 75%, 55%)',   // Pink
+    'hsl(195, 85%, 50%)',   // Teal
+    'hsl(30, 90%, 55%)',    // Orange-Red
+    'hsl(160, 70%, 50%)',   // Turquoise
+    'hsl(270, 70%, 60%)',   // Lavender
+    'hsl(15, 95%, 50%)',    // Red-Orange
+    'hsl(180, 75%, 45%)',   // Aqua
+    'hsl(300, 65%, 55%)',   // Magenta
+    'hsl(60, 90%, 50%)',    // Bright Yellow
+    'hsl(210, 85%, 55%)',   // Sky Blue
+    'hsl(120, 65%, 50%)',   // Lime Green
+    'hsl(340, 80%, 55%)',   // Rose
+    'hsl(240, 75%, 60%)',   // Indigo
+    'hsl(50, 95%, 55%)',    // Gold
+    'hsl(150, 60%, 45%)',   // Sea Green
+    'hsl(290, 70%, 55%)',   // Orchid
+    'hsl(20, 100%, 55%)',   // Bright Orange
+    'hsl(200, 80%, 50%)',   // Ocean Blue
+    'hsl(100, 70%, 50%)',   // Chartreuse
+    'hsl(310, 75%, 60%)',   // Hot Pink
+    'hsl(230, 80%, 55%)',   // Royal Blue
+    'hsl(40, 95%, 50%)',    // Amber
+    'hsl(170, 65%, 50%)',   // Mint
+    'hsl(250, 70%, 60%)',   // Blue-Violet
+    'hsl(10, 90%, 55%)',    // Coral
+    'hsl(190, 75%, 50%)',   // Steel Blue
+    'hsl(80, 75%, 50%)',    // Yellow-Green
+    'hsl(320, 70%, 55%)',   // Deep Pink
+    'hsl(220, 85%, 60%)',   // Light Blue
+    'hsl(130, 60%, 50%)',   // Forest Green
+    'hsl(260, 75%, 58%)',   // Blue-Purple
+    'hsl(35, 90%, 55%)',    // Peach
+    'hsl(140, 75%, 45%)',   // Emerald
+    'hsl(275, 65%, 58%)',   // Plum
+    'hsl(5, 85%, 55%)',     // Cherry Red
+    'hsl(205, 80%, 55%)',   // Powder Blue
+    'hsl(90, 70%, 50%)',    // Spring Green
+    'hsl(315, 75%, 58%)',   // Fuchsia
+    'hsl(225, 75%, 60%)',   // Periwinkle
+    'hsl(55, 95%, 55%)',    // Canary Yellow
+    'hsl(165, 70%, 50%)',   // Jade
+    'hsl(255, 70%, 60%)',   // Slate Blue
+    'hsl(25, 100%, 55%)',   // Tangerine
+    'hsl(185, 75%, 50%)',   // Turquoise Blue
+    'hsl(110, 65%, 50%)',   // Olive Green
+    'hsl(285, 70%, 58%)',   // Medium Purple
+    'hsl(0, 85%, 60%)',     // Light Red
+    'hsl(215, 90%, 55%)',   // Cornflower Blue
+    'hsl(125, 70%, 50%)',   // Medium Green
+    'hsl(265, 75%, 60%)',   // Medium Slate Blue
+    'hsl(45, 95%, 55%)',    // Bright Yellow-Orange
+    'hsl(175, 65%, 50%)',   // Medium Turquoise
+    'hsl(295, 70%, 58%)',   // Medium Orchid
 ];
+
 function getColors(n: number) {
+    // Use distinct colors from the palette, cycling only if we have more items than colors
     return Array.from({ length: n }, (_, i) => CHART_COLORS[i % CHART_COLORS.length]);
 }
 
