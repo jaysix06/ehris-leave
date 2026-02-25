@@ -399,9 +399,33 @@ const clearFilters = () => {
     applyFilters();
 };
 
+// Helper function to clean HTML entities from pagination labels
+const cleanPaginationLabel = (label: string): string => {
+    return label
+        .replace(/&laquo;/g, '')
+        .replace(/&raquo;/g, '')
+        .replace(/&lsaquo;/g, '')
+        .replace(/&rsaquo;/g, '')
+        .trim();
+};
+
+// Helper function to check if a link is a Previous/Next navigation link
+const isNavigationLink = (label: string): boolean => {
+    const cleaned = cleanPaginationLabel(label).toLowerCase();
+    return cleaned === 'previous' || cleaned === 'next';
+};
+
 const changePage = (url: string | null) => {
     if (url) {
-        router.get(url, {}, { preserveState: true, preserveScroll: true });
+        router.get(url, {}, { 
+            preserveState: false, // Don't preserve state to ensure fresh data
+            preserveScroll: false, // Don't preserve scroll position
+            replace: false, // Allow browser history
+            onSuccess: () => {
+                // Re-initialize hidden items after new data loads
+                initializeHiddenItems();
+            },
+        });
     }
 };
 
@@ -954,28 +978,28 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                             variant="outline"
                             size="sm"
                             :disabled="employees.current_page === 1"
-                            @click="changePage(employees.links.find((l) => l.label === '&laquo; Previous')?.url || null)"
+                            @click="changePage(employees.links.find((l) => isNavigationLink(l.label) && cleanPaginationLabel(l.label).toLowerCase() === 'previous')?.url || null)"
                         >
                             <ChevronLeft class="h-4 w-4" />
                             Previous
                         </Button>
                         <template v-for="(link, index) in employees.links" :key="index">
                             <Button
-                                v-if="link.label !== '&laquo; Previous' && link.label !== 'Next &raquo;'"
+                                v-if="!isNavigationLink(link.label)"
                                 variant="outline"
                                 size="sm"
                                 :class="{ 'bg-primary text-primary-foreground': link.active }"
                                 :disabled="!link.url"
                                 @click="changePage(link.url)"
                             >
-                                {{ link.label }}
+                                {{ cleanPaginationLabel(link.label) }}
                             </Button>
                         </template>
                         <Button
                             variant="outline"
                             size="sm"
                             :disabled="employees.current_page === employees.last_page"
-                            @click="changePage(employees.links.find((l) => l.label === 'Next &raquo;')?.url || null)"
+                            @click="changePage(employees.links.find((l) => isNavigationLink(l.label) && cleanPaginationLabel(l.label).toLowerCase() === 'next')?.url || null)"
                         >
                             Next
                             <ChevronRight class="h-4 w-4" />
