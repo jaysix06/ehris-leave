@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, router, usePage } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { computed, ref, onMounted, watch } from 'vue';
 import {
     Download,
     FileText,
@@ -82,9 +82,17 @@ type Props = {
         avgLeaveBalance: string;
     };
     chartData?: {
-        employmentStatus: ChartItem[];
+        employmentStatus: {
+            chart: ChartItem[];
+            legend: ChartItem[];
+            others: ChartItem[];
+        };
         jobTitle: ChartItem[];
-        school: ChartItem[];
+        school: {
+            chart: ChartItem[];
+            legend: ChartItem[];
+            others: ChartItem[];
+        };
     };
     filterOptions: {
         schools: string[];
@@ -131,6 +139,62 @@ const selectedEmploymentStatus = ref<string>(props.filters.employment_status || 
 const selectedSalaryGrade = ref<string>(props.filters.salary_grade || '');
 const searchQuery = ref<string>(props.filters.search || '');
 
+// Dropdown states for "others" records
+const showEmploymentStatusOthers = ref(false);
+const showSchoolOthers = ref(false);
+
+// Track hidden items (items unchecked will be hidden from chart)
+// Initialize with all items beyond top 5 hidden by default
+const hiddenEmploymentStatus = ref<string[]>([]);
+const hiddenSchools = ref<string[]>([]);
+
+// Initialize hidden items when component mounts or data changes
+const initializeHiddenItems = () => {
+    if (props.chartData?.employmentStatus?.chart) {
+        hiddenEmploymentStatus.value = props.chartData.employmentStatus.chart
+            .slice(5)
+            .map((item) => item.label);
+    }
+    if (props.chartData?.school?.chart) {
+        hiddenSchools.value = props.chartData.school.chart
+            .slice(5)
+            .map((item) => item.label);
+    }
+};
+
+// Initialize on mount
+onMounted(() => {
+    initializeHiddenItems();
+});
+
+// Watch for chartData changes
+watch(
+    () => props.chartData,
+    () => {
+        initializeHiddenItems();
+    },
+    { deep: true },
+);
+
+// Methods to toggle item visibility
+const toggleEmploymentStatusVisibility = (label: string) => {
+    const index = hiddenEmploymentStatus.value.indexOf(label);
+    if (index > -1) {
+        hiddenEmploymentStatus.value.splice(index, 1);
+    } else {
+        hiddenEmploymentStatus.value.push(label);
+    }
+};
+
+const toggleSchoolVisibility = (label: string) => {
+    const index = hiddenSchools.value.indexOf(label);
+    if (index > -1) {
+        hiddenSchools.value.splice(index, 1);
+    } else {
+        hiddenSchools.value.push(label);
+    }
+};
+
 // Computed properties
 const fullName = (emp: Employee) => {
     const parts = [emp.firstname, emp.middlename, emp.lastname, emp.extension].filter(Boolean);
@@ -138,19 +202,35 @@ const fullName = (emp: Employee) => {
 };
 
 const chartDataSafe = computed(() => ({
-    employmentStatus: props.chartData?.employmentStatus ?? [],
+    employmentStatus: {
+        chart: props.chartData?.employmentStatus?.chart ?? [],
+        legend: props.chartData?.employmentStatus?.legend ?? [],
+        others: props.chartData?.employmentStatus?.others ?? [],
+    },
     jobTitle: props.chartData?.jobTitle ?? [],
-    school: props.chartData?.school ?? [],
+    school: {
+        chart: props.chartData?.school?.chart ?? [],
+        legend: props.chartData?.school?.legend ?? [],
+        others: props.chartData?.school?.others ?? [],
+    },
 }));
 
 const employmentStatusChartData = computed(() => {
-    const items = chartDataSafe.value.employmentStatus;
+    const allItems = chartDataSafe.value.employmentStatus.chart;
+    const visibleItems = allItems.filter(
+        (item) => !hiddenEmploymentStatus.value.includes(item.label),
+    );
+    const allColors = getColors(allItems.length);
+    
     return {
-        labels: items.map((i) => i.label),
+        labels: visibleItems.map((i) => i.label),
         datasets: [
             {
-                data: items.map((i) => i.count),
-                backgroundColor: getColors(items.length),
+                data: visibleItems.map((i) => i.count),
+                backgroundColor: visibleItems.map((item) => {
+                    const originalIndex = allItems.findIndex((c) => c.label === item.label);
+                    return allColors[originalIndex];
+                }),
                 borderWidth: 1,
             },
         ],
@@ -173,13 +253,21 @@ const jobTitleChartData = computed(() => {
 });
 
 const schoolChartData = computed(() => {
-    const items = chartDataSafe.value.school;
+    const allItems = chartDataSafe.value.school.chart;
+    const visibleItems = allItems.filter(
+        (item) => !hiddenSchools.value.includes(item.label),
+    );
+    const allColors = getColors(allItems.length);
+    
     return {
-        labels: items.map((i) => i.label),
+        labels: visibleItems.map((i) => i.label),
         datasets: [
             {
-                data: items.map((i) => i.count),
-                backgroundColor: getColors(items.length),
+                data: visibleItems.map((i) => i.count),
+                backgroundColor: visibleItems.map((item) => {
+                    const originalIndex = allItems.findIndex((c) => c.label === item.label);
+                    return allColors[originalIndex];
+                }),
                 borderWidth: 1,
             },
         ],
@@ -198,6 +286,12 @@ const chartOptions = {
 const doughnutOptions = {
     ...chartOptions,
     cutout: '60%',
+    plugins: {
+        ...chartOptions.plugins,
+        legend: {
+            display: false,
+        },
+    },
 };
 
 const barOptions = {
@@ -465,6 +559,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                         <div class="h-[240px]">
                             <Doughnut
                                 v-if="employmentStatusChartData.labels.length"
+                                :key="`employment-${hiddenEmploymentStatus.length}-${employmentStatusChartData.labels.length}`"
                                 :data="employmentStatusChartData"
                                 :options="doughnutOptions"
                             />
@@ -475,12 +570,109 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                                 No data
                             </div>
                         </div>
+                        <!-- Custom Legend: Top 5 + Display -->
+                        <div class="mt-4">
+                            <div class="flex flex-wrap gap-3 items-center mb-2">
+                                <template
+                                    v-for="(item, index) in chartDataSafe.employmentStatus.legend"
+                                    :key="item.label"
+                                >
+                                    <div class="flex items-center gap-2">
+                                        <div
+                                            class="w-4 h-4 rounded"
+                                            :style="{
+                                                backgroundColor: getColors(
+                                                    chartDataSafe.employmentStatus.chart.length,
+                                                )[chartDataSafe.employmentStatus.chart.findIndex(
+                                                    (c) => c.label === item.label,
+                                                )],
+                                            }"
+                                        ></div>
+                                        <span class="text-xs text-muted-foreground">{{ item.label }}</span>
+                                    </div>
+                                </template>
+                                <button
+                                    v-if="chartDataSafe.employmentStatus.chart.length > 4 || chartDataSafe.employmentStatus.others.length > 0"
+                                    @click="showEmploymentStatusOthers = !showEmploymentStatusOthers"
+                                    class="flex items-center gap-2 px-2 py-1 rounded border border-border bg-background hover:bg-muted/50 text-xs font-medium text-foreground hover:text-primary transition-colors"
+                                >
+                                    <span>Others ({{ chartDataSafe.employmentStatus.others.length || chartDataSafe.employmentStatus.chart.length - 4 }})</span>
+                                    <span class="text-xs">{{ showEmploymentStatusOthers ? '▼' : '▶' }}</span>
+                                </button>
+                            </div>
+                            <!-- Display Dropdown - Show ALL items -->
+                            <transition
+                                enter-active-class="transition-all duration-300 ease-out"
+                                enter-from-class="opacity-0 max-h-0 overflow-hidden"
+                                enter-to-class="opacity-100"
+                                leave-active-class="transition-all duration-300 ease-in"
+                                leave-from-class="opacity-100"
+                                leave-to-class="opacity-0 max-h-0 overflow-hidden"
+                            >
+                                <div
+                                    v-if="showEmploymentStatusOthers && chartDataSafe.employmentStatus.chart.length > 0"
+                                    class="mt-2 max-h-48 overflow-y-auto overflow-x-hidden border rounded-md bg-background"
+                                    style="max-height: 12rem;"
+                                >
+                                <table class="w-full text-sm">
+                                    <thead class="bg-muted/30 sticky top-0">
+                                        <tr>
+                                            <th class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground w-12">
+                                                Show
+                                            </th>
+                                            <th class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground w-16">
+                                                Color
+                                            </th>
+                                            <th class="px-3 py-2 text-left text-xs font-semibold text-muted-foreground">
+                                                Status
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr
+                                            v-for="(item, index) in chartDataSafe.employmentStatus.chart"
+                                            :key="item.label"
+                                            class="border-b hover:bg-muted/30"
+                                            :class="{
+                                                'opacity-50': hiddenEmploymentStatus.includes(item.label),
+                                            }"
+                                        >
+                                            <td class="px-3 py-2 text-center">
+                                                <input
+                                                    type="checkbox"
+                                                    :checked="!hiddenEmploymentStatus.includes(item.label)"
+                                                    @change="toggleEmploymentStatusVisibility(item.label)"
+                                                    class="w-4 h-4 rounded border-input cursor-pointer"
+                                                />
+                                            </td>
+                                            <td class="px-3 py-2 text-center">
+                                                <div
+                                                    class="w-4 h-4 rounded mx-auto"
+                                                    :style="{
+                                                        backgroundColor: getColors(
+                                                            chartDataSafe.employmentStatus.chart.length,
+                                                        )[
+                                                            chartDataSafe.employmentStatus.chart.findIndex(
+                                                                (c) => c.label === item.label,
+                                                            )
+                                                        ],
+                                                    }"
+                                                ></div>
+                                            </td>
+                                            <td class="px-3 py-2">{{ item.label }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                                </div>
+                            </transition>
+                        </div>
                     </div>
                     <div class="rounded-lg border p-4 bg-card">
                         <h3 class="text-sm font-semibold text-muted-foreground mb-3">By School/Office</h3>
                         <div class="h-[240px]">
                             <Doughnut
                                 v-if="schoolChartData.labels.length"
+                                :key="`school-${hiddenSchools.length}-${schoolChartData.labels.length}`"
                                 :data="schoolChartData"
                                 :options="doughnutOptions"
                             />
@@ -490,6 +682,102 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                             >
                                 No data
                             </div>
+                        </div>
+                        <!-- Custom Legend: Top 5 + Display -->
+                        <div class="mt-4">
+                            <div class="flex flex-wrap gap-3 items-center mb-2">
+                                <template
+                                    v-for="(item, index) in chartDataSafe.school.legend"
+                                    :key="item.label"
+                                >
+                                    <div class="flex items-center gap-2">
+                                        <div
+                                            class="w-4 h-4 rounded"
+                                            :style="{
+                                                backgroundColor: getColors(
+                                                    chartDataSafe.school.chart.length,
+                                                )[chartDataSafe.school.chart.findIndex(
+                                                    (c) => c.label === item.label,
+                                                )],
+                                            }"
+                                        ></div>
+                                        <span class="text-xs text-muted-foreground">{{ item.label }}</span>
+                                    </div>
+                                </template>
+                                <button
+                                    v-if="chartDataSafe.school.chart.length > 4 || chartDataSafe.school.others.length > 0"
+                                    @click="showSchoolOthers = !showSchoolOthers"
+                                    class="flex items-center gap-2 px-2 py-1 rounded border border-border bg-background hover:bg-muted/50 text-xs font-medium text-foreground hover:text-primary transition-colors"
+                                >
+                                    <span>Others ({{ chartDataSafe.school.others.length || chartDataSafe.school.chart.length - 4 }})</span>
+                                    <span class="text-xs">{{ showSchoolOthers ? '▼' : '▶' }}</span>
+                                </button>
+                            </div>
+                            <!-- Display Dropdown - Show ALL items -->
+                            <transition
+                                enter-active-class="transition-all duration-300 ease-out"
+                                enter-from-class="opacity-0 max-h-0 overflow-hidden"
+                                enter-to-class="opacity-100"
+                                leave-active-class="transition-all duration-300 ease-in"
+                                leave-from-class="opacity-100"
+                                leave-to-class="opacity-0 max-h-0 overflow-hidden"
+                            >
+                                <div
+                                    v-if="showSchoolOthers && chartDataSafe.school.chart.length > 0"
+                                    class="mt-2 max-h-48 overflow-y-auto overflow-x-hidden border rounded-md bg-background"
+                                    style="max-height: 12rem;"
+                                >
+                                <table class="w-full text-sm">
+                                    <thead class="bg-muted/30 sticky top-0">
+                                        <tr>
+                                            <th class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground w-12">
+                                                Show
+                                            </th>
+                                            <th class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground w-16">
+                                                Color
+                                            </th>
+                                            <th class="px-3 py-2 text-left text-xs font-semibold text-muted-foreground">
+                                                School/Office
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr
+                                            v-for="(item, index) in chartDataSafe.school.chart"
+                                            :key="item.label"
+                                            class="border-b hover:bg-muted/30"
+                                            :class="{
+                                                'opacity-50': hiddenSchools.includes(item.label),
+                                            }"
+                                        >
+                                            <td class="px-3 py-2 text-center">
+                                                <input
+                                                    type="checkbox"
+                                                    :checked="!hiddenSchools.includes(item.label)"
+                                                    @change="toggleSchoolVisibility(item.label)"
+                                                    class="w-4 h-4 rounded border-input cursor-pointer"
+                                                />
+                                            </td>
+                                            <td class="px-3 py-2 text-center">
+                                                <div
+                                                    class="w-4 h-4 rounded mx-auto"
+                                                    :style="{
+                                                        backgroundColor: getColors(
+                                                            chartDataSafe.school.chart.length,
+                                                        )[
+                                                            chartDataSafe.school.chart.findIndex(
+                                                                (c) => c.label === item.label,
+                                                            )
+                                                        ],
+                                                    }"
+                                                ></div>
+                                            </td>
+                                            <td class="px-3 py-2">{{ item.label }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                                </div>
+                            </transition>
                         </div>
                     </div>
                 </div>
