@@ -304,6 +304,10 @@ const barOptions = {
 
 // Methods
 const applyFilters = () => {
+    // Reset chart hidden items when filters change (new data will come from server)
+    hiddenEmploymentStatus.value = [];
+    hiddenSchools.value = [];
+    
     router.get(
         employeeListing().url,
         {
@@ -314,10 +318,16 @@ const applyFilters = () => {
             employment_status: selectedEmploymentStatus.value || undefined,
             salary_grade: selectedSalaryGrade.value || undefined,
             search: searchQuery.value || undefined,
+            page: 1, // Reset to first page when filters change
         },
         {
-            preserveState: true,
-            preserveScroll: true,
+            preserveState: false, // Don't preserve state to ensure fresh data
+            preserveScroll: false, // Don't preserve scroll position
+            replace: false, // Allow browser history
+            onSuccess: () => {
+                // Re-initialize hidden items after new data loads
+                initializeHiddenItems();
+            },
         },
     );
 };
@@ -801,15 +811,15 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                 </div>
 
                 <!-- Data Table -->
-                <div class="rounded-md border overflow-x-auto w-full" style="max-width: 100%;">
-                    <table class="ehris-employee-table w-full border-collapse">
+                <div class="rounded-md border overflow-x-auto w-full">
+                    <table class="ehris-employee-table w-full border-collapse" style="min-width: 1200px;">
                         <thead class="bg-muted/50">
                             <tr>
                                 <th class="ehris-th">HRID</th>
                                 <th class="ehris-th">Employee ID</th>
                                 <th class="ehris-th ehris-col-name">Name</th>
                                 <th class="ehris-th ehris-col-job">Job Title</th>
-                                <th class="ehris-th">Subject</th>
+                                <th class="ehris-th ehris-col-subject">Subject</th>
                                 <th class="ehris-th">Grade Level</th>
                                 <th class="ehris-th ehris-col-office">School/Office</th>
                                 <th class="ehris-th">Station Code</th>
@@ -831,7 +841,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                                 <td class="ehris-td ehris-col-job">
                                     <Badge variant="outline" class="whitespace-nowrap max-w-full truncate inline-block">{{ employee.job_title || '-' }}</Badge>
                                 </td>
-                                <td class="ehris-td whitespace-nowrap">{{ employee.subject_taught || '-' }}</td>
+                                <td class="ehris-td ehris-col-subject" :title="employee.subject_taught || ''">{{ employee.subject_taught || '-' }}</td>
                                 <td class="ehris-td whitespace-nowrap">{{ employee.grade_level || '-' }}</td>
                                 <td class="ehris-td ehris-col-office" :title="employee.office || ''">{{ employee.office || '-' }}</td>
                                 <td class="ehris-td whitespace-nowrap">{{ employee.station_code || '-' }}</td>
@@ -939,11 +949,14 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
 .ehris-employee-table {
     table-layout: fixed;
     min-width: 0;
+    width: 100%;
 }
 
 .ehris-employee-table th,
 .ehris-employee-table td {
     vertical-align: middle;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 
 .ehris-th {
@@ -954,11 +967,19 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
     color: hsl(var(--muted-foreground));
     border-bottom: 1px solid hsl(var(--border));
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .ehris-td {
     padding: 0.375rem 0.5rem;
     font-size: 0.875rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ehris-td:not(.ehris-col-name):not(.ehris-col-job):not(.ehris-col-office):not(.ehris-col-subject) {
+    white-space: nowrap;
 }
 
 .ehris-col-name {
@@ -984,5 +1005,33 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
 
 .ehris-col-leave {
     min-width: 5.5rem;
+}
+
+.ehris-col-subject {
+    max-width: 15rem;
+    min-width: 10rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Ensure table cells don't overflow - max-width: 0 allows fixed table layout to work properly */
+.ehris-employee-table td {
+    max-width: 0;
+}
+
+.ehris-employee-table th {
+    max-width: 0;
+}
+
+.ehris-employee-table th.ehris-th,
+.ehris-employee-table td.ehris-td {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ehris-employee-table th.ehris-th:not(.ehris-col-name):not(.ehris-col-job):not(.ehris-col-office):not(.ehris-col-subject):not(.ehris-col-leave),
+.ehris-employee-table td.ehris-td:not(.ehris-col-name):not(.ehris-col-job):not(.ehris-col-office):not(.ehris-col-subject):not(.ehris-col-leave) {
+    white-space: nowrap;
 }
 </style>
