@@ -15,44 +15,8 @@ class EmployeeListingController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Employee::query();
-
-        // Apply filters
-        if ($request->filled('school')) {
-            $query->where('office', $request->school);
-        }
-
-        if ($request->filled('job_title')) {
-            $query->where('job_title', $request->job_title);
-        }
-
-        if ($request->filled('subject')) {
-            $query->where('subject_taught', 'like', '%'.$request->subject.'%');
-        }
-
-        if ($request->filled('grade_level')) {
-            $query->where('grade_level', $request->grade_level);
-        }
-
-        if ($request->filled('employment_status')) {
-            $query->where('employ_status', $request->employment_status);
-        }
-
-        if ($request->filled('salary_grade')) {
-            $query->where('salary_grade', $request->salary_grade);
-        }
-
-        if ($request->filled('search')) {
-            $search = $request->search;
-            $query->where(function ($q) use ($search) {
-                $q->where('firstname', 'like', '%'.$search.'%')
-                    ->orWhere('lastname', 'like', '%'.$search.'%')
-                    ->orWhere('employee_id', 'like', '%'.$search.'%')
-                    ->orWhere('hrid', 'like', '%'.$search.'%');
-            });
-        }
-
-        $perPage = (int) $request->get('per_page', 25);
+        $query = $this->buildEmployeeQuery($request);
+        $perPage = (int) $request->get('per_page', 10);
 
         // Partial reload: only fetch employees so only the table updates (no charts/summary refetch)
         $partialData = $request->header('X-Inertia-Partial-Data');
@@ -178,9 +142,9 @@ class EmployeeListingController extends Controller
     }
 
     /**
-     * Build a query with filters applied (reusable for exports)
+     * Build a query with filters applied (reusable for exports and API)
      */
-    private function buildFilteredQuery(Request $request)
+    private function buildEmployeeQuery(Request $request)
     {
         $query = Employee::query();
 
@@ -223,11 +187,23 @@ class EmployeeListingController extends Controller
     }
 
     /**
+     * API endpoint for JSON pagination (no Inertia loading)
+     */
+    public function api(Request $request)
+    {
+        $query = $this->buildEmployeeQuery($request);
+        $perPage = (int) $request->get('per_page', 10);
+        $employees = $query->paginate($perPage)->withQueryString();
+
+        return response()->json($employees);
+    }
+
+    /**
      * Export employee listing as CSV
      */
     public function exportCsv(Request $request): StreamedResponse
     {
-        $query = $this->buildFilteredQuery($request);
+        $query = $this->buildEmployeeQuery($request);
         $employees = $query->get();
 
         $filename = 'employee-listing-'.now()->format('Y-m-d-His').'.csv';
@@ -288,7 +264,7 @@ class EmployeeListingController extends Controller
      */
     public function exportExcel(Request $request)
     {
-        $query = $this->buildFilteredQuery($request);
+        $query = $this->buildEmployeeQuery($request);
         $employees = $query->get();
 
         $filename = 'employee-listing-'.now()->format('Y-m-d-His').'.xlsx';
@@ -379,7 +355,7 @@ class EmployeeListingController extends Controller
      */
     public function exportPrint(Request $request)
     {
-        $query = $this->buildFilteredQuery($request);
+        $query = $this->buildEmployeeQuery($request);
         $employees = $query->get();
 
         return Inertia::render('Reports/EmployeeListingPrint', [

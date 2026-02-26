@@ -348,6 +348,10 @@ Route::get('survey/gad', function () {
     return Inertia::render('Survey/Gad');
 })->middleware(['auth', 'verified'])->name('survey.gad');
 
+Route::get('api/reports/employee-listing', [App\Http\Controllers\Reports\EmployeeListingController::class, 'api'])
+    ->middleware(['auth', 'verified'])
+    ->name('api.reports.employee-listing');
+
 Route::get('reports/employee-listing', [App\Http\Controllers\Reports\EmployeeListingController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('reports.employee-listing');

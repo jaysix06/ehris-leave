@@ -61,6 +61,12 @@ const props = withDefaults(
         minTableWidth?: string;
         /** Show pagination above the table as well (default false) */
         showPaginationTop?: boolean;
+        /** Function to check if a row is expanded (for accordion) */
+        isRowExpanded?: (row: unknown) => boolean;
+        /** Row click handler */
+        onRowClick?: (row: unknown) => void;
+        /** Row class function */
+        rowClass?: (row: unknown) => string | string[];
     }>(),
     {
         loading: false,
@@ -69,6 +75,9 @@ const props = withDefaults(
         emptyMessage: 'No records found',
         minTableWidth: '1200px',
         showPaginationTop: false,
+        isRowExpanded: undefined,
+        onRowClick: undefined,
+        rowClass: undefined,
     },
 );
 
@@ -76,6 +85,7 @@ const emit = defineEmits<{
     'page-change': [url: string | null];
     'per-page-change': [perPage: number];
     'load-more': [];
+    'row-click': [row: unknown];
 }>();
 
 function cleanPaginationLabel(label: string): string {
@@ -109,6 +119,13 @@ function getCellValue(row: Record<string, unknown>, key: string): unknown {
     }
     return v;
 }
+
+function handleRowClick(row: unknown) {
+    if (props.onRowClick) {
+        props.onRowClick(row);
+    }
+    emit('row-click', row);
+}
 </script>
 
 <template>
@@ -116,7 +133,7 @@ function getCellValue(row: Record<string, unknown>, key: string): unknown {
         <!-- Pagination above table -->
         <div
             v-if="showPaginationTop"
-            class="data-table-pagination data-table-pagination-top flex items-center justify-between mb-4 pb-4 border-b"
+            class="data-table-pagination data-table-pagination-top flex items-center justify-between mb-4 pb-3 pt-3 border-b gap-6"
         >
             <div class="flex items-center gap-4">
                 <div class="text-sm text-muted-foreground">
@@ -207,30 +224,53 @@ function getCellValue(row: Record<string, unknown>, key: string): unknown {
                     </tr>
                 </thead>
                 <tbody>
-                    <tr
-                        v-for="(row, index) in data"
-                        :key="(row as Record<string, unknown>)[rowKey] ?? index"
-                        class="hover:bg-muted/50 border-b"
-                    >
-                        <td
-                            v-for="col in columns"
-                            :key="col.key"
-                            class="data-table-td ehris-td"
-                            :class="[col.class, col.tdClass]"
+                    <template v-for="(row, index) in data" :key="(row as Record<string, unknown>)[rowKey] ?? index">
+                        <!-- Main row -->
+                        <tr
+                            :class="[
+                                'hover:bg-muted/50 border-b transition-colors',
+                                isRowExpanded && isRowExpanded(row) ? 'bg-muted/30' : '',
+                                rowClass ? (typeof rowClass(row) === 'string' ? rowClass(row) : (rowClass(row) as string[]).join(' ')) : '',
+                                (onRowClick || isRowExpanded) ? 'cursor-pointer' : '',
+                            ]"
+                            @click="handleRowClick(row)"
                         >
-                            <slot
-                                v-if="col.slot"
-                                :name="`cell-${col.slot}`"
-                                :row="row"
-                                :value="getCellValue(row as Record<string, unknown>, col.key)"
+                            <td
+                                v-for="col in columns"
+                                :key="col.key"
+                                class="data-table-td ehris-td"
+                                :class="[col.class, col.tdClass]"
                             >
-                                {{ getCellValue(row as Record<string, unknown>, col.key) ?? '-' }}
-                            </slot>
-                            <template v-else>
-                                {{ getCellValue(row as Record<string, unknown>, col.key) ?? '-' }}
-                            </template>
-                        </td>
-                    </tr>
+                                <slot
+                                    v-if="col.slot"
+                                    :name="`cell-${col.slot}`"
+                                    :row="row"
+                                    :value="getCellValue(row as Record<string, unknown>, col.key)"
+                                >
+                                    {{ getCellValue(row as Record<string, unknown>, col.key) ?? '-' }}
+                                </slot>
+                                <template v-else>
+                                    {{ getCellValue(row as Record<string, unknown>, col.key) ?? '-' }}
+                                </template>
+                            </td>
+                        </tr>
+                        
+                        <!-- Accordion row (if expanded) -->
+                        <tr
+                            v-if="isRowExpanded && isRowExpanded(row)"
+                            class="accordion-content-row"
+                        >
+                            <td :colspan="columns.length" class="p-0">
+                                <slot
+                                    name="accordion"
+                                    :row="row"
+                                >
+                                    <!-- Default accordion content slot -->
+                                </slot>
+                            </td>
+                        </tr>
+                    </template>
+                    
                     <tr v-if="data.length === 0">
                         <td :colspan="columns.length" class="data-table-empty">
                             <slot name="empty">
@@ -243,7 +283,7 @@ function getCellValue(row: Record<string, unknown>, key: string): unknown {
         </div>
 
         <!-- Pagination -->
-        <div class="data-table-pagination flex items-center justify-between mt-4 pt-4 border-t">
+        <div class="data-table-pagination flex items-center justify-between mt-6 pt-4 pb-2 border-t gap-6">
             <div class="flex items-center gap-4">
                 <div class="text-sm text-muted-foreground">
                     Showing {{ pagination.from }} to {{ pagination.to }} of {{ pagination.total }} results
@@ -326,6 +366,16 @@ function getCellValue(row: Record<string, unknown>, key: string): unknown {
 <style scoped>
 .data-table-wrapper {
     position: relative;
+}
+
+.data-table-pagination-top {
+    margin-top: 1rem;
+    margin-bottom: 1rem;
+}
+
+.data-table-pagination {
+    padding-top: 1rem;
+    padding-bottom: 0.5rem;
 }
 
 .data-table-loading {
@@ -413,5 +463,21 @@ function getCellValue(row: Record<string, unknown>, key: string): unknown {
 }
 .data-table td.ehris-td:not(.ehris-col-name):not(.ehris-col-job):not(.ehris-col-office):not(.ehris-col-subject) {
     white-space: nowrap;
+}
+
+/* Accordion content row animation */
+.accordion-content-row {
+    animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        max-height: 0;
+    }
+    to {
+        opacity: 1;
+        max-height: 1000px;
+    }
 }
 </style>

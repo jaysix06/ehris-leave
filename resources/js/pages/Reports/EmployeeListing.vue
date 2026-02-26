@@ -199,6 +199,45 @@ const searchQuery = ref<string>(props.filters.search || '');
 // Client-side table search (filters displayed rows)
 const tableSearch = ref<string>('');
 
+// Table data ref - holds current table payload (same shape as props.employees)
+// Initialized from props.employees and kept in sync
+const tableData = ref<PaginatedData>(props.employees);
+
+// API endpoint constant
+const EMPLOYEE_LISTING_API = '/api/reports/employee-listing';
+
+// Loading state for table operations
+const isLoading = ref(false);
+
+// Watch props.employees to sync tableData when filters change (Inertia updates)
+watch(
+    () => props.employees,
+    (newEmployees) => {
+        tableData.value = newEmployees;
+    },
+    { deep: true },
+);
+
+// Pagination meta for DataTable
+const paginationMeta = computed<PaginationMeta>(() => ({
+    data: tableData.value.data,
+    current_page: tableData.value.current_page,
+    last_page: tableData.value.last_page,
+    per_page: tableData.value.per_page,
+    total: tableData.value.total,
+    from: tableData.value.from,
+    to: tableData.value.to,
+    links: tableData.value.links,
+}));
+
+// Empty message for DataTable
+const emptyMessage = computed(() => {
+    if (tableSearch.value || searchQuery.value) {
+        return `No employees found matching "${tableSearch.value || searchQuery.value}"`;
+    }
+    return 'No employees found matching your criteria';
+});
+
 // Dropdown states for "others" records
 const showEmploymentStatusOthers = ref(false);
 const showSchoolOthers = ref(false);
@@ -248,14 +287,65 @@ watch(
     { deep: true },
 );
 
-// Debounced search - auto-search as user types
+// Debounced search - auto-search as user types (for filter section)
 const debouncedSearch = useDebounceFn(() => {
     applyFilters();
 }, 500);
 
-// Watch searchQuery for dynamic search
+// Watch searchQuery for dynamic search (filter section)
 watch(searchQuery, () => {
     debouncedSearch();
+});
+
+// Dynamic table search via JSON API (server-side)
+const searchTableViaAPI = useDebounceFn(async () => {
+    isLoading.value = true;
+    try {
+        const queryParams = new URLSearchParams();
+        
+        // Add all current filters
+        if (props.filters.school) queryParams.append('school', props.filters.school);
+        if (props.filters.job_title) queryParams.append('job_title', props.filters.job_title);
+        if (props.filters.subject) queryParams.append('subject', props.filters.subject);
+        if (props.filters.grade_level) queryParams.append('grade_level', props.filters.grade_level);
+        if (props.filters.employment_status) queryParams.append('employment_status', props.filters.employment_status);
+        if (props.filters.salary_grade) queryParams.append('salary_grade', props.filters.salary_grade);
+        
+        // Add table search
+        if (tableSearch.value.trim()) {
+            queryParams.append('search', tableSearch.value.trim());
+        }
+        
+        queryParams.append('page', '1'); // Reset to first page on search
+        queryParams.append('per_page', tableData.value.per_page.toString());
+        
+        const apiUrl = `${EMPLOYEE_LISTING_API}?${queryParams.toString()}`;
+        
+        const response = await fetch(apiUrl, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            credentials: 'same-origin',
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            tableData.value = data;
+        } else {
+            console.error('Search failed:', response.statusText);
+        }
+    } catch (error) {
+        console.error('Search error:', error);
+    } finally {
+        isLoading.value = false;
+    }
+}, 500);
+
+// Watch tableSearch for dynamic server-side search
+watch(tableSearch, () => {
+    searchTableViaAPI();
 });
 
 // Methods to toggle item visibility
@@ -283,28 +373,9 @@ const fullName = (emp: Employee) => {
     return parts.join(' ');
 };
 
-// Filter employees for client-side table search
+// Use tableData directly (server-side filtering via API)
 const filteredEmployees = computed(() => {
-    if (!tableSearch.value.trim()) {
-        return props.employees.data;
-    }
-    
-    const searchTerm = tableSearch.value.toLowerCase().trim();
-    return props.employees.data.filter((employee) => {
-        const name = fullName(employee).toLowerCase();
-        const employeeId = employee.employee_id?.toString().toLowerCase() || '';
-        const hrid = employee.hrid?.toString().toLowerCase() || '';
-        const jobTitle = employee.job_title?.toLowerCase() || '';
-        const status = employee.employ_status?.toLowerCase() || '';
-        
-        return (
-            name.includes(searchTerm) ||
-            employeeId.includes(searchTerm) ||
-            hrid.includes(searchTerm) ||
-            jobTitle.includes(searchTerm) ||
-            status.includes(searchTerm)
-        );
-    });
+    return tableData.value.data;
 });
 
 const chartDataSafe = computed(() => ({
@@ -450,43 +521,122 @@ const clearFilters = () => {
 };
 
 const employeeColumns: DataTableColumn[] = [
-    { key: 'hrid', label: 'HRID' },
-    { key: 'employee_id', label: 'Employee ID' },
-    { key: 'firstname', label: 'Name', slot: 'name', class: 'ehris-col-name' },
-    { key: 'job_title', label: 'Job Title', slot: 'job_title', class: 'ehris-col-job' },
-    { key: 'subject_taught', label: 'Subject', class: 'ehris-col-subject' },
-    { key: 'grade_level', label: 'Grade Level' },
-    { key: 'office', label: 'School/Office', class: 'ehris-col-office', slot: 'office' },
-    { key: 'station_code', label: 'Station Code' },
-    { key: 'salary_grade', label: 'Salary Grade', slot: 'salary_grade' },
-    { key: 'salary_step', label: 'Salary Step' },
-    { key: 'employ_status', label: 'Status', slot: 'employ_status' },
-    { key: 'leave_balance', label: 'Leave Balance', class: 'ehris-col-leave', slot: 'leave_balance' },
+    { key: 'hrid', label: 'HRID', width: '5rem' },
+    { key: 'employee_id', label: 'Employee ID', width: '7rem' },
+    { key: 'firstname', label: 'Name', slot: 'name', class: 'ehris-col-name', width: '20rem' },
+    { key: 'arrow', label: '', width: '3rem' },
+    { key: 'job_title', label: 'Job Title', slot: 'job_title', class: 'ehris-col-job', width: '15rem' },
+    { key: 'employ_status', label: 'Status', slot: 'employ_status', width: '10rem' },
+    { key: 'leave_balance', label: 'Leave Balance', class: 'ehris-col-leave', slot: 'leave_balance', width: '9rem' },
 ];
 
-const changePage = (url: string | null) => {
-    if (url) {
+const changePage = async (url: string | null) => {
+    if (!url) return;
+    
+    isLoading.value = true;
+    try {
+        // Build API URL from pagination URL
+        const apiUrl = new URL(url, window.location.origin);
+        apiUrl.pathname = EMPLOYEE_LISTING_API;
+        
+        const response = await fetch(apiUrl.toString(), {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            credentials: 'same-origin',
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            tableData.value = data;
+        } else {
+            // Fallback to Inertia on error
+            router.get(url, {}, {
+                only: ['employees'],
+                preserveState: true,
+                preserveScroll: true,
+            });
+        }
+    } catch (error) {
+        console.error('Failed to fetch page:', error);
+        // Fallback to Inertia on fetch error
         router.get(url, {}, {
             only: ['employees'],
             preserveState: true,
             preserveScroll: true,
         });
+    } finally {
+        isLoading.value = false;
     }
 };
 
-const changePerPage = (perPage: number) => {
-    router.get(
-        employeeListing().url,
-        {
-            ...props.filters,
-            per_page: perPage,
-        },
-        {
-            only: ['employees'],
-            preserveState: true,
-            preserveScroll: true,
-        },
-    );
+const changePerPage = async (perPage: number) => {
+    isLoading.value = true;
+    try {
+        // Build query string with current filters and new per_page
+        const queryParams = new URLSearchParams();
+        
+        if (props.filters.school) queryParams.append('school', props.filters.school);
+        if (props.filters.job_title) queryParams.append('job_title', props.filters.job_title);
+        if (props.filters.subject) queryParams.append('subject', props.filters.subject);
+        if (props.filters.grade_level) queryParams.append('grade_level', props.filters.grade_level);
+        if (props.filters.employment_status) queryParams.append('employment_status', props.filters.employment_status);
+        if (props.filters.salary_grade) queryParams.append('salary_grade', props.filters.salary_grade);
+        if (props.filters.search) queryParams.append('search', props.filters.search);
+        if (tableSearch.value.trim()) queryParams.append('search', tableSearch.value.trim());
+        
+        queryParams.append('page', '1'); // Reset to first page
+        queryParams.append('per_page', perPage.toString());
+        
+        const apiUrl = `${EMPLOYEE_LISTING_API}?${queryParams.toString()}`;
+        
+        const response = await fetch(apiUrl, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            credentials: 'same-origin',
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            tableData.value = data;
+        } else {
+            // Fallback to Inertia on error
+            router.get(
+                employeeListing().url,
+                {
+                    ...props.filters,
+                    per_page: perPage,
+                },
+                {
+                    only: ['employees'],
+                    preserveState: true,
+                    preserveScroll: true,
+                },
+            );
+        }
+    } catch (error) {
+        console.error('Failed to change per page:', error);
+        // Fallback to Inertia on fetch error
+        router.get(
+            employeeListing().url,
+            {
+                ...props.filters,
+                per_page: perPage,
+            },
+            {
+                only: ['employees'],
+                preserveState: true,
+                preserveScroll: true,
+            },
+        );
+    } finally {
+        isLoading.value = false;
+    }
 };
 
 // Helper function to clean HTML entities from pagination labels
@@ -953,7 +1103,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                     <div>
                         <h2 class="text-xl font-semibold">Employee Listing Results</h2>
                         <p class="text-sm text-muted-foreground mt-1">
-                            Showing {{ employees.from }} to {{ employees.to }} of {{ employees.total }} records
+                            Showing {{ tableData.from }} to {{ tableData.to }} of {{ tableData.total }} records
                         </p>
                     </div>
                     <div class="flex gap-2">
@@ -1007,60 +1157,6 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                     </div>
                 </div>
 
-                <!-- Pagination -->
-                <div class="flex items-center justify-between mb-4">
-                    <div class="flex items-center gap-4">
-                        <div class="text-sm text-muted-foreground">
-                            Showing {{ employees.from }} to {{ employees.to }} of {{ employees.total }} results
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <Label class="text-sm">Per page:</Label>
-                            <select
-                                :value="employees.per_page"
-                                @change="changePerPage(Number(($event.target as HTMLSelectElement).value))"
-                                class="rounded-md border border-input bg-background px-2 py-1 text-sm"
-                            >
-                                <option :value="10">10</option>
-                                <option :value="25">25</option>
-                                <option :value="50">50</option>
-                                <option :value="100">100</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="flex gap-2">
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            :disabled="employees.current_page === 1"
-                            @click="changePage(employees.links.find((l) => isNavigationLink(l.label) && cleanPaginationLabel(l.label).toLowerCase() === 'previous')?.url || null)"
-                        >
-                            <ChevronLeft class="h-4 w-4" />
-                            Previous
-                        </Button>
-                        <template v-for="(link, index) in employees.links" :key="index">
-                            <Button
-                                v-if="!isNavigationLink(link.label)"
-                                variant="outline"
-                                size="sm"
-                                :class="{ 'bg-primary text-primary-foreground': link.active }"
-                                :disabled="!link.url"
-                                @click="changePage(link.url)"
-                            >
-                                {{ cleanPaginationLabel(link.label) }}
-                            </Button>
-                        </template>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            :disabled="employees.current_page === employees.last_page"
-                            @click="changePage(employees.links.find((l) => isNavigationLink(l.label) && cleanPaginationLabel(l.label).toLowerCase() === 'next')?.url || null)"
-                        >
-                            Next
-                            <ChevronRight class="h-4 w-4" />
-                        </Button>
-                    </div>
-                </div>
-
                 <!-- Data Table -->
                 <div class="rounded-md border overflow-x-auto w-full">
                     <!-- Table Search -->
@@ -1069,7 +1165,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                             <Search class="h-4 w-4 text-muted-foreground" />
                             <Input
                                 v-model="tableSearch"
-                                placeholder="Search in table by name, ID, job title, or status..."
+                                placeholder="Search all records by name, ID, job title, or status (e.g., 'jean')..."
                                 class="max-w-sm"
                             />
                             <Button
@@ -1083,151 +1179,112 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                             </Button>
                         </div>
                         <p v-if="tableSearch" class="text-xs text-muted-foreground mt-2">
-                            Showing {{ filteredEmployees.length }} of {{ employees.data.length }} employees
+                            Searching all records for "{{ tableSearch }}"... Showing {{ tableData.total }} results
                         </p>
                     </div>
-                    <table class="ehris-employee-table w-full border-collapse" style="min-width: 1200px;">
-                        <thead class="bg-muted/50">
-                            <tr>
-                                <th class="ehris-th">HRID</th>
-                                <th class="ehris-th">Employee ID</th>
-                                <th class="ehris-th ehris-col-name">Name</th>
-                                <th class="ehris-th" style="width: 3rem;"></th>
-                                <th class="ehris-th ehris-col-job">Job Title</th>
-                                <th class="ehris-th">Status</th>
-                                <th class="ehris-th ehris-col-leave">Leave Balance</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <template v-for="employee in filteredEmployees" :key="employee.hrid">
-                                <tr
-                                    class="hover:bg-muted/50 border-b cursor-pointer transition-colors"
-                                    @click="toggleRow(employee.hrid)"
-                                >
-                                    <td class="ehris-td whitespace-nowrap">{{ employee.hrid }}</td>
-                                    <td class="ehris-td whitespace-nowrap">{{ employee.employee_id }}</td>
-                                    <td class="ehris-td ehris-col-name" :title="fullName(employee)">
-                                        {{ fullName(employee) }}
-                                    </td>
-                                    <td class="ehris-td" style="width: 3rem; text-align: center;">
-                                        <ChevronDown
-                                            v-if="expandedRow !== employee.hrid"
-                                            class="h-5 w-5 text-muted-foreground transition-transform mx-auto"
-                                        />
-                                        <ChevronUp
-                                            v-else
-                                            class="h-5 w-5 text-muted-foreground transition-transform mx-auto"
-                                        />
-                                    </td>
-                                    <td class="ehris-td ehris-col-job">
-                                        <Badge variant="outline" class="whitespace-nowrap max-w-full truncate inline-block">{{ employee.job_title || '-' }}</Badge>
-                                    </td>
-                                    <td class="ehris-td whitespace-nowrap">
-                                        <Badge
-                                            :variant="employee.employ_status === 'Permanent' ? 'default' : 'secondary'"
-                                        >
-                                            {{ employee.employ_status || '-' }}
-                                        </Badge>
-                                    </td>
-                                    <td class="ehris-td ehris-col-leave whitespace-nowrap">
-                                        <Badge
-                                            :variant="(employee.leave_balance || 0) < 5 ? 'destructive' : 'outline'"
-                                        >
-                                            {{ employee.leave_balance ?? 0 }} days
-                                        </Badge>
-                                    </td>
-                                </tr>
-                                <tr v-if="expandedRow === employee.hrid" class="accordion-content-row">
-                                    <td colspan="7" class="p-0">
-                                        <div class="bg-muted/30 p-6 border-t">
-                                            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                                                <div class="space-y-1">
-                                                    <div class="text-sm font-semibold text-muted-foreground">Subjects</div>
-                                                    <div class="text-base font-normal">{{ employee.subject_taught || '-' }}</div>
-                                                </div>
-                                                <div class="space-y-1">
-                                                    <div class="text-sm font-semibold text-muted-foreground">Grade Level</div>                                                    <div class="text-base font-normal">{{ employee.grade_level || '-' }}</div>                                                </div>
-                                                <div class="space-y-1">
-                                                    <div class="text-sm font-semibold text-muted-foreground">School/Office</div>
-                                                    <div class="text-base font-normal">{{ employee.office || '-' }}</div>
-                                                </div>
-                                                <div class="space-y-1">
-                                                    <div class="text-sm font-semibold text-muted-foreground">Station Code</div>                                                    <div class="text-base font-normal">{{ employee.station_code || '-' }}</div>                                                </div>
-                                                <div class="space-y-1">
-                                                    <div class="text-sm font-semibold text-muted-foreground">Salary Grade</div>                                                    <div class="text-base font-normal">{{ employee.salary_grade ? 'SG ' + employee.salary_grade : '-' }}</div>                                                </div>
-                                                <div class="space-y-1">
-                                                    <div class="text-sm font-semibold text-muted-foreground">Salary Step</div>                                                    <div class="text-base font-normal">{{ employee.salary_step || '-' }}</div>                                                </div>
-                                                                                        </div>
-                                                                                    </div>
-                                                                                </td>
-                                                                            </tr>
-                            </template>
-                            <tr v-if="filteredEmployees.length === 0">
-                                <td colspan="7" class="px-4 py-8 text-center text-muted-foreground">
-                                    <template v-if="tableSearch">
-                                        No employees found matching "{{ tableSearch }}"
-                                    </template>
-                                    <template v-else>
-                                        No employees found matching your criteria
-                                    </template>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-
-                <!-- Pagination -->
-                <div class="flex items-center justify-between mt-4 pt-4 border-t">
-                    <div class="flex items-center gap-4">
-                        <div class="text-sm text-muted-foreground">
-                            Showing {{ employees.from }} to {{ employees.to }} of {{ employees.total }} results
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <Label class="text-sm">Per page:</Label>
-                            <select
-                                :value="employees.per_page"
-                                @change="changePerPage(Number(($event.target as HTMLSelectElement).value))"
-                                class="rounded-md border border-input bg-background px-2 py-1 text-sm"
-                            >
-                                <option :value="10">10</option>
-                                <option :value="25">25</option>
-                                <option :value="50">50</option>
-                                <option :value="100">100</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="flex gap-2">
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            :disabled="employees.current_page === 1"
-                            @click="changePage(employees.links.find((l) => isNavigationLink(l.label) && cleanPaginationLabel(l.label).toLowerCase() === 'previous')?.url || null)"
-                        >
-                            <ChevronLeft class="h-4 w-4" />
-                            Previous
-                        </Button>
-                        <template v-for="(link, index) in employees.links" :key="index">
-                            <Button
-                                v-if="!isNavigationLink(link.label)"
-                                variant="outline"
-                                size="sm"
-                                :class="{ 'bg-primary text-primary-foreground': link.active }"
-                                :disabled="!link.url"
-                                @click="changePage(link.url)"
-                            >
-                                {{ cleanPaginationLabel(link.label) }}
-                            </Button>
+                    
+                    <DataTable
+                        :columns="employeeColumns"
+                        :data="tableData.data"
+                        :pagination="paginationMeta"
+                        row-key="hrid"
+                        :loading="isLoading"
+                        :empty-message="emptyMessage"
+                        :is-row-expanded="(row) => expandedRow === (row as Employee).hrid"
+                        :on-row-click="(row) => toggleRow((row as Employee).hrid)"
+                        :row-class="(row) => expandedRow === (row as Employee).hrid ? 'bg-muted/30' : ''"
+                        :show-pagination-top="true"
+                        @page-change="changePage"
+                        @per-page-change="changePerPage"
+                    >
+                        <!-- HRID Column -->
+                        <template #cell-hrid="{ value }">
+                            <span class="whitespace-nowrap" style="font-size: 0.75rem;">{{ value }}</span>
                         </template>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            :disabled="employees.current_page === employees.last_page"
-                            @click="changePage(employees.links.find((l) => isNavigationLink(l.label) && cleanPaginationLabel(l.label).toLowerCase() === 'next')?.url || null)"
-                        >
-                            Next
-                            <ChevronRight class="h-4 w-4" />
-                        </Button>
-                    </div>
+                        
+                        <!-- Employee ID Column -->
+                        <template #cell-employee_id="{ value }">
+                            <span class="whitespace-nowrap" style="font-size: 0.75rem;">{{ value }}</span>
+                        </template>
+                        
+                        <!-- Name Column -->
+                        <template #cell-name="{ row }">
+                            <div class="flex items-center gap-2">
+                                <ChevronRight
+                                    class="h-4 w-4 text-muted-foreground transition-transform flex-shrink-0"
+                                    :class="expandedRow === (row as Employee).hrid ? 'rotate-90' : ''"
+                                />
+                                <span :title="fullName(row as Employee)">{{ fullName(row as Employee) }}</span>
+                            </div>
+                        </template>
+                        
+                        <!-- Arrow Column -->
+                        <template #cell-arrow="{ row }">
+                            <div class="text-center">
+                                <ChevronDown
+                                    v-if="expandedRow !== (row as Employee).hrid"
+                                    class="h-5 w-5 text-muted-foreground transition-transform mx-auto"
+                                />
+                                <ChevronUp
+                                    v-else
+                                    class="h-5 w-5 text-muted-foreground transition-transform mx-auto"
+                                />
+                            </div>
+                        </template>
+                        
+                        <!-- Job Title Column -->
+                        <template #cell-job_title="{ value }">
+                            <Badge variant="outline" class="whitespace-nowrap max-w-full truncate inline-block">
+                                {{ value || '-' }}
+                            </Badge>
+                        </template>
+                        
+                        <!-- Status Column -->
+                        <template #cell-employ_status="{ value }">
+                            <Badge :variant="value === 'Permanent' ? 'default' : 'secondary'">
+                                {{ value || '-' }}
+                            </Badge>
+                        </template>
+                        
+                        <!-- Leave Balance Column -->
+                        <template #cell-leave_balance="{ value }">
+                            <Badge :variant="((value as number) || 0) < 5 ? 'destructive' : 'outline'">
+                                {{ (value as number) ?? 0 }} days
+                            </Badge>
+                        </template>
+                        
+                        <!-- Accordion Content Slot -->
+                        <template #accordion="{ row }">
+                            <div class="bg-muted/30 p-6 border-t">
+                                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                                    <div class="space-y-1">
+                                        <div class="text-sm font-semibold text-muted-foreground">Subjects</div>
+                                        <div class="text-base font-normal">{{ (row as Employee).subject_taught || '-' }}</div>
+                                    </div>
+                                    <div class="space-y-1">
+                                        <div class="text-sm font-semibold text-muted-foreground">Grade Level</div>
+                                        <div class="text-base font-normal">{{ (row as Employee).grade_level || '-' }}</div>
+                                    </div>
+                                    <div class="space-y-1">
+                                        <div class="text-sm font-semibold text-muted-foreground">School/Office</div>
+                                        <div class="text-base font-normal">{{ (row as Employee).office || '-' }}</div>
+                                    </div>
+                                    <div class="space-y-1">
+                                        <div class="text-sm font-semibold text-muted-foreground">Station Code</div>
+                                        <div class="text-base font-normal">{{ (row as Employee).station_code || '-' }}</div>
+                                    </div>
+                                    <div class="space-y-1">
+                                        <div class="text-sm font-semibold text-muted-foreground">Salary Grade</div>
+                                        <div class="text-base font-normal">{{ (row as Employee).salary_grade ? 'SG ' + (row as Employee).salary_grade : '-' }}</div>
+                                    </div>
+                                    <div class="space-y-1">
+                                        <div class="text-sm font-semibold text-muted-foreground">Salary Step</div>
+                                        <div class="text-base font-normal">{{ (row as Employee).salary_step || '-' }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </DataTable>
                 </div>
             </section>
         </div>
