@@ -318,4 +318,16 @@ Route::get('reports/employee-listing', [App\Http\Controllers\Reports\EmployeeLis
     ->middleware(['auth', 'verified'])
     ->name('reports.employee-listing');
 
+Route::get('reports/employee-listing/export/csv', [App\Http\Controllers\Reports\EmployeeListingController::class, 'exportCsv'])
+    ->middleware(['auth', 'verified'])
+    ->name('reports.employee-listing.export.csv');
+
+Route::get('reports/employee-listing/export/excel', [App\Http\Controllers\Reports\EmployeeListingController::class, 'exportExcel'])
+    ->middleware(['auth', 'verified'])
+    ->name('reports.employee-listing.export.excel');
+
+Route::get('reports/employee-listing/export/print', [App\Http\Controllers\Reports\EmployeeListingController::class, 'exportPrint'])
+    ->middleware(['auth', 'verified'])
+    ->name('reports.employee-listing.export.print');
+
 require __DIR__.'/settings.php';

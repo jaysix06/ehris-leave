@@ -444,8 +444,54 @@ const changePerPage = (perPage: number) => {
 };
 
 const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
-    // TODO: Implement export functionality
-    console.log(`Exporting as ${format}`);
+    // Build query string from current filters
+    const queryParams = new URLSearchParams();
+    
+    if (props.filters.school) {
+        queryParams.append('school', props.filters.school);
+    }
+    if (props.filters.job_title) {
+        queryParams.append('job_title', props.filters.job_title);
+    }
+    if (props.filters.subject) {
+        queryParams.append('subject', props.filters.subject);
+    }
+    if (props.filters.grade_level) {
+        queryParams.append('grade_level', props.filters.grade_level);
+    }
+    if (props.filters.employment_status) {
+        queryParams.append('employment_status', props.filters.employment_status);
+    }
+    if (props.filters.salary_grade) {
+        queryParams.append('salary_grade', props.filters.salary_grade);
+    }
+    if (props.filters.search) {
+        queryParams.append('search', props.filters.search);
+    }
+    
+    const queryString = queryParams.toString();
+    const baseUrl = window.location.origin;
+    
+    if (format === 'csv') {
+        const url = `${baseUrl}/reports/employee-listing/export/csv${queryString ? `?${queryString}` : ''}`;
+        window.open(url, '_blank');
+    } else if (format === 'excel') {
+        const url = `${baseUrl}/reports/employee-listing/export/excel${queryString ? `?${queryString}` : ''}`;
+        window.open(url, '_blank');
+    } else if (format === 'pdf') {
+        // For print, use Inertia to navigate to print view
+        const url = `/reports/employee-listing/export/print${queryString ? `?${queryString}` : ''}`;
+        router.visit(url, {
+            preserveState: false,
+            preserveScroll: false,
+            onSuccess: () => {
+                // Trigger print dialog after page loads
+                setTimeout(() => {
+                    window.print();
+                }, 500);
+            },
+        });
+    }
 };
 </script>
 
@@ -887,6 +933,60 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                                 No data
                             </div>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Pagination -->
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-4">
+                        <div class="text-sm text-muted-foreground">
+                            Showing {{ employees.from }} to {{ employees.to }} of {{ employees.total }} results
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <Label class="text-sm">Per page:</Label>
+                            <select
+                                :value="employees.per_page"
+                                @change="changePerPage(Number(($event.target as HTMLSelectElement).value))"
+                                class="rounded-md border border-input bg-background px-2 py-1 text-sm"
+                            >
+                                <option :value="10">10</option>
+                                <option :value="25">25</option>
+                                <option :value="50">50</option>
+                                <option :value="100">100</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="flex gap-2">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            :disabled="employees.current_page === 1"
+                            @click="changePage(employees.links.find((l) => isNavigationLink(l.label) && cleanPaginationLabel(l.label).toLowerCase() === 'previous')?.url || null)"
+                        >
+                            <ChevronLeft class="h-4 w-4" />
+                            Previous
+                        </Button>
+                        <template v-for="(link, index) in employees.links" :key="index">
+                            <Button
+                                v-if="!isNavigationLink(link.label)"
+                                variant="outline"
+                                size="sm"
+                                :class="{ 'bg-primary text-primary-foreground': link.active }"
+                                :disabled="!link.url"
+                                @click="changePage(link.url)"
+                            >
+                                {{ cleanPaginationLabel(link.label) }}
+                            </Button>
+                        </template>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            :disabled="employees.current_page === employees.last_page"
+                            @click="changePage(employees.links.find((l) => isNavigationLink(l.label) && cleanPaginationLabel(l.label).toLowerCase() === 'next')?.url || null)"
+                        >
+                            Next
+                            <ChevronRight class="h-4 w-4" />
+                        </Button>
                     </div>
                 </div>
 
