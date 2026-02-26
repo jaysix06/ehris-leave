@@ -1,7 +1,12 @@
 <script setup lang="ts">
 import { Head, router } from '@inertiajs/vue3';
 import { computed, ref, onMounted, watch } from 'vue';
+import { useDebounceFn } from '@vueuse/core';
 import {
+    ChevronDown,
+    ChevronLeft,
+    ChevronRight,
+    ChevronUp,
     Download,
     Filter,
     Printer,
@@ -191,9 +196,24 @@ const selectedEmploymentStatus = ref<string>(props.filters.employment_status || 
 const selectedSalaryGrade = ref<string>(props.filters.salary_grade || '');
 const searchQuery = ref<string>(props.filters.search || '');
 
+// Client-side table search (filters displayed rows)
+const tableSearch = ref<string>('');
+
 // Dropdown states for "others" records
 const showEmploymentStatusOthers = ref(false);
 const showSchoolOthers = ref(false);
+
+// Accordion state - track which employee row is expanded
+const expandedRow = ref<number | null>(null);
+
+// Toggle accordion row
+const toggleRow = (hrid: number) => {
+    if (expandedRow.value === hrid) {
+        expandedRow.value = null;
+    } else {
+        expandedRow.value = hrid;
+    }
+};
 
 // Track hidden items (items unchecked will be hidden from chart)
 // Initialize with all items beyond top 5 hidden by default
@@ -228,6 +248,16 @@ watch(
     { deep: true },
 );
 
+// Debounced search - auto-search as user types
+const debouncedSearch = useDebounceFn(() => {
+    applyFilters();
+}, 500);
+
+// Watch searchQuery for dynamic search
+watch(searchQuery, () => {
+    debouncedSearch();
+});
+
 // Methods to toggle item visibility
 const toggleEmploymentStatusVisibility = (label: string) => {
     const index = hiddenEmploymentStatus.value.indexOf(label);
@@ -252,6 +282,30 @@ const fullName = (emp: Employee) => {
     const parts = [emp.firstname, emp.middlename, emp.lastname, emp.extension].filter(Boolean);
     return parts.join(' ');
 };
+
+// Filter employees for client-side table search
+const filteredEmployees = computed(() => {
+    if (!tableSearch.value.trim()) {
+        return props.employees.data;
+    }
+    
+    const searchTerm = tableSearch.value.toLowerCase().trim();
+    return props.employees.data.filter((employee) => {
+        const name = fullName(employee).toLowerCase();
+        const employeeId = employee.employee_id?.toString().toLowerCase() || '';
+        const hrid = employee.hrid?.toString().toLowerCase() || '';
+        const jobTitle = employee.job_title?.toLowerCase() || '';
+        const status = employee.employ_status?.toLowerCase() || '';
+        
+        return (
+            name.includes(searchTerm) ||
+            employeeId.includes(searchTerm) ||
+            hrid.includes(searchTerm) ||
+            jobTitle.includes(searchTerm) ||
+            status.includes(searchTerm)
+        );
+    });
+});
 
 const chartDataSafe = computed(() => ({
     employmentStatus: {
@@ -435,7 +489,22 @@ const changePerPage = (perPage: number) => {
     );
 };
 
-<<<<<<< HEAD
+// Helper function to clean HTML entities from pagination labels
+const cleanPaginationLabel = (label: string): string => {
+    return label
+        .replace(/&laquo;/g, '')
+        .replace(/&raquo;/g, '')
+        .replace(/&lsaquo;/g, '')
+        .replace(/&rsaquo;/g, '')
+        .trim();
+};
+
+// Helper function to check if a link is a Previous/Next navigation link
+const isNavigationLink = (label: string): boolean => {
+    const cleaned = cleanPaginationLabel(label).toLowerCase();
+    return cleaned === 'previous' || cleaned === 'next';
+};
+
 const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
     // Build query string from current filters
     const queryParams = new URLSearchParams();
@@ -485,10 +554,6 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
             },
         });
     }
-=======
-const exportReport = (_format: 'pdf' | 'excel' | 'csv') => {
-    // TODO: Implement export (e.g. router.get to Laravel export route)
->>>>>>> 0ccaf93a6fae37e9da19d59117b212dfeeadc728
 };
 </script>
 
@@ -509,180 +574,13 @@ const exportReport = (_format: 'pdf' | 'excel' | 'csv') => {
                 </div>
             </section>
 
-            <!-- Filter Section -->
+            <!-- Charts Section -->
             <section class="border border-border rounded-lg bg-white p-6 shadow-sm">
-                <div class="flex items-center justify-between mb-4">
-                    <div>
-                        <h2 class="text-xl font-semibold flex items-center gap-2">
-                            <Filter class="h-5 w-5" />
-                            Search & Filter Criteria
-                        </h2>
-                        <p class="text-sm text-muted-foreground mt-1">
-                            Filter employees by any combination of criteria to generate comprehensive personnel reports.
-                        </p>
-                    </div>
-                    <Button variant="ghost" size="sm" @click="clearFilters">
-                        <RefreshCw class="mr-2 h-4 w-4" />
-                        Clear All
-                    </Button>
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-                    <!-- School Filter -->
-                    <div class="space-y-2">
-                        <Label>School/Office</Label>
-                        <select
-                            v-model="selectedSchool"
-                            @change="applyFilters"
-                            class="w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        >
-                            <option value="">All Schools/Offices</option>
-                            <option v-for="school in filterOptions.schools" :key="school" :value="school">
-                                {{ school }}
-                            </option>
-                        </select>
-                    </div>
-
-                    <!-- Job Title Filter -->
-                    <div class="space-y-2">
-                        <Label>Job Title</Label>
-                        <select
-                            v-model="selectedJobTitle"
-                            @change="applyFilters"
-                            class="w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        >
-                            <option value="">All Job Titles</option>
-                            <option v-for="title in filterOptions.jobTitles" :key="title" :value="title">
-                                {{ title }}
-                            </option>
-                        </select>
-                    </div>
-
-                    <!-- Subject Filter -->
-                    <div class="space-y-2">
-                        <Label>Subject Taught</Label>
-                        <select
-                            v-model="selectedSubject"
-                            @change="applyFilters"
-                            class="w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        >
-                            <option value="">All Subjects</option>
-                            <option v-for="subject in filterOptions.subjects" :key="subject" :value="subject">
-                                {{ subject }}
-                            </option>
-                        </select>
-                    </div>
-
-                    <!-- Grade Level Filter -->
-                    <div class="space-y-2">
-                        <Label>Grade Level</Label>
-                        <select
-                            v-model="selectedGradeLevel"
-                            @change="applyFilters"
-                            class="w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        >
-                            <option value="">All Grade Levels</option>
-                            <option v-for="level in filterOptions.gradeLevels" :key="level" :value="level">
-                                {{ level }}
-                            </option>
-                        </select>
-                    </div>
-
-                    <!-- Employment Status Filter -->
-                    <div class="space-y-2">
-                        <Label>Employment Status</Label>
-                        <select
-                            v-model="selectedEmploymentStatus"
-                            @change="applyFilters"
-                            class="w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        >
-                            <option value="">All Status</option>
-                            <option
-                                v-for="status in filterOptions.employmentStatuses"
-                                :key="status"
-                                :value="status"
-                            >
-                                {{ status }}
-                            </option>
-                        </select>
-                    </div>
-
-                    <!-- Salary Grade Filter -->
-                    <div class="space-y-2">
-                        <Label>Salary Grade</Label>
-                        <select
-                            v-model="selectedSalaryGrade"
-                            @change="applyFilters"
-                            class="w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        >
-                            <option value="">All Salary Grades</option>
-                            <option v-for="grade in [11, 12, 13, 14, 15, 16, 17, 18, 19, 20]" :key="grade" :value="grade.toString()">
-                                SG {{ grade }}
-                            </option>
-                        </select>
-                    </div>
-                </div>
-
-                <!-- Search and Action Buttons -->
-                <div class="flex items-end gap-4">
-                    <div class="flex-1 space-y-2">
-                        <Label>Search Employee</Label>
-                        <div class="relative">
-                            <Search class="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                v-model="searchQuery"
-                                @keyup.enter="applyFilters"
-                                placeholder="Search by name or employee ID..."
-                                class="pl-10 bg-white"
-                            />
-                        </div>
-                    </div>
-                    <Button @click="applyFilters" class="min-w-[140px]">
-                        <Search class="mr-2 h-4 w-4" />
-                        Search Employees
-                    </Button>
-                </div>
-            </section>
-
-            <!-- Report Results Section -->
-            <section class="border border-border rounded-lg bg-white p-6 shadow-sm">
-                <div class="flex items-center justify-between mb-4">
-                    <div>
-                        <h2 class="text-xl font-semibold">Employee Listing Results</h2>
-                        <p class="text-sm text-muted-foreground mt-1">
-                            Showing {{ employees.from }} to {{ employees.to }} of {{ employees.total }} records
-                        </p>
-                    </div>
-                    <div class="flex gap-2">
-                        <Button variant="outline" size="sm" @click="exportReport('csv')">
-                            <Download class="mr-2 h-4 w-4" />
-                            CSV
-                        </Button>
-                        <Button variant="outline" size="sm" @click="exportReport('excel')">
-                            <Download class="mr-2 h-4 w-4" />
-                            Excel
-                        </Button>
-                        <Button variant="outline" size="sm" @click="exportReport('pdf')">
-                            <Printer class="mr-2 h-4 w-4" />
-                            Print
-                        </Button>
-                    </div>
-                </div>
-
-                <!-- Summary Statistics -->
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                    <div class="rounded-lg border p-4 bg-white">
-                        <div class="text-sm text-muted-foreground">Total Employees</div>
-                        <div class="text-2xl font-bold mt-1 text-primary">{{ summaryStats.total }}</div>
-                    </div>
-                    <div class="rounded-lg border p-4 bg-white">
-                        <div class="text-sm text-muted-foreground">Permanent</div>
-                        <div class="text-2xl font-bold mt-1 text-primary">{{ summaryStats.permanent }}</div>
-                    </div>
-                    <div class="rounded-lg border p-4 bg-white">
-                        <div class="text-sm text-muted-foreground">Avg Leave Balance</div>
-                        <div class="text-2xl font-bold mt-1 text-primary">{{ summaryStats.avgLeaveBalance }}</div>
-                    </div>
+                <div class="mb-4">
+                    <h2 class="text-xl font-semibold">Analytics & Reports</h2>
+                    <p class="text-sm text-muted-foreground mt-1">
+                        Visual insights into employee distribution and statistics.
+                    </p>
                 </div>
 
                 <!-- Charts -->
@@ -932,8 +830,183 @@ const exportReport = (_format: 'pdf' | 'excel' | 'csv') => {
                         </div>
                     </div>
                 </div>
+            </section>
 
-<<<<<<< HEAD
+            <!-- Filter Section -->
+            <section class="border border-border rounded-lg bg-white p-6 shadow-sm">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h2 class="text-xl font-semibold flex items-center gap-2">
+                            <Filter class="h-5 w-5" />
+                            Search & Filter Criteria
+                        </h2>
+                        <p class="text-sm text-muted-foreground mt-1">
+                            Filter employees by any combination of criteria to generate comprehensive personnel reports.
+                        </p>
+                    </div>
+                    <Button variant="ghost" size="sm" @click="clearFilters">
+                        <RefreshCw class="mr-2 h-4 w-4" />
+                        Clear All
+                    </Button>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                    <!-- School Filter -->
+                    <div class="space-y-2">
+                        <Label>School/Office</Label>
+                        <select
+                            v-model="selectedSchool"
+                            @change="applyFilters"
+                            class="w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                            <option value="">All Schools/Offices</option>
+                            <option v-for="school in filterOptions.schools" :key="school" :value="school">
+                                {{ school }}
+                            </option>
+                        </select>
+                    </div>
+
+                    <!-- Job Title Filter -->
+                    <div class="space-y-2">
+                        <Label>Job Title</Label>
+                        <select
+                            v-model="selectedJobTitle"
+                            @change="applyFilters"
+                            class="w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                            <option value="">All Job Titles</option>
+                            <option v-for="title in filterOptions.jobTitles" :key="title" :value="title">
+                                {{ title }}
+                            </option>
+                        </select>
+                    </div>
+
+                    <!-- Subject Filter -->
+                    <div class="space-y-2">
+                        <Label>Subject Taught</Label>
+                        <select
+                            v-model="selectedSubject"
+                            @change="applyFilters"
+                            class="w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                            <option value="">All Subjects</option>
+                            <option v-for="subject in filterOptions.subjects" :key="subject" :value="subject">
+                                {{ subject }}
+                            </option>
+                        </select>
+                    </div>
+
+                    <!-- Grade Level Filter -->
+                    <div class="space-y-2">
+                        <Label>Grade Level</Label>
+                        <select
+                            v-model="selectedGradeLevel"
+                            @change="applyFilters"
+                            class="w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                            <option value="">All Grade Levels</option>
+                            <option v-for="level in filterOptions.gradeLevels" :key="level" :value="level">
+                                {{ level }}
+                            </option>
+                        </select>
+                    </div>
+
+                    <!-- Employment Status Filter -->
+                    <div class="space-y-2">
+                        <Label>Employment Status</Label>
+                        <select
+                            v-model="selectedEmploymentStatus"
+                            @change="applyFilters"
+                            class="w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                            <option value="">All Status</option>
+                            <option
+                                v-for="status in filterOptions.employmentStatuses"
+                                :key="status"
+                                :value="status"
+                            >
+                                {{ status }}
+                            </option>
+                        </select>
+                    </div>
+
+                    <!-- Salary Grade Filter -->
+                    <div class="space-y-2">
+                        <Label>Salary Grade</Label>
+                        <select
+                            v-model="selectedSalaryGrade"
+                            @change="applyFilters"
+                            class="w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                            <option value="">All Salary Grades</option>
+                            <option v-for="grade in [11, 12, 13, 14, 15, 16, 17, 18, 19, 20]" :key="grade" :value="grade.toString()">
+                                SG {{ grade }}
+                            </option>
+                        </select>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Report Results Section -->
+            <section class="border border-border rounded-lg bg-white p-6 shadow-sm">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h2 class="text-xl font-semibold">Employee Listing Results</h2>
+                        <p class="text-sm text-muted-foreground mt-1">
+                            Showing {{ employees.from }} to {{ employees.to }} of {{ employees.total }} records
+                        </p>
+                    </div>
+                    <div class="flex gap-2">
+                        <Button variant="outline" size="sm" @click="exportReport('csv')">
+                            <Download class="mr-2 h-4 w-4" />
+                            CSV
+                        </Button>
+                        <Button variant="outline" size="sm" @click="exportReport('excel')">
+                            <Download class="mr-2 h-4 w-4" />
+                            Excel
+                        </Button>
+                        <Button variant="outline" size="sm" @click="exportReport('pdf')">
+                            <Printer class="mr-2 h-4 w-4" />
+                            Print
+                        </Button>
+                    </div>
+                </div>
+
+                <!-- Search and Action Buttons -->
+                <div class="flex items-end gap-4 mb-6">
+                    <div class="flex-1 space-y-2">
+                        <Label>Search Employee</Label>
+                        <div class="relative">
+                            <Search class="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input
+                                v-model="searchQuery"
+                                placeholder="Search by name or employee ID (auto-searches as you type)..."
+                                class="pl-10 bg-white"
+                            />
+                        </div>
+                    </div>
+                    <Button @click="applyFilters" class="min-w-[140px]">
+                        <Search class="mr-2 h-4 w-4" />
+                        Search Employees
+                    </Button>
+                </div>
+
+                <!-- Summary Statistics -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <div class="rounded-lg border p-4 bg-white">
+                        <div class="text-sm text-muted-foreground">Total Employees</div>
+                        <div class="text-2xl font-bold mt-1 text-primary">{{ summaryStats.total }}</div>
+                    </div>
+                    <div class="rounded-lg border p-4 bg-white">
+                        <div class="text-sm text-muted-foreground">Permanent</div>
+                        <div class="text-2xl font-bold mt-1 text-primary">{{ summaryStats.permanent }}</div>
+                    </div>
+                    <div class="rounded-lg border p-4 bg-white">
+                        <div class="text-sm text-muted-foreground">Avg Leave Balance</div>
+                        <div class="text-2xl font-bold mt-1 text-primary">{{ summaryStats.avgLeaveBalance }}</div>
+                    </div>
+                </div>
+
                 <!-- Pagination -->
                 <div class="flex items-center justify-between mb-4">
                     <div class="flex items-center gap-4">
@@ -990,61 +1063,113 @@ const exportReport = (_format: 'pdf' | 'excel' | 'csv') => {
 
                 <!-- Data Table -->
                 <div class="rounded-md border overflow-x-auto w-full">
+                    <!-- Table Search -->
+                    <div class="p-4 border-b bg-muted/30">
+                        <div class="flex items-center gap-2">
+                            <Search class="h-4 w-4 text-muted-foreground" />
+                            <Input
+                                v-model="tableSearch"
+                                placeholder="Search in table by name, ID, job title, or status..."
+                                class="max-w-sm"
+                            />
+                            <Button
+                                v-if="tableSearch"
+                                variant="ghost"
+                                size="sm"
+                                @click="tableSearch = ''"
+                                class="text-muted-foreground hover:text-foreground"
+                            >
+                                Clear
+                            </Button>
+                        </div>
+                        <p v-if="tableSearch" class="text-xs text-muted-foreground mt-2">
+                            Showing {{ filteredEmployees.length }} of {{ employees.data.length }} employees
+                        </p>
+                    </div>
                     <table class="ehris-employee-table w-full border-collapse" style="min-width: 1200px;">
                         <thead class="bg-muted/50">
                             <tr>
                                 <th class="ehris-th">HRID</th>
                                 <th class="ehris-th">Employee ID</th>
                                 <th class="ehris-th ehris-col-name">Name</th>
+                                <th class="ehris-th" style="width: 3rem;"></th>
                                 <th class="ehris-th ehris-col-job">Job Title</th>
-                                <th class="ehris-th ehris-col-subject">Subject</th>
-                                <th class="ehris-th">Grade Level</th>
-                                <th class="ehris-th ehris-col-office">School/Office</th>
-                                <th class="ehris-th">Station Code</th>
-                                <th class="ehris-th">Salary Grade</th>
-                                <th class="ehris-th">Salary Step</th>
                                 <th class="ehris-th">Status</th>
                                 <th class="ehris-th ehris-col-leave">Leave Balance</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <tr
-                                v-for="employee in employees.data"
-                                :key="employee.hrid"
-                                class="hover:bg-muted/50 border-b"
-                            >
-                                <td class="ehris-td whitespace-nowrap">{{ employee.hrid }}</td>
-                                <td class="ehris-td whitespace-nowrap">{{ employee.employee_id }}</td>
-                                <td class="ehris-td ehris-col-name" :title="fullName(employee)">{{ fullName(employee) }}</td>
-                                <td class="ehris-td ehris-col-job">
-                                    <Badge variant="outline" class="whitespace-nowrap max-w-full truncate inline-block">{{ employee.job_title || '-' }}</Badge>
-                                </td>
-                                <td class="ehris-td ehris-col-subject" :title="employee.subject_taught || ''">{{ employee.subject_taught || '-' }}</td>
-                                <td class="ehris-td whitespace-nowrap">{{ employee.grade_level || '-' }}</td>
-                                <td class="ehris-td ehris-col-office" :title="employee.office || ''">{{ employee.office || '-' }}</td>
-                                <td class="ehris-td whitespace-nowrap">{{ employee.station_code || '-' }}</td>
-                                <td class="ehris-td whitespace-nowrap">
-                                    {{ employee.salary_grade ? 'SG ' + employee.salary_grade : '-' }}
-                                </td>
-                                <td class="ehris-td whitespace-nowrap">{{ employee.salary_step || '-' }}</td>
-                                <td class="ehris-td whitespace-nowrap">
-                                    <Badge
-                                        :variant="employee.employ_status === 'Permanent' ? 'default' : 'secondary'"
-                                    >
-                                        {{ employee.employ_status || '-' }}
-                                    </Badge>
-                                </td>
-                                <td class="ehris-td ehris-col-leave whitespace-nowrap">
-                                    <Badge
-                                        :variant="(employee.leave_balance || 0) < 5 ? 'destructive' : 'outline'"
-                                    >
-                                        {{ employee.leave_balance ?? 0 }} days
-                                    </Badge>
-                                </td>
-                            </tr>
-                            <tr v-if="employees.data.length === 0">
-                                <td colspan="12" class="px-4 py-8 text-center text-muted-foreground">
-                                    No employees found matching your criteria
+                            <template v-for="employee in filteredEmployees" :key="employee.hrid">
+                                <tr
+                                    class="hover:bg-muted/50 border-b cursor-pointer transition-colors"
+                                    @click="toggleRow(employee.hrid)"
+                                >
+                                    <td class="ehris-td whitespace-nowrap">{{ employee.hrid }}</td>
+                                    <td class="ehris-td whitespace-nowrap">{{ employee.employee_id }}</td>
+                                    <td class="ehris-td ehris-col-name" :title="fullName(employee)">
+                                        {{ fullName(employee) }}
+                                    </td>
+                                    <td class="ehris-td" style="width: 3rem; text-align: center;">
+                                        <ChevronDown
+                                            v-if="expandedRow !== employee.hrid"
+                                            class="h-5 w-5 text-muted-foreground transition-transform mx-auto"
+                                        />
+                                        <ChevronUp
+                                            v-else
+                                            class="h-5 w-5 text-muted-foreground transition-transform mx-auto"
+                                        />
+                                    </td>
+                                    <td class="ehris-td ehris-col-job">
+                                        <Badge variant="outline" class="whitespace-nowrap max-w-full truncate inline-block">{{ employee.job_title || '-' }}</Badge>
+                                    </td>
+                                    <td class="ehris-td whitespace-nowrap">
+                                        <Badge
+                                            :variant="employee.employ_status === 'Permanent' ? 'default' : 'secondary'"
+                                        >
+                                            {{ employee.employ_status || '-' }}
+                                        </Badge>
+                                    </td>
+                                    <td class="ehris-td ehris-col-leave whitespace-nowrap">
+                                        <Badge
+                                            :variant="(employee.leave_balance || 0) < 5 ? 'destructive' : 'outline'"
+                                        >
+                                            {{ employee.leave_balance ?? 0 }} days
+                                        </Badge>
+                                    </td>
+                                </tr>
+                                <tr v-if="expandedRow === employee.hrid" class="accordion-content-row">
+                                    <td colspan="7" class="p-0">
+                                        <div class="bg-muted/30 p-6 border-t">
+                                            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                                                <div class="space-y-1">
+                                                    <div class="text-sm font-semibold text-muted-foreground">Subjects</div>
+                                                    <div class="text-base font-normal">{{ employee.subject_taught || '-' }}</div>
+                                                </div>
+                                                <div class="space-y-1">
+                                                    <div class="text-sm font-semibold text-muted-foreground">Grade Level</div>                                                    <div class="text-base font-normal">{{ employee.grade_level || '-' }}</div>                                                </div>
+                                                <div class="space-y-1">
+                                                    <div class="text-sm font-semibold text-muted-foreground">School/Office</div>
+                                                    <div class="text-base font-normal">{{ employee.office || '-' }}</div>
+                                                </div>
+                                                <div class="space-y-1">
+                                                    <div class="text-sm font-semibold text-muted-foreground">Station Code</div>                                                    <div class="text-base font-normal">{{ employee.station_code || '-' }}</div>                                                </div>
+                                                <div class="space-y-1">
+                                                    <div class="text-sm font-semibold text-muted-foreground">Salary Grade</div>                                                    <div class="text-base font-normal">{{ employee.salary_grade ? 'SG ' + employee.salary_grade : '-' }}</div>                                                </div>
+                                                <div class="space-y-1">
+                                                    <div class="text-sm font-semibold text-muted-foreground">Salary Step</div>                                                    <div class="text-base font-normal">{{ employee.salary_step || '-' }}</div>                                                </div>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </td>
+                                                                            </tr>
+                            </template>
+                            <tr v-if="filteredEmployees.length === 0">
+                                <td colspan="7" class="px-4 py-8 text-center text-muted-foreground">
+                                    <template v-if="tableSearch">
+                                        No employees found matching "{{ tableSearch }}"
+                                    </template>
+                                    <template v-else>
+                                        No employees found matching your criteria
+                                    </template>
                                 </td>
                             </tr>
                         </tbody>
@@ -1104,46 +1229,94 @@ const exportReport = (_format: 'pdf' | 'excel' | 'csv') => {
                         </Button>
                     </div>
                 </div>
-=======
-                <!-- Data Table (server-side chunk + optional lazy load) -->
-                <DataTable
-                    :columns="employeeColumns"
-                    :data="employees.data"
-                    :pagination="employees as PaginationMeta"
-                    row-key="hrid"
-                    :per-page-options="[10, 25, 50, 100]"
-                    empty-message="No employees found matching your criteria"
-                    min-table-width="1200px"
-                    show-pagination-top
-                    @page-change="changePage"
-                    @per-page-change="changePerPage"
-                >
-                    <template #cell-name="{ row }">
-                        <span :title="fullName(row as Employee)">{{ fullName(row as Employee) }}</span>
-                    </template>
-                    <template #cell-job_title="{ value }">
-                        <Badge variant="outline" class="whitespace-nowrap max-w-full truncate inline-block">{{ value || '-' }}</Badge>
-                    </template>
-                    <template #cell-office="{ value }">
-                        <span :title="(value as string) || ''">{{ (value as string) || '-' }}</span>
-                    </template>
-                    <template #cell-employ_status="{ value }">
-                        <Badge :variant="(value as string) === 'Permanent' ? 'default' : 'secondary'">
-                            {{ (value as string) || '-' }}
-                        </Badge>
-                    </template>
-                    <template #cell-leave_balance="{ value }">
-                        <Badge :variant="((value as number) ?? 0) < 5 ? 'destructive' : 'outline'">
-                            {{ (value as number) ?? 0 }} days
-                        </Badge>
-                    </template>
-                    <template #cell-salary_grade="{ value }">
-                        {{ value ? 'SG ' + value : '-' }}
-                    </template>
-                </DataTable>
->>>>>>> 0ccaf93a6fae37e9da19d59117b212dfeeadc728
             </section>
         </div>
     </AppLayout>
 </template>
 
+<style scoped>
+.ehris-employee-table {
+    table-layout: fixed;
+    width: 100%;
+}
+
+.ehris-employee-table th,
+.ehris-employee-table td {
+    vertical-align: middle;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+
+.ehris-th {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: hsl(var(--muted-foreground));
+    border-bottom: 1px solid hsl(var(--border));
+    white-space: nowrap;
+}
+
+.ehris-th:not(.ehris-col-name):not(.ehris-col-job):not(.ehris-col-leave) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ehris-td {
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: middle;
+}
+
+/* Ensure consistent spacing for HRID and Employee ID columns */
+.ehris-employee-table th:nth-child(1),
+.ehris-employee-table td:nth-child(1) {
+    padding-right: 1.5rem;
+    min-width: 5rem;
+    width: 5rem;
+}
+
+.ehris-employee-table th:nth-child(2),
+.ehris-employee-table td:nth-child(2) {
+    padding-left: 1.5rem;
+    padding-right: 1rem;
+    min-width: 7rem;
+    width: 7rem;
+}
+
+.ehris-col-name {
+    min-width: 12rem;
+    max-width: 20rem;
+}
+
+.ehris-col-job {
+    min-width: 10rem;
+    max-width: 15rem;
+}
+
+.ehris-col-leave {
+    min-width: 9rem;
+    width: 9rem;
+}
+
+.ehris-td:not(.ehris-col-name):not(.ehris-col-job):not(.ehris-col-leave) {
+    white-space: nowrap;
+}
+
+.accordion-content-row {
+    animation: slideDown 0.2s ease-out;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        max-height: 0;
+    }
+    to {
+        opacity: 1;
+        max-height: 500px;
+    }
+}
+</style>
