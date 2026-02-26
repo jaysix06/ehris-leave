@@ -52,6 +52,21 @@ class EmployeeListingController extends Controller
             });
         }
 
+        $perPage = (int) $request->get('per_page', 25);
+
+        // Partial reload: only fetch employees so only the table updates (no charts/summary refetch)
+        $partialData = $request->header('X-Inertia-Partial-Data');
+        if ($partialData) {
+            $wanted = array_map('trim', explode(',', $partialData));
+            if (in_array('employees', $wanted)) {
+                $employees = $query->paginate($perPage)->withQueryString();
+
+                return Inertia::render('Reports/EmployeeListing', [
+                    'employees' => $employees,
+                ]);
+            }
+        }
+
         // Get filter options for dropdowns
         $schools = Employee::whereNotNull('office')
             ->distinct()
@@ -128,8 +143,7 @@ class EmployeeListingController extends Controller
         $schoolTop = $allSchoolDistribution->take(5)->all();
         $schoolOthers = $allSchoolDistribution->skip(5)->all();
 
-        // Pagination
-        $perPage = $request->get('per_page', 25);
+        // Pagination (full load)
         $employees = $query->paginate($perPage)->withQueryString();
 
         return Inertia::render('Reports/EmployeeListing', [

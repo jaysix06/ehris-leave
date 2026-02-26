@@ -1,15 +1,12 @@
 <script setup lang="ts">
-import { Head, router, usePage } from '@inertiajs/vue3';
+import { Head, router } from '@inertiajs/vue3';
 import { computed, ref, onMounted, watch } from 'vue';
 import {
     Download,
-    FileText,
     Filter,
     Printer,
     RefreshCw,
     Search,
-    ChevronLeft,
-    ChevronRight,
 } from 'lucide-vue-next';
 import { Doughnut, Bar } from 'vue-chartjs';
 import {
@@ -23,6 +20,7 @@ import {
     Tooltip,
 } from 'chart.js';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { DataTable, type DataTableColumn, type PaginationMeta } from '@/components/DataTable';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -183,8 +181,6 @@ function getColors(n: number) {
 }
 
 const props = defineProps<Props>();
-
-const page = usePage();
 
 // Filter states - initialize from props
 const selectedSchool = ref<string>(props.filters.school || '');
@@ -399,32 +395,27 @@ const clearFilters = () => {
     applyFilters();
 };
 
-// Helper function to clean HTML entities from pagination labels
-const cleanPaginationLabel = (label: string): string => {
-    return label
-        .replace(/&laquo;/g, '')
-        .replace(/&raquo;/g, '')
-        .replace(/&lsaquo;/g, '')
-        .replace(/&rsaquo;/g, '')
-        .trim();
-};
-
-// Helper function to check if a link is a Previous/Next navigation link
-const isNavigationLink = (label: string): boolean => {
-    const cleaned = cleanPaginationLabel(label).toLowerCase();
-    return cleaned === 'previous' || cleaned === 'next';
-};
+const employeeColumns: DataTableColumn[] = [
+    { key: 'hrid', label: 'HRID' },
+    { key: 'employee_id', label: 'Employee ID' },
+    { key: 'firstname', label: 'Name', slot: 'name', class: 'ehris-col-name' },
+    { key: 'job_title', label: 'Job Title', slot: 'job_title', class: 'ehris-col-job' },
+    { key: 'subject_taught', label: 'Subject', class: 'ehris-col-subject' },
+    { key: 'grade_level', label: 'Grade Level' },
+    { key: 'office', label: 'School/Office', class: 'ehris-col-office', slot: 'office' },
+    { key: 'station_code', label: 'Station Code' },
+    { key: 'salary_grade', label: 'Salary Grade', slot: 'salary_grade' },
+    { key: 'salary_step', label: 'Salary Step' },
+    { key: 'employ_status', label: 'Status', slot: 'employ_status' },
+    { key: 'leave_balance', label: 'Leave Balance', class: 'ehris-col-leave', slot: 'leave_balance' },
+];
 
 const changePage = (url: string | null) => {
     if (url) {
-        router.get(url, {}, { 
-            preserveState: false, // Don't preserve state to ensure fresh data
-            preserveScroll: false, // Don't preserve scroll position
-            replace: false, // Allow browser history
-            onSuccess: () => {
-                // Re-initialize hidden items after new data loads
-                initializeHiddenItems();
-            },
+        router.get(url, {}, {
+            only: ['employees'],
+            preserveState: true,
+            preserveScroll: true,
         });
     }
 };
@@ -437,12 +428,14 @@ const changePerPage = (perPage: number) => {
             per_page: perPage,
         },
         {
+            only: ['employees'],
             preserveState: true,
             preserveScroll: true,
         },
     );
 };
 
+<<<<<<< HEAD
 const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
     // Build query string from current filters
     const queryParams = new URLSearchParams();
@@ -492,6 +485,10 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
             },
         });
     }
+=======
+const exportReport = (_format: 'pdf' | 'excel' | 'csv') => {
+    // TODO: Implement export (e.g. router.get to Laravel export route)
+>>>>>>> 0ccaf93a6fae37e9da19d59117b212dfeeadc728
 };
 </script>
 
@@ -499,9 +496,9 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
     <Head :title="pageTitle" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
-        <div class="ehris-page">
+        <div class="p-6 flex flex-col gap-6">
             <!-- Page Header -->
-            <section class="ehris-card">
+            <section class="border border-border rounded-lg bg-white p-6 shadow-sm">
                 <div class="mb-4">
                     <h1 class="text-3xl font-bold">{{ pageTitle }}</h1>
                     <p class="text-muted-foreground mt-1">
@@ -513,7 +510,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
             </section>
 
             <!-- Filter Section -->
-            <section class="ehris-card">
+            <section class="border border-border rounded-lg bg-white p-6 shadow-sm">
                 <div class="flex items-center justify-between mb-4">
                     <div>
                         <h2 class="text-xl font-semibold flex items-center gap-2">
@@ -648,7 +645,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
             </section>
 
             <!-- Report Results Section -->
-            <section class="ehris-card">
+            <section class="border border-border rounded-lg bg-white p-6 shadow-sm">
                 <div class="flex items-center justify-between mb-4">
                     <div>
                         <h2 class="text-xl font-semibold">Employee Listing Results</h2>
@@ -710,7 +707,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                         <div class="mt-4">
                             <div class="flex flex-wrap gap-3 items-center mb-2">
                                 <template
-                                    v-for="(item, index) in chartDataSafe.employmentStatus.legend"
+                                    v-for="item in chartDataSafe.employmentStatus.legend"
                                     :key="item.label"
                                 >
                                     <div class="flex items-center gap-2">
@@ -766,7 +763,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                                     </thead>
                                     <tbody>
                                         <tr
-                                            v-for="(item, index) in chartDataSafe.employmentStatus.chart"
+                                            v-for="item in chartDataSafe.employmentStatus.chart"
                                             :key="item.label"
                                             class="border-b hover:bg-muted/30"
                                             :class="{
@@ -823,7 +820,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                         <div class="mt-4">
                             <div class="flex flex-wrap gap-3 items-center mb-2">
                                 <template
-                                    v-for="(item, index) in chartDataSafe.school.legend"
+                                    v-for="item in chartDataSafe.school.legend"
                                     :key="item.label"
                                 >
                                     <div class="flex items-center gap-2">
@@ -879,7 +876,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                                     </thead>
                                     <tbody>
                                         <tr
-                                            v-for="(item, index) in chartDataSafe.school.chart"
+                                            v-for="item in chartDataSafe.school.chart"
                                             :key="item.label"
                                             class="border-b hover:bg-muted/30"
                                             :class="{
@@ -936,6 +933,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                     </div>
                 </div>
 
+<<<<<<< HEAD
                 <!-- Pagination -->
                 <div class="flex items-center justify-between mb-4">
                     <div class="flex items-center gap-4">
@@ -1106,113 +1104,46 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                         </Button>
                     </div>
                 </div>
+=======
+                <!-- Data Table (server-side chunk + optional lazy load) -->
+                <DataTable
+                    :columns="employeeColumns"
+                    :data="employees.data"
+                    :pagination="employees as PaginationMeta"
+                    row-key="hrid"
+                    :per-page-options="[10, 25, 50, 100]"
+                    empty-message="No employees found matching your criteria"
+                    min-table-width="1200px"
+                    show-pagination-top
+                    @page-change="changePage"
+                    @per-page-change="changePerPage"
+                >
+                    <template #cell-name="{ row }">
+                        <span :title="fullName(row as Employee)">{{ fullName(row as Employee) }}</span>
+                    </template>
+                    <template #cell-job_title="{ value }">
+                        <Badge variant="outline" class="whitespace-nowrap max-w-full truncate inline-block">{{ value || '-' }}</Badge>
+                    </template>
+                    <template #cell-office="{ value }">
+                        <span :title="(value as string) || ''">{{ (value as string) || '-' }}</span>
+                    </template>
+                    <template #cell-employ_status="{ value }">
+                        <Badge :variant="(value as string) === 'Permanent' ? 'default' : 'secondary'">
+                            {{ (value as string) || '-' }}
+                        </Badge>
+                    </template>
+                    <template #cell-leave_balance="{ value }">
+                        <Badge :variant="((value as number) ?? 0) < 5 ? 'destructive' : 'outline'">
+                            {{ (value as number) ?? 0 }} days
+                        </Badge>
+                    </template>
+                    <template #cell-salary_grade="{ value }">
+                        {{ value ? 'SG ' + value : '-' }}
+                    </template>
+                </DataTable>
+>>>>>>> 0ccaf93a6fae37e9da19d59117b212dfeeadc728
             </section>
         </div>
     </AppLayout>
 </template>
 
-<style scoped>
-.ehris-page {
-    padding: 1.5rem;
-    display: flex;
-    flex-direction: column;
-    gap: 1.5rem;
-}
-
-.ehris-card {
-    border: 1px solid hsl(var(--border));
-    border-radius: 0.5rem;
-    background: white;
-    padding: 1.5rem;
-    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
-}
-
-.ehris-employee-table {
-    table-layout: fixed;
-    min-width: 0;
-    width: 100%;
-}
-
-.ehris-employee-table th,
-.ehris-employee-table td {
-    vertical-align: middle;
-    word-wrap: break-word;
-    overflow-wrap: break-word;
-}
-
-.ehris-th {
-    padding: 0.375rem 0.5rem;
-    text-align: left;
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: hsl(var(--muted-foreground));
-    border-bottom: 1px solid hsl(var(--border));
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.ehris-td {
-    padding: 0.375rem 0.5rem;
-    font-size: 0.875rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.ehris-td:not(.ehris-col-name):not(.ehris-col-job):not(.ehris-col-office):not(.ehris-col-subject) {
-    white-space: nowrap;
-}
-
-.ehris-col-name {
-    max-width: 10rem;
-    min-width: 8rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.ehris-col-job {
-    max-width: 9rem;
-    min-width: 6rem;
-}
-
-.ehris-col-office {
-    max-width: 10rem;
-    min-width: 7rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.ehris-col-leave {
-    min-width: 5.5rem;
-}
-
-.ehris-col-subject {
-    max-width: 15rem;
-    min-width: 10rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-/* Ensure table cells don't overflow - max-width: 0 allows fixed table layout to work properly */
-.ehris-employee-table td {
-    max-width: 0;
-}
-
-.ehris-employee-table th {
-    max-width: 0;
-}
-
-.ehris-employee-table th.ehris-th,
-.ehris-employee-table td.ehris-td {
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.ehris-employee-table th.ehris-th:not(.ehris-col-name):not(.ehris-col-job):not(.ehris-col-office):not(.ehris-col-subject):not(.ehris-col-leave),
-.ehris-employee-table td.ehris-td:not(.ehris-col-name):not(.ehris-col-job):not(.ehris-col-office):not(.ehris-col-subject):not(.ehris-col-leave) {
-    white-space: nowrap;
-}
-</style>
