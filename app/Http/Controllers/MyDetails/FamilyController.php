@@ -3,9 +3,9 @@
 namespace App\Http\Controllers\MyDetails;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\MyDetails\FamilyStoreRequest;
 use App\Models\FamilyInfo;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 
 class FamilyController extends Controller
@@ -13,8 +13,9 @@ class FamilyController extends Controller
     /**
      * Store or replace the authenticated user's family information.
      */
-    public function store(FamilyStoreRequest $request): RedirectResponse
+    public function store(Request $request): RedirectResponse
     {
+        $request->validate(['family' => ['nullable', 'array']]);
         $user = $request->user();
         $hrid = $user->hrId ?? $user->userId ?? $user->id ?? null;
 

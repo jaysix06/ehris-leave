@@ -201,6 +201,8 @@ Route::get('my-details', function (Request $request) {
                 $result = $query();
                 if ($result instanceof \Illuminate\Support\Collection) {
                     $result = $result->all();
+                } elseif (is_object($result)) {
+                    $result = json_decode(json_encode($result), true);
                 }
                 switch ($table) {
                     case 'tbl_emp_official_info': $officialInfo = $result;
@@ -242,8 +244,40 @@ Route::get('my-details', function (Request $request) {
         }
     }
 
+    // Fallback: when employee tables have no row, show at least profile (tbl_user) or auth user data so sections aren't empty
+    $profileArray = $dbProfile
+        ? json_decode(json_encode($dbProfile), true)
+        : ($authUser ? $authUser->only(['hrId', 'email', 'lastname', 'firstname', 'middlename', 'extname', 'avatar', 'job_title', 'role', 'fullname']) : null);
+    if ($profileArray !== null) {
+        if ($officialInfo === null) {
+            $officialInfo = [
+                'hrid' => $profileArray['hrId'] ?? $authUser?->hrId ?? null,
+                'employee_id' => null,
+                'firstname' => $profileArray['firstname'] ?? null,
+                'middlename' => $profileArray['middlename'] ?? null,
+                'lastname' => $profileArray['lastname'] ?? null,
+                'extension' => $profileArray['extname'] ?? null,
+                'email' => $profileArray['email'] ?? null,
+                'job_title' => $profileArray['job_title'] ?? null,
+                'role' => $profileArray['role'] ?? null,
+            ];
+        }
+        if ($personalInfo === null) {
+            $personalInfo = [
+                'firstname' => $profileArray['firstname'] ?? null,
+                'middlename' => $profileArray['middlename'] ?? null,
+                'lastname' => $profileArray['lastname'] ?? null,
+            ];
+        }
+        if ($contactInfo === null) {
+            $contactInfo = [
+                'email' => $profileArray['email'] ?? null,
+            ];
+        }
+    }
+
     return Inertia::render('MyDetails', [
-        'profile' => $dbProfile,
+        'profile' => $profileArray ?? ($dbProfile ? json_decode(json_encode($dbProfile), true) : null),
         'officialInfo' => $officialInfo,
         'personalInfo' => $personalInfo,
         'contactInfo' => $contactInfo,
@@ -318,8 +352,24 @@ Route::get('survey/gad', function () {
     return Inertia::render('Survey/Gad');
 })->middleware(['auth', 'verified'])->name('survey.gad');
 
+Route::get('api/reports/employee-listing', [App\Http\Controllers\Reports\EmployeeListingController::class, 'api'])
+    ->middleware(['auth', 'verified'])
+    ->name('api.reports.employee-listing');
+
 Route::get('reports/employee-listing', [App\Http\Controllers\Reports\EmployeeListingController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('reports.employee-listing');
+
+Route::get('reports/employee-listing/export/csv', [App\Http\Controllers\Reports\EmployeeListingController::class, 'exportCsv'])
+    ->middleware(['auth', 'verified'])
+    ->name('reports.employee-listing.export.csv');
+
+Route::get('reports/employee-listing/export/excel', [App\Http\Controllers\Reports\EmployeeListingController::class, 'exportExcel'])
+    ->middleware(['auth', 'verified'])
+    ->name('reports.employee-listing.export.excel');
+
+Route::get('reports/employee-listing/export/print', [App\Http\Controllers\Reports\EmployeeListingController::class, 'exportPrint'])
+    ->middleware(['auth', 'verified'])
+    ->name('reports.employee-listing.export.print');
 
 require __DIR__.'/settings.php';

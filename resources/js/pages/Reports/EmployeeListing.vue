@@ -1,15 +1,17 @@
 <script setup lang="ts">
-import { Head, router, usePage } from '@inertiajs/vue3';
+import { Head, router } from '@inertiajs/vue3';
 import { computed, ref, onMounted, watch } from 'vue';
+import { useDebounceFn } from '@vueuse/core';
 import {
+    ChevronDown,
+    ChevronLeft,
+    ChevronRight,
+    ChevronUp,
     Download,
-    FileText,
     Filter,
     Printer,
     RefreshCw,
     Search,
-    ChevronLeft,
-    ChevronRight,
 } from 'lucide-vue-next';
 import { Doughnut, Bar } from 'vue-chartjs';
 import {
@@ -23,6 +25,7 @@ import {
     Tooltip,
 } from 'chart.js';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { DataTable, type DataTableColumn, type PaginationMeta } from '@/components/DataTable';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -184,8 +187,6 @@ function getColors(n: number) {
 
 const props = defineProps<Props>();
 
-const page = usePage();
-
 // Filter states - initialize from props
 const selectedSchool = ref<string>(props.filters.school || '');
 const selectedJobTitle = ref<string>(props.filters.job_title || '');
@@ -195,9 +196,63 @@ const selectedEmploymentStatus = ref<string>(props.filters.employment_status || 
 const selectedSalaryGrade = ref<string>(props.filters.salary_grade || '');
 const searchQuery = ref<string>(props.filters.search || '');
 
+// Client-side table search (filters displayed rows)
+const tableSearch = ref<string>('');
+
+// Table data ref - holds current table payload (same shape as props.employees)
+// Initialized from props.employees and kept in sync
+const tableData = ref<PaginatedData>(props.employees);
+
+// API endpoint constant
+const EMPLOYEE_LISTING_API = '/api/reports/employee-listing';
+
+// Loading state for table operations
+const isLoading = ref(false);
+
+// Watch props.employees to sync tableData when filters change (Inertia updates)
+watch(
+    () => props.employees,
+    (newEmployees) => {
+        tableData.value = newEmployees;
+    },
+    { deep: true },
+);
+
+// Pagination meta for DataTable
+const paginationMeta = computed<PaginationMeta>(() => ({
+    data: tableData.value.data,
+    current_page: tableData.value.current_page,
+    last_page: tableData.value.last_page,
+    per_page: tableData.value.per_page,
+    total: tableData.value.total,
+    from: tableData.value.from,
+    to: tableData.value.to,
+    links: tableData.value.links,
+}));
+
+// Empty message for DataTable
+const emptyMessage = computed(() => {
+    if (tableSearch.value || searchQuery.value) {
+        return `No employees found matching "${tableSearch.value || searchQuery.value}"`;
+    }
+    return 'No employees found matching your criteria';
+});
+
 // Dropdown states for "others" records
 const showEmploymentStatusOthers = ref(false);
 const showSchoolOthers = ref(false);
+
+// Accordion state - track which employee row is expanded
+const expandedRow = ref<number | null>(null);
+
+// Toggle accordion row
+const toggleRow = (hrid: number) => {
+    if (expandedRow.value === hrid) {
+        expandedRow.value = null;
+    } else {
+        expandedRow.value = hrid;
+    }
+};
 
 // Track hidden items (items unchecked will be hidden from chart)
 // Initialize with all items beyond top 5 hidden by default
@@ -232,6 +287,67 @@ watch(
     { deep: true },
 );
 
+// Debounced search - auto-search as user types (for filter section)
+const debouncedSearch = useDebounceFn(() => {
+    applyFilters();
+}, 500);
+
+// Watch searchQuery for dynamic search (filter section)
+watch(searchQuery, () => {
+    debouncedSearch();
+});
+
+// Dynamic table search via JSON API (server-side)
+const searchTableViaAPI = useDebounceFn(async () => {
+    isLoading.value = true;
+    try {
+        const queryParams = new URLSearchParams();
+        
+        // Add all current filters
+        if (props.filters.school) queryParams.append('school', props.filters.school);
+        if (props.filters.job_title) queryParams.append('job_title', props.filters.job_title);
+        if (props.filters.subject) queryParams.append('subject', props.filters.subject);
+        if (props.filters.grade_level) queryParams.append('grade_level', props.filters.grade_level);
+        if (props.filters.employment_status) queryParams.append('employment_status', props.filters.employment_status);
+        if (props.filters.salary_grade) queryParams.append('salary_grade', props.filters.salary_grade);
+        
+        // Add table search
+        if (tableSearch.value.trim()) {
+            queryParams.append('search', tableSearch.value.trim());
+        }
+        
+        queryParams.append('page', '1'); // Reset to first page on search
+        queryParams.append('per_page', tableData.value.per_page.toString());
+        
+        const apiUrl = `${EMPLOYEE_LISTING_API}?${queryParams.toString()}`;
+        
+        const response = await fetch(apiUrl, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            credentials: 'same-origin',
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            tableData.value = data;
+        } else {
+            console.error('Search failed:', response.statusText);
+        }
+    } catch (error) {
+        console.error('Search error:', error);
+    } finally {
+        isLoading.value = false;
+    }
+}, 500);
+
+// Watch tableSearch for dynamic server-side search
+watch(tableSearch, () => {
+    searchTableViaAPI();
+});
+
 // Methods to toggle item visibility
 const toggleEmploymentStatusVisibility = (label: string) => {
     const index = hiddenEmploymentStatus.value.indexOf(label);
@@ -256,6 +372,11 @@ const fullName = (emp: Employee) => {
     const parts = [emp.firstname, emp.middlename, emp.lastname, emp.extension].filter(Boolean);
     return parts.join(' ');
 };
+
+// Use tableData directly (server-side filtering via API)
+const filteredEmployees = computed(() => {
+    return tableData.value.data;
+});
 
 const chartDataSafe = computed(() => ({
     employmentStatus: {
@@ -410,6 +531,125 @@ const clearFilters = () => {
     applyFilters();
 };
 
+const employeeColumns: DataTableColumn[] = [
+    { key: 'hrid', label: 'HRID', width: '5rem' },
+    { key: 'employee_id', label: 'Employee ID', width: '7rem' },
+    { key: 'firstname', label: 'Name', slot: 'name', class: 'ehris-col-name', width: '20rem' },
+    { key: 'arrow', label: '', width: '3rem' },
+    { key: 'job_title', label: 'Job Title', slot: 'job_title', class: 'ehris-col-job', width: '15rem' },
+    { key: 'employ_status', label: 'Status', slot: 'employ_status', width: '10rem' },
+    { key: 'leave_balance', label: 'Leave Balance', class: 'ehris-col-leave', slot: 'leave_balance', width: '9rem' },
+];
+
+const changePage = async (url: string | null) => {
+    if (!url) return;
+    
+    isLoading.value = true;
+    try {
+        // Build API URL from pagination URL
+        const apiUrl = new URL(url, window.location.origin);
+        apiUrl.pathname = EMPLOYEE_LISTING_API;
+        
+        const response = await fetch(apiUrl.toString(), {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            credentials: 'same-origin',
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            tableData.value = data;
+        } else {
+            // Fallback to Inertia on error
+            router.get(url, {}, {
+                only: ['employees'],
+                preserveState: true,
+                preserveScroll: true,
+            });
+        }
+    } catch (error) {
+        console.error('Failed to fetch page:', error);
+        // Fallback to Inertia on fetch error
+        router.get(url, {}, {
+            only: ['employees'],
+            preserveState: true,
+            preserveScroll: true,
+        });
+    } finally {
+        isLoading.value = false;
+    }
+};
+
+const changePerPage = async (perPage: number) => {
+    isLoading.value = true;
+    try {
+        // Build query string with current filters and new per_page
+        const queryParams = new URLSearchParams();
+        
+        if (props.filters.school) queryParams.append('school', props.filters.school);
+        if (props.filters.job_title) queryParams.append('job_title', props.filters.job_title);
+        if (props.filters.subject) queryParams.append('subject', props.filters.subject);
+        if (props.filters.grade_level) queryParams.append('grade_level', props.filters.grade_level);
+        if (props.filters.employment_status) queryParams.append('employment_status', props.filters.employment_status);
+        if (props.filters.salary_grade) queryParams.append('salary_grade', props.filters.salary_grade);
+        if (props.filters.search) queryParams.append('search', props.filters.search);
+        if (tableSearch.value.trim()) queryParams.append('search', tableSearch.value.trim());
+        
+        queryParams.append('page', '1'); // Reset to first page
+        queryParams.append('per_page', perPage.toString());
+        
+        const apiUrl = `${EMPLOYEE_LISTING_API}?${queryParams.toString()}`;
+        
+        const response = await fetch(apiUrl, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            credentials: 'same-origin',
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            tableData.value = data;
+        } else {
+            // Fallback to Inertia on error
+            router.get(
+                employeeListing().url,
+                {
+                    ...props.filters,
+                    per_page: perPage,
+                },
+                {
+                    only: ['employees'],
+                    preserveState: true,
+                    preserveScroll: true,
+                },
+            );
+        }
+    } catch (error) {
+        console.error('Failed to change per page:', error);
+        // Fallback to Inertia on fetch error
+        router.get(
+            employeeListing().url,
+            {
+                ...props.filters,
+                per_page: perPage,
+            },
+            {
+                only: ['employees'],
+                preserveState: true,
+                preserveScroll: true,
+            },
+        );
+    } finally {
+        isLoading.value = false;
+    }
+};
+
 // Helper function to clean HTML entities from pagination labels
 const cleanPaginationLabel = (label: string): string => {
     return label
@@ -426,37 +666,55 @@ const isNavigationLink = (label: string): boolean => {
     return cleaned === 'previous' || cleaned === 'next';
 };
 
-const changePage = (url: string | null) => {
-    if (url) {
-        router.get(url, {}, { 
-            preserveState: false, // Don't preserve state to ensure fresh data
-            preserveScroll: false, // Don't preserve scroll position
-            replace: false, // Allow browser history
+const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
+    // Build query string from current filters
+    const queryParams = new URLSearchParams();
+    
+    if (props.filters.school) {
+        queryParams.append('school', props.filters.school);
+    }
+    if (props.filters.job_title) {
+        queryParams.append('job_title', props.filters.job_title);
+    }
+    if (props.filters.subject) {
+        queryParams.append('subject', props.filters.subject);
+    }
+    if (props.filters.grade_level) {
+        queryParams.append('grade_level', props.filters.grade_level);
+    }
+    if (props.filters.employment_status) {
+        queryParams.append('employment_status', props.filters.employment_status);
+    }
+    if (props.filters.salary_grade) {
+        queryParams.append('salary_grade', props.filters.salary_grade);
+    }
+    if (props.filters.search) {
+        queryParams.append('search', props.filters.search);
+    }
+    
+    const queryString = queryParams.toString();
+    const baseUrl = window.location.origin;
+    
+    if (format === 'csv') {
+        const url = `${baseUrl}/reports/employee-listing/export/csv${queryString ? `?${queryString}` : ''}`;
+        window.open(url, '_blank');
+    } else if (format === 'excel') {
+        const url = `${baseUrl}/reports/employee-listing/export/excel${queryString ? `?${queryString}` : ''}`;
+        window.open(url, '_blank');
+    } else if (format === 'pdf') {
+        // For print, use Inertia to navigate to print view
+        const url = `/reports/employee-listing/export/print${queryString ? `?${queryString}` : ''}`;
+        router.visit(url, {
+            preserveState: false,
+            preserveScroll: false,
             onSuccess: () => {
-                // Re-initialize hidden items after new data loads
-                initializeHiddenItems();
+                // Trigger print dialog after page loads
+                setTimeout(() => {
+                    window.print();
+                }, 500);
             },
         });
     }
-};
-
-const changePerPage = (perPage: number) => {
-    router.get(
-        employeeListing().url,
-        {
-            ...props.filters,
-            per_page: perPage,
-        },
-        {
-            preserveState: true,
-            preserveScroll: true,
-        },
-    );
-};
-
-const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
-    // TODO: Implement export functionality
-    console.log(`Exporting as ${format}`);
 };
 </script>
 
@@ -464,9 +722,9 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
     <Head :title="pageTitle" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
-        <div class="ehris-page">
+        <div class="p-6 flex flex-col gap-6">
             <!-- Page Header -->
-            <section class="ehris-card">
+            <section class="border border-border rounded-lg bg-white p-6 shadow-sm">
                 <div class="mb-4">
                     <h1 class="text-3xl font-bold">{{ pageTitle }}</h1>
                     <p class="text-muted-foreground mt-1">
@@ -477,8 +735,266 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                 </div>
             </section>
 
+            <!-- Charts Section -->
+            <section class="border border-border rounded-lg bg-white p-6 shadow-sm">
+                <div class="mb-4">
+                    <h2 class="text-xl font-semibold">Analytics & Reports</h2>
+                    <p class="text-sm text-muted-foreground mt-1">
+                        Visual insights into employee distribution and statistics.
+                    </p>
+                </div>
+
+                <!-- Charts -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 items-start">
+                    <div class="rounded-lg border p-4 bg-white">
+                        <h3 class="text-sm font-semibold text-muted-foreground mb-3">Employment Status</h3>
+                        <div class="h-[240px]">
+                            <Doughnut
+                                v-if="employmentStatusChartData.labels.length"
+                                :key="`employment-${hiddenEmploymentStatus.length}-${employmentStatusChartData.labels.length}`"
+                                :data="employmentStatusChartData"
+                                :options="doughnutOptions"
+                            />
+                            <div
+                                v-else
+                                class="h-full flex items-center justify-center text-muted-foreground text-sm"
+                            >
+                                No data
+                            </div>
+                        </div>
+                        <!-- Custom Legend: Top 5 + Display -->
+                        <div class="mt-4">
+                            <div class="flex flex-wrap gap-3 items-center mb-2">
+                                <template
+                                    v-for="item in chartDataSafe.employmentStatus.legend"
+                                    :key="item.label"
+                                >
+                                    <div class="flex items-center gap-2">
+                                        <div
+                                            class="w-4 h-4 rounded"
+                                            :style="{
+                                                backgroundColor: getColors(
+                                                    chartDataSafe.employmentStatus.chart.length,
+                                                )[chartDataSafe.employmentStatus.chart.findIndex(
+                                                    (c) => c.label === item.label,
+                                                )],
+                                            }"
+                                        ></div>
+                                        <span class="text-xs text-muted-foreground">{{ item.label }}</span>
+                                    </div>
+                                </template>
+                                <button
+                                    v-if="chartDataSafe.employmentStatus.chart.length > 4 || chartDataSafe.employmentStatus.others.length > 0"
+                                    @click="showEmploymentStatusOthers = !showEmploymentStatusOthers"
+                                    class="flex items-center gap-2 px-2 py-1 rounded border border-border bg-background hover:bg-muted/50 text-xs font-medium text-foreground hover:text-primary transition-colors"
+                                >
+                                    <span>Others ({{ chartDataSafe.employmentStatus.others.length || chartDataSafe.employmentStatus.chart.length - 4 }})</span>
+                                    <span class="text-xs">{{ showEmploymentStatusOthers ? '▼' : '▶' }}</span>
+                                </button>
+                            </div>
+                            <!-- Display Dropdown - Show ALL items -->
+                            <transition
+                                enter-active-class="transition-all duration-300 ease-out"
+                                enter-from-class="opacity-0 max-h-0 overflow-hidden"
+                                enter-to-class="opacity-100"
+                                leave-active-class="transition-all duration-300 ease-in"
+                                leave-from-class="opacity-100"
+                                leave-to-class="opacity-0 max-h-0 overflow-hidden"
+                            >
+                                <div
+                                    v-if="showEmploymentStatusOthers && chartDataSafe.employmentStatus.chart.length > 0"
+                                    class="mt-2 max-h-48 overflow-y-auto overflow-x-hidden border rounded-md bg-white"
+                                    style="max-height: 12rem;"
+                                >
+                                <table class="w-full text-sm" style="table-layout: fixed;">
+                                    <thead class="sticky top-0 z-20 bg-white border-b">
+                                        <tr>
+                                            <th class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground whitespace-nowrap" style="width: 3rem; min-width: 3rem;">
+                                                Show
+                                            </th>
+                                            <th class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground whitespace-nowrap" style="width: 4rem; min-width: 4rem;">
+                                                Color
+                                            </th>
+                                            <th class="px-3 py-2 text-left text-xs font-semibold text-muted-foreground whitespace-nowrap" style="min-width: 8rem;">
+                                                Status
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr
+                                            v-for="item in chartDataSafe.employmentStatus.chart"
+                                            :key="item.label"
+                                            class="border-b hover:bg-muted/30"
+                                            :class="{
+                                                'opacity-50': hiddenEmploymentStatus.includes(item.label),
+                                            }"
+                                        >
+                                            <td class="px-3 py-2 text-center" style="width: 3rem; min-width: 3rem;">
+                                                <input
+                                                    type="checkbox"
+                                                    :checked="!hiddenEmploymentStatus.includes(item.label)"
+                                                    @change="toggleEmploymentStatusVisibility(item.label)"
+                                                    class="w-4 h-4 rounded border-input cursor-pointer"
+                                                />
+                                            </td>
+                                            <td class="px-3 py-2 text-center" style="width: 4rem; min-width: 4rem;">
+                                                <div
+                                                    class="w-4 h-4 rounded mx-auto"
+                                                    :style="{
+                                                        backgroundColor: getColors(
+                                                            chartDataSafe.employmentStatus.chart.length,
+                                                        )[
+                                                            chartDataSafe.employmentStatus.chart.findIndex(
+                                                                (c) => c.label === item.label,
+                                                            )
+                                                        ],
+                                                    }"
+                                                ></div>
+                                            </td>
+                                            <td class="px-3 py-2" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ item.label }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                                </div>
+                            </transition>
+                        </div>
+                    </div>
+                    <div class="rounded-lg border p-4 bg-white">
+                        <h3 class="text-sm font-semibold text-muted-foreground mb-3">By School/Office</h3>
+                        <div class="h-[240px]">
+                            <Doughnut
+                                v-if="schoolChartData.labels.length"
+                                :key="`school-${hiddenSchools.length}-${schoolChartData.labels.length}`"
+                                :data="schoolChartData"
+                                :options="doughnutOptions"
+                            />
+                            <div
+                                v-else
+                                class="h-full flex items-center justify-center text-muted-foreground text-sm"
+                            >
+                                No data
+                            </div>
+                        </div>
+                        <!-- Custom Legend: Top 5 + Display -->
+                        <div class="mt-4">
+                            <div class="flex flex-wrap gap-3 items-center mb-2">
+                                <template
+                                    v-for="item in chartDataSafe.school.legend"
+                                    :key="item.label"
+                                >
+                                    <div class="flex items-center gap-2">
+                                        <div
+                                            class="w-4 h-4 rounded"
+                                            :style="{
+                                                backgroundColor: getColors(
+                                                    chartDataSafe.school.chart.length,
+                                                )[chartDataSafe.school.chart.findIndex(
+                                                    (c) => c.label === item.label,
+                                                )],
+                                            }"
+                                        ></div>
+                                        <span class="text-xs text-muted-foreground">{{ item.label }}</span>
+                                    </div>
+                                </template>
+                                <button
+                                    v-if="chartDataSafe.school.chart.length > 4 || chartDataSafe.school.others.length > 0"
+                                    @click="showSchoolOthers = !showSchoolOthers"
+                                    class="flex items-center gap-2 px-2 py-1 rounded border border-border bg-background hover:bg-muted/50 text-xs font-medium text-foreground hover:text-primary transition-colors"
+                                >
+                                    <span>Others ({{ chartDataSafe.school.others.length || chartDataSafe.school.chart.length - 4 }})</span>
+                                    <span class="text-xs">{{ showSchoolOthers ? '▼' : '▶' }}</span>
+                                </button>
+                            </div>
+                            <!-- Display Dropdown - Show ALL items -->
+                            <transition
+                                enter-active-class="transition-all duration-300 ease-out"
+                                enter-from-class="opacity-0 max-h-0 overflow-hidden"
+                                enter-to-class="opacity-100"
+                                leave-active-class="transition-all duration-300 ease-in"
+                                leave-from-class="opacity-100"
+                                leave-to-class="opacity-0 max-h-0 overflow-hidden"
+                            >
+                                <div
+                                    v-if="showSchoolOthers && chartDataSafe.school.chart.length > 0"
+                                    class="mt-2 max-h-48 overflow-y-auto overflow-x-hidden border rounded-md bg-white"
+                                    style="max-height: 12rem;"
+                                >
+                                <table class="w-full text-sm" style="table-layout: fixed;">
+                                    <thead class="sticky top-0 z-20 bg-white border-b">
+                                        <tr>
+                                            <th class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground whitespace-nowrap" style="width: 3rem; min-width: 3rem;">
+                                                Show
+                                            </th>
+                                            <th class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground whitespace-nowrap" style="width: 4rem; min-width: 4rem;">
+                                                Color
+                                            </th>
+                                            <th class="px-3 py-2 text-left text-xs font-semibold text-muted-foreground whitespace-nowrap" style="min-width: 8rem;">
+                                                School/Office
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr
+                                            v-for="item in chartDataSafe.school.chart"
+                                            :key="item.label"
+                                            class="border-b hover:bg-muted/30"
+                                            :class="{
+                                                'opacity-50': hiddenSchools.includes(item.label),
+                                            }"
+                                        >
+                                            <td class="px-3 py-2 text-center" style="width: 3rem; min-width: 3rem;">
+                                                <input
+                                                    type="checkbox"
+                                                    :checked="!hiddenSchools.includes(item.label)"
+                                                    @change="toggleSchoolVisibility(item.label)"
+                                                    class="w-4 h-4 rounded border-input cursor-pointer"
+                                                />
+                                            </td>
+                                            <td class="px-3 py-2 text-center" style="width: 4rem; min-width: 4rem;">
+                                                <div
+                                                    class="w-4 h-4 rounded mx-auto"
+                                                    :style="{
+                                                        backgroundColor: getColors(
+                                                            chartDataSafe.school.chart.length,
+                                                        )[
+                                                            chartDataSafe.school.chart.findIndex(
+                                                                (c) => c.label === item.label,
+                                                            )
+                                                        ],
+                                                    }"
+                                                ></div>
+                                            </td>
+                                            <td class="px-3 py-2" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ item.label }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                                </div>
+                            </transition>
+                        </div>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 gap-6 mb-6">
+                    <div class="rounded-lg border p-4 bg-white">
+                        <h3 class="text-sm font-semibold text-muted-foreground mb-3">Count per Job Title (top 10)</h3>
+                        <div class="h-[320px]">
+                            <Bar
+                                v-if="jobTitleChartData.labels.length"
+                                :data="jobTitleChartData"
+                                :options="barOptions"
+                            />
+                            <div
+                                v-else
+                                class="h-full flex items-center justify-center text-muted-foreground text-sm"
+                            >
+                                No data
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <!-- Filter Section -->
-            <section class="ehris-card">
+            <section class="border border-border rounded-lg bg-white p-6 shadow-sm">
                 <div class="flex items-center justify-between mb-4">
                     <div>
                         <h2 class="text-xl font-semibold flex items-center gap-2">
@@ -590,35 +1106,15 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                         </select>
                     </div>
                 </div>
-
-                <!-- Search and Action Buttons -->
-                <div class="flex items-end gap-4">
-                    <div class="flex-1 space-y-2">
-                        <Label>Search Employee</Label>
-                        <div class="relative">
-                            <Search class="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                v-model="searchQuery"
-                                @keyup.enter="applyFilters"
-                                placeholder="Search by name or employee ID..."
-                                class="pl-10 bg-white"
-                            />
-                        </div>
-                    </div>
-                    <Button @click="applyFilters" class="min-w-[140px]">
-                        <Search class="mr-2 h-4 w-4" />
-                        Search Employees
-                    </Button>
-                </div>
             </section>
 
             <!-- Report Results Section -->
-            <section class="ehris-card">
+            <section class="border border-border rounded-lg bg-white p-6 shadow-sm">
                 <div class="flex items-center justify-between mb-4">
                     <div>
                         <h2 class="text-xl font-semibold">Employee Listing Results</h2>
                         <p class="text-sm text-muted-foreground mt-1">
-                            Showing {{ employees.from }} to {{ employees.to }} of {{ employees.total }} records
+                            Showing {{ tableData.from }} to {{ tableData.to }} of {{ tableData.total }} records
                         </p>
                     </div>
                     <div class="flex gap-2">
@@ -653,369 +1149,134 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                     </div>
                 </div>
 
-                <!-- Charts -->
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 items-start">
-                    <div class="rounded-lg border p-4 bg-white">
-                        <h3 class="text-sm font-semibold text-muted-foreground mb-3">Employment Status</h3>
-                        <div class="h-[240px]">
-                            <Doughnut
-                                v-if="employmentStatusChartData.labels.length"
-                                :key="`employment-${hiddenEmploymentStatus.length}-${employmentStatusChartData.labels.length}`"
-                                :data="employmentStatusChartData"
-                                :options="doughnutOptions"
-                            />
-                            <div
-                                v-else
-                                class="h-full flex items-center justify-center text-muted-foreground text-sm"
-                            >
-                                No data
-                            </div>
-                        </div>
-                        <!-- Custom Legend: Top 5 + Display -->
-                        <div class="mt-4">
-                            <div class="flex flex-wrap gap-3 items-center mb-2">
-                                <template
-                                    v-for="(item, index) in chartDataSafe.employmentStatus.legend"
-                                    :key="item.label"
-                                >
-                                    <div class="flex items-center gap-2">
-                                        <div
-                                            class="w-4 h-4 rounded"
-                                            :style="{
-                                                backgroundColor: getColors(
-                                                    chartDataSafe.employmentStatus.chart.length,
-                                                )[chartDataSafe.employmentStatus.chart.findIndex(
-                                                    (c) => c.label === item.label,
-                                                )],
-                                            }"
-                                        ></div>
-                                        <span class="text-xs text-muted-foreground">{{ item.label }}</span>
-                                    </div>
-                                </template>
-                                <button
-                                    v-if="chartDataSafe.employmentStatus.chart.length > 4 || chartDataSafe.employmentStatus.others.length > 0"
-                                    @click="showEmploymentStatusOthers = !showEmploymentStatusOthers"
-                                    class="flex items-center gap-2 px-2 py-1 rounded border border-border bg-background hover:bg-muted/50 text-xs font-medium text-foreground hover:text-primary transition-colors"
-                                >
-                                    <span>Others ({{ chartDataSafe.employmentStatus.others.length || chartDataSafe.employmentStatus.chart.length - 4 }})</span>
-                                    <span class="text-xs">{{ showEmploymentStatusOthers ? '▼' : '▶' }}</span>
-                                </button>
-                            </div>
-                            <!-- Display Dropdown - Show ALL items -->
-                            <transition
-                                enter-active-class="transition-all duration-300 ease-out"
-                                enter-from-class="opacity-0 max-h-0 overflow-hidden"
-                                enter-to-class="opacity-100"
-                                leave-active-class="transition-all duration-300 ease-in"
-                                leave-from-class="opacity-100"
-                                leave-to-class="opacity-0 max-h-0 overflow-hidden"
-                            >
-                                <div
-                                    v-if="showEmploymentStatusOthers && chartDataSafe.employmentStatus.chart.length > 0"
-                                    class="mt-2 max-h-48 overflow-y-auto overflow-x-hidden border rounded-md bg-white"
-                                    style="max-height: 12rem;"
-                                >
-                                <table class="w-full text-sm" style="table-layout: fixed;">
-                                    <thead class="sticky top-0 z-20 bg-white border-b">
-                                        <tr>
-                                            <th class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground whitespace-nowrap" style="width: 3rem; min-width: 3rem;">
-                                                Show
-                                            </th>
-                                            <th class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground whitespace-nowrap" style="width: 4rem; min-width: 4rem;">
-                                                Color
-                                            </th>
-                                            <th class="px-3 py-2 text-left text-xs font-semibold text-muted-foreground whitespace-nowrap" style="min-width: 8rem;">
-                                                Status
-                                            </th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr
-                                            v-for="(item, index) in chartDataSafe.employmentStatus.chart"
-                                            :key="item.label"
-                                            class="border-b hover:bg-muted/30"
-                                            :class="{
-                                                'opacity-50': hiddenEmploymentStatus.includes(item.label),
-                                            }"
-                                        >
-                                            <td class="px-3 py-2 text-center" style="width: 3rem; min-width: 3rem;">
-                                                <input
-                                                    type="checkbox"
-                                                    :checked="!hiddenEmploymentStatus.includes(item.label)"
-                                                    @change="toggleEmploymentStatusVisibility(item.label)"
-                                                    class="w-4 h-4 rounded border-input cursor-pointer"
-                                                />
-                                            </td>
-                                            <td class="px-3 py-2 text-center" style="width: 4rem; min-width: 4rem;">
-                                                <div
-                                                    class="w-4 h-4 rounded mx-auto"
-                                                    :style="{
-                                                        backgroundColor: getColors(
-                                                            chartDataSafe.employmentStatus.chart.length,
-                                                        )[
-                                                            chartDataSafe.employmentStatus.chart.findIndex(
-                                                                (c) => c.label === item.label,
-                                                            )
-                                                        ],
-                                                    }"
-                                                ></div>
-                                            </td>
-                                            <td class="px-3 py-2" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ item.label }}</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                                </div>
-                            </transition>
-                        </div>
-                    </div>
-                    <div class="rounded-lg border p-4 bg-white">
-                        <h3 class="text-sm font-semibold text-muted-foreground mb-3">By School/Office</h3>
-                        <div class="h-[240px]">
-                            <Doughnut
-                                v-if="schoolChartData.labels.length"
-                                :key="`school-${hiddenSchools.length}-${schoolChartData.labels.length}`"
-                                :data="schoolChartData"
-                                :options="doughnutOptions"
-                            />
-                            <div
-                                v-else
-                                class="h-full flex items-center justify-center text-muted-foreground text-sm"
-                            >
-                                No data
-                            </div>
-                        </div>
-                        <!-- Custom Legend: Top 5 + Display -->
-                        <div class="mt-4">
-                            <div class="flex flex-wrap gap-3 items-center mb-2">
-                                <template
-                                    v-for="(item, index) in chartDataSafe.school.legend"
-                                    :key="item.label"
-                                >
-                                    <div class="flex items-center gap-2">
-                                        <div
-                                            class="w-4 h-4 rounded"
-                                            :style="{
-                                                backgroundColor: getColors(
-                                                    chartDataSafe.school.chart.length,
-                                                )[chartDataSafe.school.chart.findIndex(
-                                                    (c) => c.label === item.label,
-                                                )],
-                                            }"
-                                        ></div>
-                                        <span class="text-xs text-muted-foreground">{{ item.label }}</span>
-                                    </div>
-                                </template>
-                                <button
-                                    v-if="chartDataSafe.school.chart.length > 4 || chartDataSafe.school.others.length > 0"
-                                    @click="showSchoolOthers = !showSchoolOthers"
-                                    class="flex items-center gap-2 px-2 py-1 rounded border border-border bg-background hover:bg-muted/50 text-xs font-medium text-foreground hover:text-primary transition-colors"
-                                >
-                                    <span>Others ({{ chartDataSafe.school.others.length || chartDataSafe.school.chart.length - 4 }})</span>
-                                    <span class="text-xs">{{ showSchoolOthers ? '▼' : '▶' }}</span>
-                                </button>
-                            </div>
-                            <!-- Display Dropdown - Show ALL items -->
-                            <transition
-                                enter-active-class="transition-all duration-300 ease-out"
-                                enter-from-class="opacity-0 max-h-0 overflow-hidden"
-                                enter-to-class="opacity-100"
-                                leave-active-class="transition-all duration-300 ease-in"
-                                leave-from-class="opacity-100"
-                                leave-to-class="opacity-0 max-h-0 overflow-hidden"
-                            >
-                                <div
-                                    v-if="showSchoolOthers && chartDataSafe.school.chart.length > 0"
-                                    class="mt-2 max-h-48 overflow-y-auto overflow-x-hidden border rounded-md bg-white"
-                                    style="max-height: 12rem;"
-                                >
-                                <table class="w-full text-sm" style="table-layout: fixed;">
-                                    <thead class="sticky top-0 z-20 bg-white border-b">
-                                        <tr>
-                                            <th class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground whitespace-nowrap" style="width: 3rem; min-width: 3rem;">
-                                                Show
-                                            </th>
-                                            <th class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground whitespace-nowrap" style="width: 4rem; min-width: 4rem;">
-                                                Color
-                                            </th>
-                                            <th class="px-3 py-2 text-left text-xs font-semibold text-muted-foreground whitespace-nowrap" style="min-width: 8rem;">
-                                                School/Office
-                                            </th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr
-                                            v-for="(item, index) in chartDataSafe.school.chart"
-                                            :key="item.label"
-                                            class="border-b hover:bg-muted/30"
-                                            :class="{
-                                                'opacity-50': hiddenSchools.includes(item.label),
-                                            }"
-                                        >
-                                            <td class="px-3 py-2 text-center" style="width: 3rem; min-width: 3rem;">
-                                                <input
-                                                    type="checkbox"
-                                                    :checked="!hiddenSchools.includes(item.label)"
-                                                    @change="toggleSchoolVisibility(item.label)"
-                                                    class="w-4 h-4 rounded border-input cursor-pointer"
-                                                />
-                                            </td>
-                                            <td class="px-3 py-2 text-center" style="width: 4rem; min-width: 4rem;">
-                                                <div
-                                                    class="w-4 h-4 rounded mx-auto"
-                                                    :style="{
-                                                        backgroundColor: getColors(
-                                                            chartDataSafe.school.chart.length,
-                                                        )[
-                                                            chartDataSafe.school.chart.findIndex(
-                                                                (c) => c.label === item.label,
-                                                            )
-                                                        ],
-                                                    }"
-                                                ></div>
-                                            </td>
-                                            <td class="px-3 py-2" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ item.label }}</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                                </div>
-                            </transition>
-                        </div>
-                    </div>
-                </div>
-                <div class="grid grid-cols-1 gap-6 mb-6">
-                    <div class="rounded-lg border p-4 bg-white">
-                        <h3 class="text-sm font-semibold text-muted-foreground mb-3">Count per Job Title (top 10)</h3>
-                        <div class="h-[320px]">
-                            <Bar
-                                v-if="jobTitleChartData.labels.length"
-                                :data="jobTitleChartData"
-                                :options="barOptions"
-                            />
-                            <div
-                                v-else
-                                class="h-full flex items-center justify-center text-muted-foreground text-sm"
-                            >
-                                No data
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- Data Table -->
                 <div class="rounded-md border overflow-x-auto w-full">
-                    <table class="ehris-employee-table w-full border-collapse" style="min-width: 1200px;">
-                        <thead class="bg-muted/50">
-                            <tr>
-                                <th class="ehris-th">HRID</th>
-                                <th class="ehris-th">Employee ID</th>
-                                <th class="ehris-th ehris-col-name">Name</th>
-                                <th class="ehris-th ehris-col-job">Job Title</th>
-                                <th class="ehris-th ehris-col-subject">Subject</th>
-                                <th class="ehris-th">Grade Level</th>
-                                <th class="ehris-th ehris-col-office">School/Office</th>
-                                <th class="ehris-th">Station Code</th>
-                                <th class="ehris-th">Salary Grade</th>
-                                <th class="ehris-th">Salary Step</th>
-                                <th class="ehris-th">Status</th>
-                                <th class="ehris-th ehris-col-leave">Leave Balance</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr
-                                v-for="employee in employees.data"
-                                :key="employee.hrid"
-                                class="hover:bg-muted/50 border-b"
-                            >
-                                <td class="ehris-td whitespace-nowrap">{{ employee.hrid }}</td>
-                                <td class="ehris-td whitespace-nowrap">{{ employee.employee_id }}</td>
-                                <td class="ehris-td ehris-col-name" :title="fullName(employee)">{{ fullName(employee) }}</td>
-                                <td class="ehris-td ehris-col-job">
-                                    <Badge variant="outline" class="whitespace-nowrap max-w-full truncate inline-block">{{ employee.job_title || '-' }}</Badge>
-                                </td>
-                                <td class="ehris-td ehris-col-subject" :title="employee.subject_taught || ''">{{ employee.subject_taught || '-' }}</td>
-                                <td class="ehris-td whitespace-nowrap">{{ employee.grade_level || '-' }}</td>
-                                <td class="ehris-td ehris-col-office" :title="employee.office || ''">{{ employee.office || '-' }}</td>
-                                <td class="ehris-td whitespace-nowrap">{{ employee.station_code || '-' }}</td>
-                                <td class="ehris-td whitespace-nowrap">
-                                    {{ employee.salary_grade ? 'SG ' + employee.salary_grade : '-' }}
-                                </td>
-                                <td class="ehris-td whitespace-nowrap">{{ employee.salary_step || '-' }}</td>
-                                <td class="ehris-td whitespace-nowrap">
-                                    <Badge
-                                        :variant="employee.employ_status === 'Permanent' ? 'default' : 'secondary'"
-                                    >
-                                        {{ employee.employ_status || '-' }}
-                                    </Badge>
-                                </td>
-                                <td class="ehris-td ehris-col-leave whitespace-nowrap">
-                                    <Badge
-                                        :variant="(employee.leave_balance || 0) < 5 ? 'destructive' : 'outline'"
-                                    >
-                                        {{ employee.leave_balance ?? 0 }} days
-                                    </Badge>
-                                </td>
-                            </tr>
-                            <tr v-if="employees.data.length === 0">
-                                <td colspan="12" class="px-4 py-8 text-center text-muted-foreground">
-                                    No employees found matching your criteria
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-
-                <!-- Pagination -->
-                <div class="flex items-center justify-between mt-4 pt-4 border-t">
-                    <div class="flex items-center gap-4">
-                        <div class="text-sm text-muted-foreground">
-                            Showing {{ employees.from }} to {{ employees.to }} of {{ employees.total }} results
-                        </div>
+                    <!-- Table Search -->
+                    <div class="p-4 border-b bg-muted/30">
                         <div class="flex items-center gap-2">
-                            <Label class="text-sm">Per page:</Label>
-                            <select
-                                :value="employees.per_page"
-                                @change="changePerPage(Number(($event.target as HTMLSelectElement).value))"
-                                class="rounded-md border border-input bg-background px-2 py-1 text-sm"
-                            >
-                                <option :value="10">10</option>
-                                <option :value="25">25</option>
-                                <option :value="50">50</option>
-                                <option :value="100">100</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="flex gap-2">
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            :disabled="employees.current_page === 1"
-                            @click="changePage(employees.links.find((l) => isNavigationLink(l.label) && cleanPaginationLabel(l.label).toLowerCase() === 'previous')?.url || null)"
-                        >
-                            <ChevronLeft class="h-4 w-4" />
-                            Previous
-                        </Button>
-                        <template v-for="(link, index) in pageNumberLinks" :key="index">
+                            <Search class="h-4 w-4 text-muted-foreground" />
+                            <Input
+                                v-model="tableSearch"
+                                placeholder="Search all records by name, ID, job title, or status (e.g., 'jean')..."
+                                class="max-w-sm"
+                            />
                             <Button
-                                v-if="!isNavigationLink(link.label)"
-                                variant="outline"
+                                v-if="tableSearch"
+                                variant="ghost"
                                 size="sm"
-                                :class="{ 'bg-primary text-primary-foreground': link.active }"
-                                :disabled="!link.url"
-                                @click="changePage(link.url)"
+                                @click="tableSearch = ''"
+                                class="text-muted-foreground hover:text-foreground"
                             >
-                                {{ cleanPaginationLabel(link.label) }}
+                                Clear
                             </Button>
-                        </template>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            :disabled="employees.current_page === employees.last_page"
-                            @click="changePage(employees.links.find((l) => isNavigationLink(l.label) && cleanPaginationLabel(l.label).toLowerCase() === 'next')?.url || null)"
-                        >
-                            Next
-                            <ChevronRight class="h-4 w-4" />
-                        </Button>
+                        </div>
+                        <p v-if="tableSearch" class="text-xs text-muted-foreground mt-2">
+                            Searching all records for "{{ tableSearch }}"... Showing {{ tableData.total }} results
+                        </p>
                     </div>
+                    
+                    <DataTable
+                        :columns="employeeColumns"
+                        :data="tableData.data"
+                        :pagination="paginationMeta"
+                        row-key="hrid"
+                        :loading="isLoading"
+                        :empty-message="emptyMessage"
+                        :is-row-expanded="(row) => expandedRow === (row as Employee).hrid"
+                        :on-row-click="(row) => toggleRow((row as Employee).hrid)"
+                        :row-class="(row) => expandedRow === (row as Employee).hrid ? 'bg-muted/30' : ''"
+                        :show-pagination-top="true"
+                        @page-change="changePage"
+                        @per-page-change="changePerPage"
+                    >
+                        <!-- HRID Column -->
+                        <template #cell-hrid="{ value }">
+                            <span class="whitespace-nowrap" style="font-size: 0.75rem;">{{ value }}</span>
+                        </template>
+                        
+                        <!-- Employee ID Column -->
+                        <template #cell-employee_id="{ value }">
+                            <span class="whitespace-nowrap" style="font-size: 0.75rem;">{{ value }}</span>
+                        </template>
+                        
+                        <!-- Name Column -->
+                        <template #cell-name="{ row }">
+                            <div class="flex items-center gap-2">
+                                <ChevronRight
+                                    class="h-4 w-4 text-muted-foreground transition-transform flex-shrink-0"
+                                    :class="expandedRow === (row as Employee).hrid ? 'rotate-90' : ''"
+                                />
+                                <span :title="fullName(row as Employee)">{{ fullName(row as Employee) }}</span>
+                            </div>
+                        </template>
+                        
+                        <!-- Arrow Column -->
+                        <template #cell-arrow="{ row }">
+                            <div class="text-center">
+                                <ChevronDown
+                                    v-if="expandedRow !== (row as Employee).hrid"
+                                    class="h-5 w-5 text-muted-foreground transition-transform mx-auto"
+                                />
+                                <ChevronUp
+                                    v-else
+                                    class="h-5 w-5 text-muted-foreground transition-transform mx-auto"
+                                />
+                            </div>
+                        </template>
+                        
+                        <!-- Job Title Column -->
+                        <template #cell-job_title="{ value }">
+                            <Badge variant="outline" class="whitespace-nowrap max-w-full truncate inline-block">
+                                {{ value || '-' }}
+                            </Badge>
+                        </template>
+                        
+                        <!-- Status Column -->
+                        <template #cell-employ_status="{ value }">
+                            <Badge :variant="value === 'Permanent' ? 'default' : 'secondary'">
+                                {{ value || '-' }}
+                            </Badge>
+                        </template>
+                        
+                        <!-- Leave Balance Column -->
+                        <template #cell-leave_balance="{ value }">
+                            <Badge :variant="((value as number) || 0) < 5 ? 'destructive' : 'outline'">
+                                {{ (value as number) ?? 0 }} days
+                            </Badge>
+                        </template>
+                        
+                        <!-- Accordion Content Slot -->
+                        <template #accordion="{ row }">
+                            <div class="bg-muted/30 p-6 border-t">
+                                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                                    <div class="space-y-1">
+                                        <div class="text-sm font-semibold text-muted-foreground">Subjects</div>
+                                        <div class="text-base font-normal">{{ (row as Employee).subject_taught || '-' }}</div>
+                                    </div>
+                                    <div class="space-y-1">
+                                        <div class="text-sm font-semibold text-muted-foreground">Grade Level</div>
+                                        <div class="text-base font-normal">{{ (row as Employee).grade_level || '-' }}</div>
+                                    </div>
+                                    <div class="space-y-1">
+                                        <div class="text-sm font-semibold text-muted-foreground">School/Office</div>
+                                        <div class="text-base font-normal">{{ (row as Employee).office || '-' }}</div>
+                                    </div>
+                                    <div class="space-y-1">
+                                        <div class="text-sm font-semibold text-muted-foreground">Station Code</div>
+                                        <div class="text-base font-normal">{{ (row as Employee).station_code || '-' }}</div>
+                                    </div>
+                                    <div class="space-y-1">
+                                        <div class="text-sm font-semibold text-muted-foreground">Salary Grade</div>
+                                        <div class="text-base font-normal">{{ (row as Employee).salary_grade ? 'SG ' + (row as Employee).salary_grade : '-' }}</div>
+                                    </div>
+                                    <div class="space-y-1">
+                                        <div class="text-sm font-semibold text-muted-foreground">Salary Step</div>
+                                        <div class="text-base font-normal">{{ (row as Employee).salary_step || '-' }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </DataTable>
                 </div>
             </section>
         </div>
@@ -1023,24 +1284,8 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
 </template>
 
 <style scoped>
-.ehris-page {
-    padding: 1.5rem;
-    display: flex;
-    flex-direction: column;
-    gap: 1.5rem;
-}
-
-.ehris-card {
-    border: 1px solid hsl(var(--border));
-    border-radius: 0.5rem;
-    background: white;
-    padding: 1.5rem;
-    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
-}
-
 .ehris-employee-table {
     table-layout: fixed;
-    min-width: 0;
     width: 100%;
 }
 
@@ -1052,78 +1297,75 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
 }
 
 .ehris-th {
-    padding: 0.375rem 0.5rem;
+    padding: 0.75rem 1rem;
     text-align: left;
-    font-size: 0.75rem;
+    font-size: 0.8125rem;
     font-weight: 600;
     color: hsl(var(--muted-foreground));
     border-bottom: 1px solid hsl(var(--border));
     white-space: nowrap;
+}
+
+.ehris-th:not(.ehris-col-name):not(.ehris-col-job):not(.ehris-col-leave) {
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
 .ehris-td {
-    padding: 0.375rem 0.5rem;
+    padding: 0.75rem 1rem;
     font-size: 0.875rem;
     overflow: hidden;
     text-overflow: ellipsis;
+    vertical-align: middle;
 }
 
-.ehris-td:not(.ehris-col-name):not(.ehris-col-job):not(.ehris-col-office):not(.ehris-col-subject) {
-    white-space: nowrap;
+/* Ensure consistent spacing for HRID and Employee ID columns */
+.ehris-employee-table th:nth-child(1),
+.ehris-employee-table td:nth-child(1) {
+    padding-right: 1.5rem;
+    min-width: 5rem;
+    width: 5rem;
+}
+
+.ehris-employee-table th:nth-child(2),
+.ehris-employee-table td:nth-child(2) {
+    padding-left: 1.5rem;
+    padding-right: 1rem;
+    min-width: 7rem;
+    width: 7rem;
 }
 
 .ehris-col-name {
-    max-width: 10rem;
-    min-width: 8rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    min-width: 12rem;
+    max-width: 20rem;
 }
 
 .ehris-col-job {
-    max-width: 9rem;
-    min-width: 6rem;
-}
-
-.ehris-col-office {
-    max-width: 10rem;
-    min-width: 7rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    min-width: 10rem;
+    max-width: 15rem;
 }
 
 .ehris-col-leave {
-    min-width: 5.5rem;
+    min-width: 9rem;
+    width: 9rem;
 }
 
-.ehris-col-subject {
-    max-width: 15rem;
-    min-width: 10rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
+.ehris-td:not(.ehris-col-name):not(.ehris-col-job):not(.ehris-col-leave) {
     white-space: nowrap;
 }
 
-/* Ensure table cells don't overflow - max-width: 0 allows fixed table layout to work properly */
-.ehris-employee-table td {
-    max-width: 0;
+.accordion-content-row {
+    animation: slideDown 0.2s ease-out;
 }
 
-.ehris-employee-table th {
-    max-width: 0;
-}
-
-.ehris-employee-table th.ehris-th,
-.ehris-employee-table td.ehris-td {
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.ehris-employee-table th.ehris-th:not(.ehris-col-name):not(.ehris-col-job):not(.ehris-col-office):not(.ehris-col-subject):not(.ehris-col-leave),
-.ehris-employee-table td.ehris-td:not(.ehris-col-name):not(.ehris-col-job):not(.ehris-col-office):not(.ehris-col-subject):not(.ehris-col-leave) {
-    white-space: nowrap;
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        max-height: 0;
+    }
+    to {
+        opacity: 1;
+        max-height: 500px;
+    }
 }
 </style>

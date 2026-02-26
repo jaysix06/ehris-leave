@@ -255,8 +255,8 @@ onMounted(() => {
 
 <template>
     <section class="ehris-card">
-        <div class="ehris-card-header">
-            <h3>II. Family Background</h3>
+        <div class="ehris-official-info-header">
+            <h3>Family information</h3>
             <button
                 type="button"
                 class="ehris-btn-grade-subject"
