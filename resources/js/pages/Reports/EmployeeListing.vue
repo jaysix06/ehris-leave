@@ -1122,25 +1122,6 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                     </div>
                 </div>
 
-                <!-- Search and Action Buttons -->
-                <div class="flex items-end gap-4 mb-6">
-                    <div class="flex-1 space-y-2">
-                        <Label>Search Employee</Label>
-                        <div class="relative">
-                            <Search class="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                v-model="searchQuery"
-                                placeholder="Search by name or employee ID (auto-searches as you type)..."
-                                class="pl-10 bg-white"
-                            />
-                        </div>
-                    </div>
-                    <Button @click="applyFilters" class="min-w-[140px]">
-                        <Search class="mr-2 h-4 w-4" />
-                        Search Employees
-                    </Button>
-                </div>
-
                 <!-- Summary Statistics -->
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                     <div class="rounded-lg border p-4 bg-white">
