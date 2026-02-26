@@ -989,21 +989,14 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                             variant="outline"
                             size="sm"
                             :disabled="employees.current_page === 1"
-<<<<<<< HEAD
-                            @click="changePage(prevLink?.url || null)"
-=======
                             @click="changePage(employees.links.find((l) => isNavigationLink(l.label) && cleanPaginationLabel(l.label).toLowerCase() === 'previous')?.url || null)"
->>>>>>> dbb08826040f7024b0897b31036502e28d7ac39e
                         >
                             <ChevronLeft class="h-4 w-4" />
                             Previous
                         </Button>
                         <template v-for="(link, index) in pageNumberLinks" :key="index">
                             <Button
-<<<<<<< HEAD
-=======
                                 v-if="!isNavigationLink(link.label)"
->>>>>>> dbb08826040f7024b0897b31036502e28d7ac39e
                                 variant="outline"
                                 size="sm"
                                 :class="{ 'bg-primary text-primary-foreground': link.active }"
@@ -1017,11 +1010,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                             variant="outline"
                             size="sm"
                             :disabled="employees.current_page === employees.last_page"
-<<<<<<< HEAD
-                            @click="changePage(nextLink?.url || null)"
-=======
                             @click="changePage(employees.links.find((l) => isNavigationLink(l.label) && cleanPaginationLabel(l.label).toLowerCase() === 'next')?.url || null)"
->>>>>>> dbb08826040f7024b0897b31036502e28d7ac39e
                         >
                             Next
                             <ChevronRight class="h-4 w-4" />
