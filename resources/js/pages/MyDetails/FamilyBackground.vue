@@ -59,7 +59,6 @@ const emptyParent = (): ParentFields => ({
 
 const props = defineProps<{
     family?: Record<string, unknown>[];
-    familyUpdateUrl?: string;
 }>();
 
 const isEditing = ref(false);
@@ -259,13 +258,12 @@ onMounted(() => {
         <div class="ehris-card-header">
             <h3>II. Family Background</h3>
             <button
-                v-if="canEdit && !isEditing"
                 type="button"
-                class="ehris-edit-btn"
-                aria-label="Edit family"
-                @click="openEdit"
+                class="ehris-btn-grade-subject"
+                aria-label="Edit family information"
             >
                 <Pencil class="size-4" />
+                <span>Edit</span>
             </button>
         </div>
 

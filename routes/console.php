@@ -81,3 +81,60 @@ Artisan::command('users:reset-legacy-g-hashes {password}', function (string $pas
 
     return self::SUCCESS;
 })->purpose('Reset legacy $G$ password hashes in tbl_user to Laravel bcrypt using a temporary password');
+
+Artisan::command('leave:forfeit-mandatory-vl {year?}', function (?string $year = null) {
+    if (! DB::getSchemaBuilder()->hasTable('tbl_request_leave') || ! DB::getSchemaBuilder()->hasTable('tbl_leave_history')) {
+        $this->error('Required leave tables are missing.');
+
+        return self::FAILURE;
+    }
+
+    $targetYear = (int) ($year ?: now()->format('Y'));
+    $processed = 0;
+
+    $hrids = DB::table('tbl_request_leave')
+        ->select('hrid')
+        ->whereNotNull('hrid')
+        ->groupBy('hrid')
+        ->pluck('hrid');
+
+    foreach ($hrids as $hrid) {
+        $usedMandatoryDays = (int) DB::table('tbl_request_leave')
+            ->where('hrid', $hrid)
+            ->whereYear('fdate', $targetYear)
+            ->whereIn('leave_type', ['Vacation Leave', 'Mandatory/Force Leave', 'Mandatory Leave', 'Forced Leave'])
+            ->sum('leave_count');
+
+        $forfeited = max(5 - $usedMandatoryDays, 0);
+        if ($forfeited <= 0) {
+            continue;
+        }
+
+        $alreadyExists = DB::table('tbl_leave_history')
+            ->where('hrid', $hrid)
+            ->where('type', 'Mandatory Leave Forfeiture')
+            ->whereYear('credits_from', $targetYear)
+            ->exists();
+
+        if ($alreadyExists) {
+            continue;
+        }
+
+        DB::table('tbl_leave_history')->insert([
+            'hrid' => $hrid,
+            'credits_from' => "{$targetYear}-01-01",
+            'credits_to' => "{$targetYear}-12-31",
+            'no_of_days' => (string) $forfeited,
+            'particulars' => 'Mandatory VL forfeiture',
+            'type' => 'Mandatory Leave Forfeiture',
+            'balance' => null,
+            'remarks' => "Unused mandatory VL forfeited for {$targetYear}",
+        ]);
+
+        $processed++;
+    }
+
+    $this->info("Processed forfeiture entries: {$processed}");
+
+    return self::SUCCESS;
+})->purpose('Compute and post year-end mandatory/forced VL forfeiture records');
