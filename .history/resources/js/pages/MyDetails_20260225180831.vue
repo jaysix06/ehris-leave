@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { Head, router, usePage } from '@inertiajs/vue3';
 import { echo } from '@laravel/echo-vue';
-import { Download, User } from 'lucide-vue-next';
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { User } from 'lucide-vue-next';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { BreadcrumbItem } from '@/types';
 import { useSidebar } from '@/components/ui/sidebar/utils';
@@ -90,11 +90,13 @@ const props = defineProps<{
 const page = usePage();
 const authUser = computed(() => page.props.auth.user);
 
-// Sidebar context may be unavailable during certain render timings.
+// Close mobile sidebar when page loads to prevent overlay from blocking clicks
+// Wrap in try-catch to handle cases where sidebar context might not be available
 let sidebarContext: ReturnType<typeof useSidebar> | null = null;
 try {
     sidebarContext = useSidebar();
 } catch (error) {
+    // Sidebar context not available, which is fine - page will work without it
     console.debug('[MyDetails] Sidebar context not available');
 }
 
@@ -230,10 +232,6 @@ const refreshMyDetails = () => {
     });
 };
 
-const exportPdsExcel = () => {
-    window.location.href = '/my-details/pds-export';
-};
-
 const onMyDetailsUpdated = (event: { hrid?: number | string } = {}) => {
     const updatedHrid = Number(event.hrid);
     if (!Number.isFinite(updatedHrid) || currentHrid.value === null || updatedHrid !== currentHrid.value) {
@@ -244,41 +242,29 @@ const onMyDetailsUpdated = (event: { hrid?: number | string } = {}) => {
     refreshMyDetails();
 };
 
-let isRealtimeBound = false;
-
-onMounted(() => {
-    // Close mobile sidebar if open to prevent overlay from blocking clicks.
-    if (sidebarContext && sidebarContext.isMobile.value) {
-        sidebarContext.setOpenMobile(false);
-        setTimeout(() => {
-            if (sidebarContext && sidebarContext.isMobile.value && sidebarContext.openMobile.value) {
-                sidebarContext.setOpenMobile(false);
-            }
-        }, 200);
-    }
-
-    try {
-        const realtime = echo();
-
-        if (realtime && typeof realtime.channel === 'function') {
-            realtime.channel('my-details').listen('.MyDetailsUpdated', onMyDetailsUpdated);
-            isRealtimeBound = true;
+onMounted(async () => {
+    // Close mobile sidebar if open to prevent overlay from blocking clicks
+    // Only if sidebar context is available
+    if (sidebarContext) {
+        // Wait for next tick to ensure DOM and sidebar are fully initialized
+        await nextTick();
+        // Always close mobile sidebar on page load to prevent overlay blocking
+        // Check multiple times to ensure it closes (in case it opens after initial check)
+        if (sidebarContext.isMobile.value) {
+            sidebarContext.setOpenMobile(false);
+            // Also check after a short delay to catch any late-opening sidebars
+            setTimeout(() => {
+                if (sidebarContext && sidebarContext.isMobile.value && sidebarContext.openMobile.value) {
+                    sidebarContext.setOpenMobile(false);
+                }
+            }, 200);
         }
-    } catch (error) {
-        console.warn('[MyDetails] Realtime channel unavailable:', error);
     }
+    echo().channel('my-details').listen('.MyDetailsUpdated', onMyDetailsUpdated);
 });
 
 onBeforeUnmount(() => {
-    if (!isRealtimeBound) {
-        return;
-    }
-
-    try {
-        echo().leave('my-details');
-    } catch (error) {
-        console.warn('[MyDetails] Failed to leave realtime channel:', error);
-    }
+    echo().channel('my-details').stopListening('MyDetailsUpdated');
 });
 </script>
 
@@ -343,13 +329,7 @@ onBeforeUnmount(() => {
                 </div>
             </section>
 
-            <div class="flex items-center justify-between gap-3">
-                <h2 class="ehris-page-title mb-0!">{{ tabs[activeTab] }}</h2>
-                <button type="button" class="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90" @click="exportPdsExcel">
-                    <Download class="h-4 w-4" />
-                    Export PDS Excel
-                </button>
-            </div>
+            <h2 class="ehris-page-title">{{ tabs[activeTab] }}</h2>
 
             <component
                 :is="sectionComponents[activeTab]"

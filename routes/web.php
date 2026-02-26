@@ -263,6 +263,10 @@ Route::get('my-details', function (Request $request) {
     ]);
 })->middleware(['auth', 'verified'])->name('my-details');
 
+Route::get('my-details/pds-export', [MyDetailsController::class, 'exportPdsExcel'])
+    ->middleware(['auth', 'verified'])
+    ->name('my-details.export-pds');
+
 Route::get('utilities', function () {
     return Inertia::render('Utilities');
 })->middleware(['auth', 'verified'])->name('utilities');
