@@ -155,6 +155,14 @@ const clampLeaveRange = (value: LeaveRange): LeaveRange => {
     return { start, end };
 };
 
+const disabledDates = ref([
+  {
+    repeat: {
+      weekdays: [1, 7],
+    },
+  },
+]);
+
 const calendarLeaveRange = computed<CalendarRangeModel | undefined>({
     get: () => {
         const { start, end } = leaveRange.value;
@@ -928,10 +936,11 @@ onBeforeUnmount(() => {
                                     is-range
                                     is-inline
                                     expanded
-                                :min-date="minSelectableDate ?? undefined"
-                                :masks="{ weekdays: 'WWW' }"
-                                class="calendar-inline"
-                            />
+                                    :disabled-dates="disabledDates"
+                                    :min-date="minSelectableDate ?? undefined"
+                                    :masks="{ weekdays: 'WWW' }"
+                                    class="calendar-inline"
+                                />
                                 <div v-if="isLeaveTypeUnselected" class="calendar-disabled-overlay" />
                             </div>
                             <div
@@ -1609,6 +1618,22 @@ onBeforeUnmount(() => {
     font-weight: 600;
 }
 
+/* Render weekdays-only layout (Mon-Fri) by removing Sun/Sat columns */
+.calendar-box :deep(.vc-weekdays),
+.calendar-box :deep(.vc-week) {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+}
+
+.calendar-box :deep(.vc-weekdays .vc-weekday-1),
+.calendar-box :deep(.vc-weekdays .vc-weekday-7),
+.calendar-box :deep(.vc-week .weekday-1),
+.calendar-box :deep(.vc-week .weekday-7),
+.calendar-box :deep(.vc-weekdays > *:nth-child(1)),
+.calendar-box :deep(.vc-weekdays > *:nth-child(7)),
+.calendar-box :deep(.vc-week > *:nth-child(1)),
+.calendar-box :deep(.vc-week > *:nth-child(7)) {
+    display: none !important;
+}
 .calendar-inline :deep(.vc-day-content:hover) {
     background: color-mix(in srgb, hsl(var(--primary)) 18%, white);
 }
