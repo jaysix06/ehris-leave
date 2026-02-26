@@ -158,12 +158,12 @@ class LeaveApplicationController extends Controller
 
         if (Schema::hasTable('tbl_leave_type')) {
             $leaveTypes = LeaveType::query()
-                ->select('leave_type')
+                ->select('leave_type', 'id')
                 ->whereNotNull('leave_type')
                 ->where('leave_type', '!=', '')
                 ->distinct()
                 ->orderBy('id')
-                ->pluck('leave_type')
+                ->pluck('leave_type', 'id')
                 ->map(fn ($type) => trim((string) $type))
                 ->filter(fn ($type) => $type !== '')
                 ->values()

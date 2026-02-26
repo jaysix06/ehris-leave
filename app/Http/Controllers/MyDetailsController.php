@@ -363,14 +363,22 @@ class MyDetailsController extends Controller
             require_once base_path('vendor/phpoffice/phpexcel/Classes/PHPExcel/Shared/PCLZip/pclzip.lib.php');
         }
 
+        if (! is_file($templatePath) || ! is_readable($templatePath)) {
+            throw new \RuntimeException("PDS template is missing or unreadable: {$templatePath}");
+        }
+
         $tempRoot = storage_path('app/tmp/pds_'.uniqid());
         $extractRoot = $tempRoot.'/extract';
         $outputPath = $tempRoot.'/output.xlsx';
 
         @mkdir($extractRoot, 0777, true);
 
-        $zip = new \PclZip($templatePath);
-        $extractResult = $zip->extract(PCLZIP_OPT_PATH, $extractRoot);
+        $zip = $this->initPclZip($templatePath);
+        $extractResult = $zip->extract(
+            PCLZIP_OPT_PATH,
+            $extractRoot,
+            PCLZIP_OPT_TEMP_FILE_OFF
+        );
         if ($extractResult === 0) {
             throw new \RuntimeException('Failed to extract template: '.$zip->errorInfo(true));
         }
@@ -442,8 +450,13 @@ class MyDetailsController extends Controller
             }
         }
 
-        $outputZip = new \PclZip($outputPath);
-        $createResult = $outputZip->create($files, PCLZIP_OPT_REMOVE_PATH, $extractRoot);
+        $outputZip = $this->initPclZip($outputPath);
+        $createResult = $outputZip->create(
+            $files,
+            PCLZIP_OPT_REMOVE_PATH,
+            $extractRoot,
+            PCLZIP_OPT_TEMP_FILE_OFF
+        );
         if ($createResult === 0) {
             throw new \RuntimeException('Failed to create output workbook: '.$outputZip->errorInfo(true));
         }
@@ -452,6 +465,22 @@ class MyDetailsController extends Controller
         @rmdir($tempRoot);
 
         return $outputPath;
+    }
+
+    private function initPclZip(string $archivePath): \PclZip
+    {
+        $zip = new \PclZip($archivePath);
+
+        // PHP 8 may not invoke the legacy same-name constructor used by old PclZip versions.
+        if ((string) ($zip->zipname ?? '') === '') {
+            if (method_exists($zip, 'PclZip')) {
+                $zip->PclZip($archivePath);
+            } else {
+                $zip->zipname = $archivePath;
+            }
+        }
+
+        return $zip;
     }
 
     private function resolveWorksheetEntryPath(string $workbookXml, string $relsXml, string $sheetName): ?string
