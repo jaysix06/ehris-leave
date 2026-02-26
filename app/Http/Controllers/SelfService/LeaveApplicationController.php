@@ -162,7 +162,6 @@ class LeaveApplicationController extends Controller
                 ->whereNotNull('leave_type')
                 ->where('leave_type', '!=', '')
                 ->distinct()
-                ->orderBy('id')
                 ->pluck('leave_type')
                 ->map(fn ($type) => trim((string) $type))
                 ->filter(fn ($type) => $type !== '')
