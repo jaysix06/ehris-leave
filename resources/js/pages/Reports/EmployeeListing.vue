@@ -1,15 +1,12 @@
 <script setup lang="ts">
-import { Head, router, usePage } from '@inertiajs/vue3';
+import { Head, router } from '@inertiajs/vue3';
 import { computed, ref, onMounted, watch } from 'vue';
 import {
     Download,
-    FileText,
     Filter,
     Printer,
     RefreshCw,
     Search,
-    ChevronLeft,
-    ChevronRight,
 } from 'lucide-vue-next';
 import { Doughnut, Bar } from 'vue-chartjs';
 import {
@@ -23,6 +20,7 @@ import {
     Tooltip,
 } from 'chart.js';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { DataTable, type DataTableColumn, type PaginationMeta } from '@/components/DataTable';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -112,23 +110,77 @@ type Props = {
     };
 };
 
+// Extended color palette with distinct, non-similar colors
 const CHART_COLORS = [
-    'hsl(217, 91%, 60%)',
-    'hsl(262, 83%, 58%)',
-    'hsl(24, 95%, 53%)',
-    'hsl(142, 71%, 45%)',
-    'hsl(199, 89%, 48%)',
-    'hsl(280, 67%, 58%)',
-    'hsl(0, 72%, 51%)',
-    'hsl(47, 96%, 53%)',
+    'hsl(217, 91%, 60%)',   // Blue
+    'hsl(142, 71%, 45%)',   // Green
+    'hsl(24, 95%, 53%)',    // Orange
+    'hsl(280, 67%, 58%)',  // Purple
+    'hsl(0, 72%, 51%)',     // Red
+    'hsl(199, 89%, 48%)',   // Cyan
+    'hsl(47, 96%, 53%)',    // Yellow
+    'hsl(262, 83%, 58%)',   // Violet
+    'hsl(330, 75%, 55%)',   // Pink
+    'hsl(195, 85%, 50%)',   // Teal
+    'hsl(30, 90%, 55%)',    // Orange-Red
+    'hsl(160, 70%, 50%)',   // Turquoise
+    'hsl(270, 70%, 60%)',   // Lavender
+    'hsl(15, 95%, 50%)',    // Red-Orange
+    'hsl(180, 75%, 45%)',   // Aqua
+    'hsl(300, 65%, 55%)',   // Magenta
+    'hsl(60, 90%, 50%)',    // Bright Yellow
+    'hsl(210, 85%, 55%)',   // Sky Blue
+    'hsl(120, 65%, 50%)',   // Lime Green
+    'hsl(340, 80%, 55%)',   // Rose
+    'hsl(240, 75%, 60%)',   // Indigo
+    'hsl(50, 95%, 55%)',    // Gold
+    'hsl(150, 60%, 45%)',   // Sea Green
+    'hsl(290, 70%, 55%)',   // Orchid
+    'hsl(20, 100%, 55%)',   // Bright Orange
+    'hsl(200, 80%, 50%)',   // Ocean Blue
+    'hsl(100, 70%, 50%)',   // Chartreuse
+    'hsl(310, 75%, 60%)',   // Hot Pink
+    'hsl(230, 80%, 55%)',   // Royal Blue
+    'hsl(40, 95%, 50%)',    // Amber
+    'hsl(170, 65%, 50%)',   // Mint
+    'hsl(250, 70%, 60%)',   // Blue-Violet
+    'hsl(10, 90%, 55%)',    // Coral
+    'hsl(190, 75%, 50%)',   // Steel Blue
+    'hsl(80, 75%, 50%)',    // Yellow-Green
+    'hsl(320, 70%, 55%)',   // Deep Pink
+    'hsl(220, 85%, 60%)',   // Light Blue
+    'hsl(130, 60%, 50%)',   // Forest Green
+    'hsl(260, 75%, 58%)',   // Blue-Purple
+    'hsl(35, 90%, 55%)',    // Peach
+    'hsl(140, 75%, 45%)',   // Emerald
+    'hsl(275, 65%, 58%)',   // Plum
+    'hsl(5, 85%, 55%)',     // Cherry Red
+    'hsl(205, 80%, 55%)',   // Powder Blue
+    'hsl(90, 70%, 50%)',    // Spring Green
+    'hsl(315, 75%, 58%)',   // Fuchsia
+    'hsl(225, 75%, 60%)',   // Periwinkle
+    'hsl(55, 95%, 55%)',    // Canary Yellow
+    'hsl(165, 70%, 50%)',   // Jade
+    'hsl(255, 70%, 60%)',   // Slate Blue
+    'hsl(25, 100%, 55%)',   // Tangerine
+    'hsl(185, 75%, 50%)',   // Turquoise Blue
+    'hsl(110, 65%, 50%)',   // Olive Green
+    'hsl(285, 70%, 58%)',   // Medium Purple
+    'hsl(0, 85%, 60%)',     // Light Red
+    'hsl(215, 90%, 55%)',   // Cornflower Blue
+    'hsl(125, 70%, 50%)',   // Medium Green
+    'hsl(265, 75%, 60%)',   // Medium Slate Blue
+    'hsl(45, 95%, 55%)',    // Bright Yellow-Orange
+    'hsl(175, 65%, 50%)',   // Medium Turquoise
+    'hsl(295, 70%, 58%)',   // Medium Orchid
 ];
+
 function getColors(n: number) {
+    // Use distinct colors from the palette, cycling only if we have more items than colors
     return Array.from({ length: n }, (_, i) => CHART_COLORS[i % CHART_COLORS.length]);
 }
 
 const props = defineProps<Props>();
-
-const page = usePage();
 
 // Filter states - initialize from props
 const selectedSchool = ref<string>(props.filters.school || '');
@@ -343,9 +395,28 @@ const clearFilters = () => {
     applyFilters();
 };
 
+const employeeColumns: DataTableColumn[] = [
+    { key: 'hrid', label: 'HRID' },
+    { key: 'employee_id', label: 'Employee ID' },
+    { key: 'firstname', label: 'Name', slot: 'name', class: 'ehris-col-name' },
+    { key: 'job_title', label: 'Job Title', slot: 'job_title', class: 'ehris-col-job' },
+    { key: 'subject_taught', label: 'Subject', class: 'ehris-col-subject' },
+    { key: 'grade_level', label: 'Grade Level' },
+    { key: 'office', label: 'School/Office', class: 'ehris-col-office', slot: 'office' },
+    { key: 'station_code', label: 'Station Code' },
+    { key: 'salary_grade', label: 'Salary Grade', slot: 'salary_grade' },
+    { key: 'salary_step', label: 'Salary Step' },
+    { key: 'employ_status', label: 'Status', slot: 'employ_status' },
+    { key: 'leave_balance', label: 'Leave Balance', class: 'ehris-col-leave', slot: 'leave_balance' },
+];
+
 const changePage = (url: string | null) => {
     if (url) {
-        router.get(url, {}, { preserveState: true, preserveScroll: true });
+        router.get(url, {}, {
+            only: ['employees'],
+            preserveState: true,
+            preserveScroll: true,
+        });
     }
 };
 
@@ -357,15 +428,15 @@ const changePerPage = (perPage: number) => {
             per_page: perPage,
         },
         {
+            only: ['employees'],
             preserveState: true,
             preserveScroll: true,
         },
     );
 };
 
-const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
-    // TODO: Implement export functionality
-    console.log(`Exporting as ${format}`);
+const exportReport = (_format: 'pdf' | 'excel' | 'csv') => {
+    // TODO: Implement export (e.g. router.get to Laravel export route)
 };
 </script>
 
@@ -373,9 +444,9 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
     <Head :title="pageTitle" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
-        <div class="ehris-page">
+        <div class="p-6 flex flex-col gap-6">
             <!-- Page Header -->
-            <section class="ehris-card">
+            <section class="border border-border rounded-lg bg-white p-6 shadow-sm">
                 <div class="mb-4">
                     <h1 class="text-3xl font-bold">{{ pageTitle }}</h1>
                     <p class="text-muted-foreground mt-1">
@@ -387,7 +458,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
             </section>
 
             <!-- Filter Section -->
-            <section class="ehris-card">
+            <section class="border border-border rounded-lg bg-white p-6 shadow-sm">
                 <div class="flex items-center justify-between mb-4">
                     <div>
                         <h2 class="text-xl font-semibold flex items-center gap-2">
@@ -411,7 +482,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                         <select
                             v-model="selectedSchool"
                             @change="applyFilters"
-                            class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            class="w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
                             <option value="">All Schools/Offices</option>
                             <option v-for="school in filterOptions.schools" :key="school" :value="school">
@@ -426,7 +497,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                         <select
                             v-model="selectedJobTitle"
                             @change="applyFilters"
-                            class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            class="w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
                             <option value="">All Job Titles</option>
                             <option v-for="title in filterOptions.jobTitles" :key="title" :value="title">
@@ -441,7 +512,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                         <select
                             v-model="selectedSubject"
                             @change="applyFilters"
-                            class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            class="w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
                             <option value="">All Subjects</option>
                             <option v-for="subject in filterOptions.subjects" :key="subject" :value="subject">
@@ -456,7 +527,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                         <select
                             v-model="selectedGradeLevel"
                             @change="applyFilters"
-                            class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            class="w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
                             <option value="">All Grade Levels</option>
                             <option v-for="level in filterOptions.gradeLevels" :key="level" :value="level">
@@ -471,7 +542,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                         <select
                             v-model="selectedEmploymentStatus"
                             @change="applyFilters"
-                            class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            class="w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
                             <option value="">All Status</option>
                             <option
@@ -490,7 +561,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                         <select
                             v-model="selectedSalaryGrade"
                             @change="applyFilters"
-                            class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            class="w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
                             <option value="">All Salary Grades</option>
                             <option v-for="grade in [11, 12, 13, 14, 15, 16, 17, 18, 19, 20]" :key="grade" :value="grade.toString()">
@@ -510,7 +581,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                                 v-model="searchQuery"
                                 @keyup.enter="applyFilters"
                                 placeholder="Search by name or employee ID..."
-                                class="pl-10"
+                                class="pl-10 bg-white"
                             />
                         </div>
                     </div>
@@ -522,7 +593,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
             </section>
 
             <!-- Report Results Section -->
-            <section class="ehris-card">
+            <section class="border border-border rounded-lg bg-white p-6 shadow-sm">
                 <div class="flex items-center justify-between mb-4">
                     <div>
                         <h2 class="text-xl font-semibold">Employee Listing Results</h2>
@@ -548,23 +619,23 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
 
                 <!-- Summary Statistics -->
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                    <div class="rounded-lg border p-4 bg-card">
+                    <div class="rounded-lg border p-4 bg-white">
                         <div class="text-sm text-muted-foreground">Total Employees</div>
                         <div class="text-2xl font-bold mt-1 text-primary">{{ summaryStats.total }}</div>
                     </div>
-                    <div class="rounded-lg border p-4 bg-card">
+                    <div class="rounded-lg border p-4 bg-white">
                         <div class="text-sm text-muted-foreground">Permanent</div>
                         <div class="text-2xl font-bold mt-1 text-primary">{{ summaryStats.permanent }}</div>
                     </div>
-                    <div class="rounded-lg border p-4 bg-card">
+                    <div class="rounded-lg border p-4 bg-white">
                         <div class="text-sm text-muted-foreground">Avg Leave Balance</div>
                         <div class="text-2xl font-bold mt-1 text-primary">{{ summaryStats.avgLeaveBalance }}</div>
                     </div>
                 </div>
 
                 <!-- Charts -->
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                    <div class="rounded-lg border p-4 bg-card">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 items-start">
+                    <div class="rounded-lg border p-4 bg-white">
                         <h3 class="text-sm font-semibold text-muted-foreground mb-3">Employment Status</h3>
                         <div class="h-[240px]">
                             <Doughnut
@@ -584,7 +655,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                         <div class="mt-4">
                             <div class="flex flex-wrap gap-3 items-center mb-2">
                                 <template
-                                    v-for="(item, index) in chartDataSafe.employmentStatus.legend"
+                                    v-for="item in chartDataSafe.employmentStatus.legend"
                                     :key="item.label"
                                 >
                                     <div class="flex items-center gap-2">
@@ -621,33 +692,33 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                             >
                                 <div
                                     v-if="showEmploymentStatusOthers && chartDataSafe.employmentStatus.chart.length > 0"
-                                    class="mt-2 max-h-48 overflow-y-auto overflow-x-hidden border rounded-md bg-background"
+                                    class="mt-2 max-h-48 overflow-y-auto overflow-x-hidden border rounded-md bg-white"
                                     style="max-height: 12rem;"
                                 >
-                                <table class="w-full text-sm">
-                                    <thead class="bg-muted/30 sticky top-0">
+                                <table class="w-full text-sm" style="table-layout: fixed;">
+                                    <thead class="sticky top-0 z-20 bg-white border-b">
                                         <tr>
-                                            <th class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground w-12">
+                                            <th class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground whitespace-nowrap" style="width: 3rem; min-width: 3rem;">
                                                 Show
                                             </th>
-                                            <th class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground w-16">
+                                            <th class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground whitespace-nowrap" style="width: 4rem; min-width: 4rem;">
                                                 Color
                                             </th>
-                                            <th class="px-3 py-2 text-left text-xs font-semibold text-muted-foreground">
+                                            <th class="px-3 py-2 text-left text-xs font-semibold text-muted-foreground whitespace-nowrap" style="min-width: 8rem;">
                                                 Status
                                             </th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         <tr
-                                            v-for="(item, index) in chartDataSafe.employmentStatus.chart"
+                                            v-for="item in chartDataSafe.employmentStatus.chart"
                                             :key="item.label"
                                             class="border-b hover:bg-muted/30"
                                             :class="{
                                                 'opacity-50': hiddenEmploymentStatus.includes(item.label),
                                             }"
                                         >
-                                            <td class="px-3 py-2 text-center">
+                                            <td class="px-3 py-2 text-center" style="width: 3rem; min-width: 3rem;">
                                                 <input
                                                     type="checkbox"
                                                     :checked="!hiddenEmploymentStatus.includes(item.label)"
@@ -655,7 +726,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                                                     class="w-4 h-4 rounded border-input cursor-pointer"
                                                 />
                                             </td>
-                                            <td class="px-3 py-2 text-center">
+                                            <td class="px-3 py-2 text-center" style="width: 4rem; min-width: 4rem;">
                                                 <div
                                                     class="w-4 h-4 rounded mx-auto"
                                                     :style="{
@@ -669,7 +740,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                                                     }"
                                                 ></div>
                                             </td>
-                                            <td class="px-3 py-2">{{ item.label }}</td>
+                                            <td class="px-3 py-2" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ item.label }}</td>
                                         </tr>
                                     </tbody>
                                 </table>
@@ -677,7 +748,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                             </transition>
                         </div>
                     </div>
-                    <div class="rounded-lg border p-4 bg-card">
+                    <div class="rounded-lg border p-4 bg-white">
                         <h3 class="text-sm font-semibold text-muted-foreground mb-3">By School/Office</h3>
                         <div class="h-[240px]">
                             <Doughnut
@@ -697,7 +768,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                         <div class="mt-4">
                             <div class="flex flex-wrap gap-3 items-center mb-2">
                                 <template
-                                    v-for="(item, index) in chartDataSafe.school.legend"
+                                    v-for="item in chartDataSafe.school.legend"
                                     :key="item.label"
                                 >
                                     <div class="flex items-center gap-2">
@@ -734,33 +805,33 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                             >
                                 <div
                                     v-if="showSchoolOthers && chartDataSafe.school.chart.length > 0"
-                                    class="mt-2 max-h-48 overflow-y-auto overflow-x-hidden border rounded-md bg-background"
+                                    class="mt-2 max-h-48 overflow-y-auto overflow-x-hidden border rounded-md bg-white"
                                     style="max-height: 12rem;"
                                 >
-                                <table class="w-full text-sm">
-                                    <thead class="bg-muted/30 sticky top-0">
+                                <table class="w-full text-sm" style="table-layout: fixed;">
+                                    <thead class="sticky top-0 z-20 bg-white border-b">
                                         <tr>
-                                            <th class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground w-12">
+                                            <th class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground whitespace-nowrap" style="width: 3rem; min-width: 3rem;">
                                                 Show
                                             </th>
-                                            <th class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground w-16">
+                                            <th class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground whitespace-nowrap" style="width: 4rem; min-width: 4rem;">
                                                 Color
                                             </th>
-                                            <th class="px-3 py-2 text-left text-xs font-semibold text-muted-foreground">
+                                            <th class="px-3 py-2 text-left text-xs font-semibold text-muted-foreground whitespace-nowrap" style="min-width: 8rem;">
                                                 School/Office
                                             </th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         <tr
-                                            v-for="(item, index) in chartDataSafe.school.chart"
+                                            v-for="item in chartDataSafe.school.chart"
                                             :key="item.label"
                                             class="border-b hover:bg-muted/30"
                                             :class="{
                                                 'opacity-50': hiddenSchools.includes(item.label),
                                             }"
                                         >
-                                            <td class="px-3 py-2 text-center">
+                                            <td class="px-3 py-2 text-center" style="width: 3rem; min-width: 3rem;">
                                                 <input
                                                     type="checkbox"
                                                     :checked="!hiddenSchools.includes(item.label)"
@@ -768,7 +839,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                                                     class="w-4 h-4 rounded border-input cursor-pointer"
                                                 />
                                             </td>
-                                            <td class="px-3 py-2 text-center">
+                                            <td class="px-3 py-2 text-center" style="width: 4rem; min-width: 4rem;">
                                                 <div
                                                     class="w-4 h-4 rounded mx-auto"
                                                     :style="{
@@ -782,7 +853,7 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                                                     }"
                                                 ></div>
                                             </td>
-                                            <td class="px-3 py-2">{{ item.label }}</td>
+                                            <td class="px-3 py-2" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ item.label }}</td>
                                         </tr>
                                     </tbody>
                                 </table>
@@ -792,8 +863,8 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                     </div>
                 </div>
                 <div class="grid grid-cols-1 gap-6 mb-6">
-                    <div class="rounded-lg border p-4 bg-card">
-                        <h3 class="text-sm font-semibold text-muted-foreground mb-3">Count per Job Title (top 12)</h3>
+                    <div class="rounded-lg border p-4 bg-white">
+                        <h3 class="text-sm font-semibold text-muted-foreground mb-3">Count per Job Title (top 10)</h3>
                         <div class="h-[320px]">
                             <Bar
                                 v-if="jobTitleChartData.labels.length"
@@ -810,228 +881,44 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
                     </div>
                 </div>
 
-                <!-- Data Table -->
-                <div class="rounded-md border overflow-x-auto w-full">
-                    <table class="ehris-employee-table w-full border-collapse" style="min-width: 1200px;">
-                        <thead class="bg-muted/50">
-                            <tr>
-                                <th class="ehris-th">HRID</th>
-                                <th class="ehris-th">Employee ID</th>
-                                <th class="ehris-th ehris-col-name">Name</th>
-                                <th class="ehris-th ehris-col-job">Job Title</th>
-                                <th class="ehris-th ehris-col-subject">Subject</th>
-                                <th class="ehris-th">Grade Level</th>
-                                <th class="ehris-th ehris-col-office">School/Office</th>
-                                <th class="ehris-th">Station Code</th>
-                                <th class="ehris-th">Salary Grade</th>
-                                <th class="ehris-th">Salary Step</th>
-                                <th class="ehris-th">Status</th>
-                                <th class="ehris-th ehris-col-leave">Leave Balance</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr
-                                v-for="employee in employees.data"
-                                :key="employee.hrid"
-                                class="hover:bg-muted/50 border-b"
-                            >
-                                <td class="ehris-td whitespace-nowrap">{{ employee.hrid }}</td>
-                                <td class="ehris-td whitespace-nowrap">{{ employee.employee_id }}</td>
-                                <td class="ehris-td ehris-col-name" :title="fullName(employee)">{{ fullName(employee) }}</td>
-                                <td class="ehris-td ehris-col-job">
-                                    <Badge variant="outline" class="whitespace-nowrap max-w-full truncate inline-block">{{ employee.job_title || '-' }}</Badge>
-                                </td>
-                                <td class="ehris-td ehris-col-subject" :title="employee.subject_taught || ''">{{ employee.subject_taught || '-' }}</td>
-                                <td class="ehris-td whitespace-nowrap">{{ employee.grade_level || '-' }}</td>
-                                <td class="ehris-td ehris-col-office" :title="employee.office || ''">{{ employee.office || '-' }}</td>
-                                <td class="ehris-td whitespace-nowrap">{{ employee.station_code || '-' }}</td>
-                                <td class="ehris-td whitespace-nowrap">
-                                    {{ employee.salary_grade ? 'SG ' + employee.salary_grade : '-' }}
-                                </td>
-                                <td class="ehris-td whitespace-nowrap">{{ employee.salary_step || '-' }}</td>
-                                <td class="ehris-td whitespace-nowrap">
-                                    <Badge
-                                        :variant="employee.employ_status === 'Permanent' ? 'default' : 'secondary'"
-                                    >
-                                        {{ employee.employ_status || '-' }}
-                                    </Badge>
-                                </td>
-                                <td class="ehris-td ehris-col-leave whitespace-nowrap">
-                                    <Badge
-                                        :variant="(employee.leave_balance || 0) < 5 ? 'destructive' : 'outline'"
-                                    >
-                                        {{ employee.leave_balance ?? 0 }} days
-                                    </Badge>
-                                </td>
-                            </tr>
-                            <tr v-if="employees.data.length === 0">
-                                <td colspan="12" class="px-4 py-8 text-center text-muted-foreground">
-                                    No employees found matching your criteria
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-
-                <!-- Pagination -->
-                <div class="flex items-center justify-between mt-4 pt-4 border-t">
-                    <div class="flex items-center gap-4">
-                        <div class="text-sm text-muted-foreground">
-                            Showing {{ employees.from }} to {{ employees.to }} of {{ employees.total }} results
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <Label class="text-sm">Per page:</Label>
-                            <select
-                                :value="employees.per_page"
-                                @change="changePerPage(Number(($event.target as HTMLSelectElement).value))"
-                                class="rounded-md border border-input bg-background px-2 py-1 text-sm"
-                            >
-                                <option :value="10">10</option>
-                                <option :value="25">25</option>
-                                <option :value="50">50</option>
-                                <option :value="100">100</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="flex gap-2">
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            :disabled="employees.current_page === 1"
-                            @click="changePage(employees.links.find((l) => l.label === '&laquo; Previous')?.url || null)"
-                        >
-                            <ChevronLeft class="h-4 w-4" />
-                            Previous
-                        </Button>
-                        <template v-for="(link, index) in employees.links" :key="index">
-                            <Button
-                                v-if="link.label !== '&laquo; Previous' && link.label !== 'Next &raquo;'"
-                                variant="outline"
-                                size="sm"
-                                :class="{ 'bg-primary text-primary-foreground': link.active }"
-                                :disabled="!link.url"
-                                @click="changePage(link.url)"
-                            >
-                                {{ link.label }}
-                            </Button>
-                        </template>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            :disabled="employees.current_page === employees.last_page"
-                            @click="changePage(employees.links.find((l) => l.label === 'Next &raquo;')?.url || null)"
-                        >
-                            Next
-                            <ChevronRight class="h-4 w-4" />
-                        </Button>
-                    </div>
-                </div>
+                <!-- Data Table (server-side chunk + optional lazy load) -->
+                <DataTable
+                    :columns="employeeColumns"
+                    :data="employees.data"
+                    :pagination="employees as PaginationMeta"
+                    row-key="hrid"
+                    :per-page-options="[10, 25, 50, 100]"
+                    empty-message="No employees found matching your criteria"
+                    min-table-width="1200px"
+                    show-pagination-top
+                    @page-change="changePage"
+                    @per-page-change="changePerPage"
+                >
+                    <template #cell-name="{ row }">
+                        <span :title="fullName(row as Employee)">{{ fullName(row as Employee) }}</span>
+                    </template>
+                    <template #cell-job_title="{ value }">
+                        <Badge variant="outline" class="whitespace-nowrap max-w-full truncate inline-block">{{ value || '-' }}</Badge>
+                    </template>
+                    <template #cell-office="{ value }">
+                        <span :title="(value as string) || ''">{{ (value as string) || '-' }}</span>
+                    </template>
+                    <template #cell-employ_status="{ value }">
+                        <Badge :variant="(value as string) === 'Permanent' ? 'default' : 'secondary'">
+                            {{ (value as string) || '-' }}
+                        </Badge>
+                    </template>
+                    <template #cell-leave_balance="{ value }">
+                        <Badge :variant="((value as number) ?? 0) < 5 ? 'destructive' : 'outline'">
+                            {{ (value as number) ?? 0 }} days
+                        </Badge>
+                    </template>
+                    <template #cell-salary_grade="{ value }">
+                        {{ value ? 'SG ' + value : '-' }}
+                    </template>
+                </DataTable>
             </section>
         </div>
     </AppLayout>
 </template>
 
-<style scoped>
-.ehris-page {
-    padding: 1.5rem;
-    display: flex;
-    flex-direction: column;
-    gap: 1.5rem;
-}
-
-.ehris-card {
-    border: 1px solid hsl(var(--border));
-    border-radius: 0.5rem;
-    background: hsl(var(--card));
-    padding: 1.5rem;
-}
-
-.ehris-employee-table {
-    table-layout: fixed;
-    min-width: 0;
-    width: 100%;
-}
-
-.ehris-employee-table th,
-.ehris-employee-table td {
-    vertical-align: middle;
-    word-wrap: break-word;
-    overflow-wrap: break-word;
-}
-
-.ehris-th {
-    padding: 0.375rem 0.5rem;
-    text-align: left;
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: hsl(var(--muted-foreground));
-    border-bottom: 1px solid hsl(var(--border));
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.ehris-td {
-    padding: 0.375rem 0.5rem;
-    font-size: 0.875rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.ehris-td:not(.ehris-col-name):not(.ehris-col-job):not(.ehris-col-office):not(.ehris-col-subject) {
-    white-space: nowrap;
-}
-
-.ehris-col-name {
-    max-width: 10rem;
-    min-width: 8rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.ehris-col-job {
-    max-width: 9rem;
-    min-width: 6rem;
-}
-
-.ehris-col-office {
-    max-width: 10rem;
-    min-width: 7rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.ehris-col-leave {
-    min-width: 5.5rem;
-}
-
-.ehris-col-subject {
-    max-width: 15rem;
-    min-width: 10rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-/* Ensure table cells don't overflow - max-width: 0 allows fixed table layout to work properly */
-.ehris-employee-table td {
-    max-width: 0;
-}
-
-.ehris-employee-table th {
-    max-width: 0;
-}
-
-.ehris-employee-table th.ehris-th,
-.ehris-employee-table td.ehris-td {
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.ehris-employee-table th.ehris-th:not(.ehris-col-name):not(.ehris-col-job):not(.ehris-col-office):not(.ehris-col-subject):not(.ehris-col-leave),
-.ehris-employee-table td.ehris-td:not(.ehris-col-name):not(.ehris-col-job):not(.ehris-col-office):not(.ehris-col-subject):not(.ehris-col-leave) {
-    white-space: nowrap;
-}
-</style>

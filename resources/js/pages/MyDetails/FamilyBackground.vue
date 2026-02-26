@@ -59,7 +59,6 @@ const emptyParent = (): ParentFields => ({
 
 const props = defineProps<{
     family?: Record<string, unknown>[];
-    familyUpdateUrl?: string | null;
 }>();
 
 const isEditing = ref(false);
@@ -262,8 +261,6 @@ onMounted(() => {
                 type="button"
                 class="ehris-btn-grade-subject"
                 aria-label="Edit family information"
-                :disabled="!canEdit"
-                @click="canEdit && openEdit()"
             >
                 <Pencil class="size-4" />
                 <span>Edit</span>

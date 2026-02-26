@@ -282,7 +282,6 @@ Route::get('my-details', function (Request $request) {
         'personalInfo' => $personalInfo,
         'contactInfo' => $contactInfo,
         'family' => $family,
-        'familyUpdateUrl' => route('my-details.family.store'),
         'education' => $education,
         'workExperience' => $workExperience,
         'eligibility' => $eligibility,
@@ -297,10 +296,6 @@ Route::get('my-details', function (Request $request) {
         'affiliation' => $affiliation,
     ]);
 })->middleware(['auth', 'verified'])->name('my-details');
-
-Route::post('my-details/family', [\App\Http\Controllers\MyDetails\FamilyController::class, 'store'])
-    ->middleware(['auth', 'verified'])
-    ->name('my-details.family.store');
 
 Route::get('utilities', function () {
     return Inertia::render('Utilities');

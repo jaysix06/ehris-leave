@@ -49,6 +49,21 @@ class EmployeeListingController extends Controller
             });
         }
 
+        $perPage = (int) $request->get('per_page', 25);
+
+        // Partial reload: only fetch employees so only the table updates (no charts/summary refetch)
+        $partialData = $request->header('X-Inertia-Partial-Data');
+        if ($partialData) {
+            $wanted = array_map('trim', explode(',', $partialData));
+            if (in_array('employees', $wanted)) {
+                $employees = $query->paginate($perPage)->withQueryString();
+
+                return Inertia::render('Reports/EmployeeListing', [
+                    'employees' => $employees,
+                ]);
+            }
+        }
+
         // Get filter options for dropdowns
         $schools = Employee::whereNotNull('office')
             ->distinct()
@@ -56,10 +71,9 @@ class EmployeeListingController extends Controller
             ->sort()
             ->values();
 
-        $jobTitles = Employee::whereNotNull('job_title')
-            ->distinct()
+        $jobTitles = DB::table('tbl_job_title')
+            ->orderBy('job_title')
             ->pluck('job_title')
-            ->sort()
             ->values();
 
         $subjects = Employee::whereNotNull('subject_taught')
@@ -108,7 +122,7 @@ class EmployeeListingController extends Controller
             ->select(DB::raw('COALESCE(job_title, \'(Blank)\') as label'), DB::raw('count(*) as count'))
             ->groupBy('job_title')
             ->orderByDesc('count')
-            ->limit(12)
+            ->limit(10)
             ->get()
             ->map(fn ($row) => ['label' => $row->label ?? '(Blank)', 'count' => (int) $row->count])
             ->values()
@@ -126,8 +140,7 @@ class EmployeeListingController extends Controller
         $schoolTop = $allSchoolDistribution->take(5)->all();
         $schoolOthers = $allSchoolDistribution->skip(5)->all();
 
-        // Pagination
-        $perPage = $request->get('per_page', 25);
+        // Pagination (full load)
         $employees = $query->paginate($perPage)->withQueryString();
 
         return Inertia::render('Reports/EmployeeListing', [
