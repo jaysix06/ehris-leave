@@ -310,11 +310,11 @@ class MyDetailsController extends Controller
             // 18. PERMANENT ADDRESS
             'I25' => $contactInfo->house_block_lotnum1 ?? null,                      // House/Block/Lot No.
             'L25' => $contactInfo->street_add1 ?? null,                              // Street
-            'I27' => $contactInfo->subdivision_village1 ?? null,                     // Subdivision/Village
-            'L27' => $contactInfo->permanent_barangay_name ?? null,                  // Barangay (name)
-            'I29' => $contactInfo->city_municipality1 ?? null,                       // City/Municipality
-            'L29' => $contactInfo->permanent_province_name ?? null,                  // Province (name)
-            'I31' => $contactInfo->zip_code1 ?? null,                                // ZIP Code
+            'D23' => $contactInfo->subdivision_village1 ?? null,                     // Subdivision/Village
+            'I23' => $contactInfo->permanent_barangay_name ?? null,                  // Barangay (name)
+            'D24' => $contactInfo->city_municipality1 ?? null,                       // City/Municipality
+            'I24' => $contactInfo->permanent_province_name ?? null,                  // Province (name)
+            'D25' => $contactInfo->zip_code1 ?? null,                                // ZIP Code
 
             // Height and weight – ensure we include the proper units.
             'D22' => $this->formatHeight($personalInfo->height ?? null),

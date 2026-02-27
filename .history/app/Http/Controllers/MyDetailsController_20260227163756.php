@@ -305,16 +305,16 @@ class MyDetailsController extends Controller
             'L19' => $contactInfo->residential_barangay_name ?? null,                // Barangay (name)
             'I22' => $contactInfo->city_municipality ?? null,                        // City/Municipality
             'L22' => $contactInfo->residential_province_name ?? null,                // Province (name)
-            'I24' => $contactInfo->zip_code ?? null,                                 // ZIP Code
+            'L24' => $contactInfo->zip_code ?? null,                                 // ZIP Code
 
             // 18. PERMANENT ADDRESS
-            'I25' => $contactInfo->house_block_lotnum1 ?? null,                      // House/Block/Lot No.
-            'L25' => $contactInfo->street_add1 ?? null,                              // Street
-            'I27' => $contactInfo->subdivision_village1 ?? null,                     // Subdivision/Village
-            'L27' => $contactInfo->permanent_barangay_name ?? null,                  // Barangay (name)
-            'I29' => $contactInfo->city_municipality1 ?? null,                       // City/Municipality
-            'L29' => $contactInfo->permanent_province_name ?? null,                  // Province (name)
-            'I31' => $contactInfo->zip_code1 ?? null,                                // ZIP Code
+            'D22' => $contactInfo->house_block_lotnum1 ?? null,                      // House/Block/Lot No.
+            'I22' => $contactInfo->street_add1 ?? null,                              // Street
+            'D23' => $contactInfo->subdivision_village1 ?? null,                     // Subdivision/Village
+            'I23' => $contactInfo->permanent_barangay_name ?? null,                  // Barangay (name)
+            'D24' => $contactInfo->city_municipality1 ?? null,                       // City/Municipality
+            'I24' => $contactInfo->permanent_province_name ?? null,                  // Province (name)
+            'D25' => $contactInfo->zip_code1 ?? null,                                // ZIP Code
 
             // Height and weight – ensure we include the proper units.
             'D22' => $this->formatHeight($personalInfo->height ?? null),
