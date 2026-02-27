@@ -87,12 +87,6 @@ const effectiveLeaveEndDate = computed(() => {
     return sortedSpecificLeaveDates.value[sortedSpecificLeaveDates.value.length - 1] ?? null;
 });
 
-const selectedRangeText = computed(() =>
-    isSpecificDaysMode.value
-        ? selectedSpecificDatesText.value
-        : `${formatDate(leaveRange.value.start)} to ${formatDate(leaveRange.value.end)}`,
-);
-
 const noOfDays = computed(() => {
     if (isSpecificDaysMode.value) {
         return sortedSpecificLeaveDates.value.length;
@@ -138,7 +132,6 @@ const isSpecialWomenLeave = computed(() => selectedLeaveType.value === 'Special 
 const isCalamityLeave = computed(() => selectedLeaveType.value === 'Special Emergency (Calamity) Leave');
 const isMonetizationLeave = computed(() => selectedLeaveType.value === 'Monetization of Leave Credits');
 const isTerminalLeave = computed(() => selectedLeaveType.value === 'Terminal Leave');
-const isAdoptionLeave = computed(() => selectedLeaveType.value === 'Adoption Leave');
 const isMandatoryForceLeave = computed(
     () =>
         selectedLeaveType.value === 'Mandatory/Force Leave' ||
@@ -289,10 +282,7 @@ const commutation = ref<string>('');
 const consultationAvailed = ref<'yes' | 'no' | ''>('');
 const medicalCertification = ref<File | null>(null);
 const affidavitFile = ref<File | null>(null);
-const medicalFileInput = ref<HTMLInputElement | null>(null);
-const affidavitFileInput = ref<HTMLInputElement | null>(null);
 const proofOfDelivery = ref<File | null>(null);
-const proofOfDeliveryInput = ref<HTMLInputElement | null>(null);
 const isMedicalDropActive = ref(false);
 const isAffidavitDropActive = ref(false);
 const isProofOfDeliveryDropActive = ref(false);
@@ -320,10 +310,26 @@ const separationType = ref('');
 const separationEffectiveDate = ref('');
 const creditsMonetized = ref<number | null>(null);
 const isMandatoryLeave = ref(false);
-const submitError = ref<string | null>(null);
+const toastVisible = ref(false);
+const toastMessage = ref('');
+const toastType = ref<'error' | 'success'>('error');
+let toastTimer: ReturnType<typeof setTimeout> | null = null;
+
+const showToast = (message: string, type: 'error' | 'success' = 'error') => {
+    toastMessage.value = message;
+    toastType.value = type;
+    toastVisible.value = true;
+
+    if (toastTimer) {
+        clearTimeout(toastTimer);
+    }
+    toastTimer = setTimeout(() => {
+        toastVisible.value = false;
+    }, 4000);
+};
 
 const clearLeaveRequestForm = () => {
-    submitError.value = null;
+    toastVisible.value = false;
 
     selectedLeaveType.value = defaultLeaveTypeLabel;
     leaveForMode.value = '- Select Leave For -';
@@ -340,9 +346,6 @@ const clearLeaveRequestForm = () => {
     affidavitFile.value = null;
     proofOfDelivery.value = null;
     supportingDocuments.value = [];
-    if (medicalFileInput.value) medicalFileInput.value.value = '';
-    if (affidavitFileInput.value) affidavitFileInput.value.value = '';
-    if (proofOfDeliveryInput.value) proofOfDeliveryInput.value.value = '';
     if (supportingDocumentsInput.value) supportingDocumentsInput.value.value = '';
 
     isMedicalDropActive.value = false;
@@ -481,74 +484,6 @@ const employeeDetails = computed(() => ({
         pickUserValue(['salary', 'monthly_salary', 'salary_grade']),
 }));
 
-const onMedicalCertificationChange = (event: Event) => {
-    const target = event.target as HTMLInputElement;
-    medicalCertification.value = target.files?.[0] ?? null;
-};
-
-const openMedicalFilePicker = () => {
-    medicalFileInput.value?.click();
-};
-
-const onMedicalDrop = (event: DragEvent) => {
-    event.preventDefault();
-    isMedicalDropActive.value = false;
-    const file = event.dataTransfer?.files?.[0] ?? null;
-    medicalCertification.value = file;
-};
-
-const clearMedicalCertification = () => {
-    medicalCertification.value = null;
-    if (medicalFileInput.value) {
-        medicalFileInput.value.value = '';
-    }
-};
-
-const onAffidavitChange = (event: Event) => {
-    const target = event.target as HTMLInputElement;
-    affidavitFile.value = target.files?.[0] ?? null;
-};
-
-const openAffidavitFilePicker = () => {
-    affidavitFileInput.value?.click();
-};
-
-const onAffidavitDrop = (event: DragEvent) => {
-    event.preventDefault();
-    isAffidavitDropActive.value = false;
-    const file = event.dataTransfer?.files?.[0] ?? null;
-    affidavitFile.value = file;
-};
-
-const clearAffidavit = () => {
-    affidavitFile.value = null;
-    if (affidavitFileInput.value) {
-        affidavitFileInput.value.value = '';
-    }
-};
-
-const onProofOfDeliveryChange = (event: Event) => {
-    const target = event.target as HTMLInputElement;
-    proofOfDelivery.value = target.files?.[0] ?? null;
-};
-
-const openProofOfDeliveryPicker = () => {
-    proofOfDeliveryInput.value?.click();
-};
-
-const onProofOfDeliveryDrop = (event: DragEvent) => {
-    event.preventDefault();
-    isProofOfDeliveryDropActive.value = false;
-    proofOfDelivery.value = event.dataTransfer?.files?.[0] ?? null;
-};
-
-const clearProofOfDelivery = () => {
-    proofOfDelivery.value = null;
-    if (proofOfDeliveryInput.value) {
-        proofOfDeliveryInput.value.value = '';
-    }
-};
-
 const onSupportingDocumentsChange = (event: Event) => {
     const target = event.target as HTMLInputElement;
     supportingDocuments.value = target.files ? Array.from(target.files) : [];
@@ -605,7 +540,6 @@ watch(leaveTypeOptions, (options) => {
 });
 
 watch([selectedLeaveType, consultationAvailed], () => {
-    submitError.value = null;
     if (!requiresSupportingDoc.value) {
         consultationAvailed.value = '';
         if (!isMaternityLeave.value) {
@@ -681,6 +615,16 @@ watch([selectedLeaveType, consultationAvailed], () => {
     }
 });
 
+watch(
+    () => (page.props.errors as Record<string, string>) ?? {},
+    (errors) => {
+        const firstError = Object.values(errors)[0];
+        if (firstError) {
+            showToast(firstError, 'error');
+        }
+    },
+);
+
 const formatDateForSubmit = (date: Date) => {
     const year = date.getFullYear();
     const month = `${date.getMonth() + 1}`.padStart(2, '0');
@@ -689,79 +633,81 @@ const formatDateForSubmit = (date: Date) => {
 };
 
 const submitLeaveApplication = () => {
-    submitError.value = null;
+    toastVisible.value = false;
     const leaveStartDate = effectiveLeaveStartDate.value;
     const leaveEndDate = effectiveLeaveEndDate.value;
 
     if (selectedLeaveType.value === defaultLeaveTypeLabel) {
-        submitError.value = 'Please select a leave type.';
+        showToast('Please select a leave type.');
         return;
     }
     if (isLeaveForUnselected.value) {
-        submitError.value = 'Please select Leave For.';
+        showToast('Please select Leave For.');
         return;
     }
     if (!leaveStartDate || !leaveEndDate) {
-        submitError.value = isSpecificDaysMode.value
+        showToast(
+            isSpecificDaysMode.value
             ? 'Please select at least one leave date.'
-            : 'Please select both start and end dates.';
+            : 'Please select both start and end dates.',
+        );
         return;
     }
 
     if (leaveTypeDayLimit.value !== null && noOfDays.value > leaveTypeDayLimit.value) {
-        submitError.value = `${selectedLeaveType.value} cannot exceed ${leaveTypeDayLimit.value} days.`;
+        showToast(`${selectedLeaveType.value} cannot exceed ${leaveTypeDayLimit.value} days.`);
         return;
     }
 
     if (requiresSupportingDoc.value) {
         if (requiredDocType.value === 'medical' && !medicalCertification.value) {
-            submitError.value = 'Medical certificate is required when consultation was availed.';
+            showToast('Medical certificate is required when consultation was availed.');
             return;
         }
         if (requiredDocType.value === 'affidavit' && !affidavitFile.value) {
-            submitError.value = 'Affidavit is required when consultation was not availed.';
+            showToast('Affidavit is required when consultation was not availed.');
             return;
         }
         if (!requiredDocType.value && !medicalCertification.value && !affidavitFile.value) {
-            submitError.value = 'Please upload a medical certificate or an affidavit.';
+            showToast('Please upload a medical certificate or an affidavit.');
             return;
         }
     }
 
     if (isPaternityLeave.value) {
         if (!proofOfDelivery.value) {
-            submitError.value = 'Please upload proof of child\'s delivery (e.g. birth certificate, medical certificate, or marriage contract).';
+            showToast('Please upload proof of child\'s delivery (e.g. birth certificate, medical certificate, or marriage contract).');
             return;
         }
     }
 
     if ((isVacationLeave.value || isSpecialPrivilegeLeave.value) && !destinationScope.value) {
-        submitError.value = 'Please indicate if your destination is within the Philippines or abroad.';
+        showToast('Please indicate if your destination is within the Philippines or abroad.');
         return;
     }
 
     if (isSpecialPrivilegeLeave.value && isEmergencySpl.value && !emergencyReason.value.trim()) {
-        submitError.value = 'Please provide emergency reason for Special Privilege Leave.';
+        showToast('Please provide emergency reason for Special Privilege Leave.');
         return;
     }
 
     if (isRehabilitationLeave.value && !accidentDate.value) {
-        submitError.value = 'Accident date is required for Rehabilitation Leave.';
+        showToast('Accident date is required for Rehabilitation Leave.');
         return;
     }
 
     if (isCalamityLeave.value && !calamityDate.value) {
-        submitError.value = 'Calamity date is required for Special Emergency (Calamity) Leave.';
+        showToast('Calamity date is required for Special Emergency (Calamity) Leave.');
         return;
     }
 
     if (isMonetizationLeave.value && (!creditsMonetized.value || creditsMonetized.value <= 0)) {
-        submitError.value = 'Please provide credits to monetize.';
+        showToast('Please provide credits to monetize.');
         return;
     }
 
     if (isTerminalLeave.value && (!separationType.value || !separationEffectiveDate.value)) {
-        submitError.value = 'Please provide separation type and effective date for Terminal Leave.';
+        showToast('Please provide separation type and effective date for Terminal Leave.');
         return;
     }
 
@@ -830,6 +776,9 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+    if (toastTimer) {
+        clearTimeout(toastTimer);
+    }
     if (reverbEnabled) {
         try {
             echo().channel('leave-types').stopListening('LeaveTypeUpdated');
@@ -845,6 +794,9 @@ onBeforeUnmount(() => {
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="ehris-page leave-application-page">
+            <div v-if="toastVisible" class="toast-banner" :class="toastType === 'error' ? 'is-error' : 'is-success'">
+                {{ toastMessage }}
+            </div>
 
             <section class="leave-summary-row">
                 <article class="ehris-card leave-highlight-card">
@@ -1082,32 +1034,6 @@ onBeforeUnmount(() => {
                     </div>
 
                     <div class="request-actions">
-                        <p v-if="submitError" class="text-sm text-destructive">{{ submitError }}</p>
-                        <p v-else-if="$page.props.errors?.medical_certificate" class="text-sm text-destructive">
-                            {{ $page.props.errors.medical_certificate }}
-                        </p>
-                        <p v-else-if="$page.props.errors?.affidavit" class="text-sm text-destructive">
-                            {{ $page.props.errors.affidavit }}
-                        </p>
-                        <p v-else-if="$page.props.errors?.proof_of_delivery" class="text-sm text-destructive">
-                            {{ $page.props.errors.proof_of_delivery }}
-                        </p>
-                        <p v-else-if="$page.props.errors?.leave_end_date" class="text-sm text-destructive">
-                            {{ $page.props.errors.leave_end_date }}
-                        </p>
-                        <p
-                            v-else-if="
-                                Object.keys(($page.props.errors as Record<string, string>) ?? {}).length > 0
-                            "
-                            class="text-sm text-destructive"
-                        >
-                            {{
-                                (
-                                    Object.values(($page.props.errors as Record<string, string>) ?? {})[0] ??
-                                    'Please review your inputs.'
-                                )
-                            }}
-                        </p>
                         <button class="clear-btn" type="button" @click="clearLeaveRequestForm">
                             Clear
                         </button>
@@ -1151,7 +1077,32 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .leave-application-page {
+    position: relative;
     gap: 1rem;
+}
+
+.toast-banner {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 50;
+    max-width: min(420px, calc(100vw - 2rem));
+    padding: 0.7rem 0.9rem;
+    border-radius: 0.7rem;
+    border: 1px solid hsl(var(--border));
+    box-shadow: 0 12px 28px hsl(var(--foreground) / 0.15);
+    font-size: 0.84rem;
+    font-weight: 600;
+}
+
+.toast-banner.is-error {
+    background: hsl(var(--destructive));
+    color: hsl(var(--destructive-foreground));
+}
+
+.toast-banner.is-success {
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
 }
 
 .leave-top-row {

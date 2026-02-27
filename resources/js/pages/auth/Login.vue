@@ -44,7 +44,7 @@ onBeforeUnmount(() => {
         >
             <div class="mb-6 overflow-hidden rounded-xl">
                 <img
-                    src="/dous.png"
+                    src="/ehris.png"
                     alt="DepEd Ozamiz Unit School Division"
                     class="h-36 w-full object-cover object-center"
                 />
