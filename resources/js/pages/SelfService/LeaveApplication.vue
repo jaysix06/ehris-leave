@@ -1050,7 +1050,7 @@ onBeforeUnmount(() => {
                                 )
                             }}
                         </p>
-                        <button class="cancel-btn" type="button">Cancel</button>
+                        <button class="clear-btn" type="button">Clear</button>
                         <button class="apply-btn" type="button" @click="submitLeaveApplication">
                             Apply Leave
                             <SendHorizontal :size="14" />
@@ -1503,7 +1503,7 @@ onBeforeUnmount(() => {
     margin-top: 0.9rem;
 }
 
-.cancel-btn,
+.clear-btn,
 .apply-btn {
     border-radius: 0.6rem;
     border: 1px solid hsl(var(--primary));
@@ -1513,7 +1513,7 @@ onBeforeUnmount(() => {
     cursor: pointer;
 }
 
-.cancel-btn {
+.clear-btn {
     background: hsl(var(--card));
     color: hsl(var(--primary));
 }
