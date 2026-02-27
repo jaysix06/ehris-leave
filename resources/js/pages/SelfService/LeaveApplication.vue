@@ -64,6 +64,9 @@ const dateKey = (date: Date) => {
 const sortedSpecificLeaveDates = computed(() =>
     [...specificLeaveDates.value].sort((a, b) => a.getTime() - b.getTime()),
 );
+const specificDatesSignature = computed(() =>
+    sortedSpecificLeaveDates.value.map((date) => dateKey(date)).join('|'),
+);
 
 const selectedSpecificDatesText = computed(() => {
     const dates = sortedSpecificLeaveDates.value.map((date) => formatDate(date));
@@ -257,9 +260,9 @@ const calendarLeaveRange = computed<CalendarRangeModel | undefined>({
 
 const specificDaysAttributes = computed(() => [
     {
-        key: 'specific-leave-days',
+        key: `specific-leave-days-${specificDatesSignature.value}`,
         highlight: true,
-        dates: sortedSpecificLeaveDates.value,
+        dates: sortedSpecificLeaveDates.value.map((date) => new Date(date)),
     },
 ]);
 
@@ -280,10 +283,8 @@ const onSpecificDayClick = (day: CalendarDayClick) => {
     specificLeaveDates.value = clampSpecificLeaveDates(nextDates);
 };
 
-const clearSpecificLeaveDates = () => {
-    specificLeaveDates.value = [];
-};
 const reason = ref<string>('');
+const reasonSpecify = ref<string>('');
 const commutation = ref<string>('');
 const consultationAvailed = ref<'yes' | 'no' | ''>('');
 const medicalCertification = ref<File | null>(null);
@@ -320,6 +321,57 @@ const separationEffectiveDate = ref('');
 const creditsMonetized = ref<number | null>(null);
 const isMandatoryLeave = ref(false);
 const submitError = ref<string | null>(null);
+
+const clearLeaveRequestForm = () => {
+    submitError.value = null;
+
+    selectedLeaveType.value = defaultLeaveTypeLabel;
+    leaveForMode.value = '- Select Leave For -';
+    leaveRange.value = { start: null, end: null };
+    specificLeaveDates.value = [];
+    calendarKey.value += 1;
+
+    reason.value = '';
+    reasonSpecify.value = '';
+    commutation.value = '';
+    consultationAvailed.value = '';
+
+    medicalCertification.value = null;
+    affidavitFile.value = null;
+    proofOfDelivery.value = null;
+    supportingDocuments.value = [];
+    if (medicalFileInput.value) medicalFileInput.value.value = '';
+    if (affidavitFileInput.value) affidavitFileInput.value.value = '';
+    if (proofOfDeliveryInput.value) proofOfDeliveryInput.value.value = '';
+    if (supportingDocumentsInput.value) supportingDocumentsInput.value.value = '';
+
+    isMedicalDropActive.value = false;
+    isAffidavitDropActive.value = false;
+    isProofOfDeliveryDropActive.value = false;
+
+    destinationScope.value = '';
+    destinationDetails.value = '';
+    travelAuthorityNo.value = '';
+    isEmergencySpl.value = false;
+    emergencyReason.value = '';
+    isTimingOverride.value = false;
+    timingOverrideReason.value = '';
+    accidentDate.value = '';
+    surgeryDate.value = '';
+    calamityDate.value = '';
+    calamityType.value = '';
+    calamityArea.value = '';
+    residenceAddressSnapshot.value = '';
+    soloParentIdNo.value = '';
+    soloParentIdValidUntil.value = '';
+    studyContractId.value = '';
+    isPrivatePhysician.value = false;
+    supervisorNotes.value = '';
+    separationType.value = '';
+    separationEffectiveDate.value = '';
+    creditsMonetized.value = null;
+    isMandatoryLeave.value = false;
+};
 
 const page = usePage();
 const authUser = computed(() => page.props.auth?.user as User | undefined);
@@ -863,14 +915,6 @@ onBeforeUnmount(() => {
                                 <label>
                                     <div class="specific-dates-label">
                                         <span>Specific dates</span>
-                                        <button
-                                            type="button"
-                                            class="clear-specific-dates-btn"
-                                            :disabled="specificLeaveDates.length === 0"
-                                            @click="clearSpecificLeaveDates"
-                                        >
-                                            Clear
-                                        </button>
                                     </div>
                                     <div class="date-readonly">
                                         {{ selectedSpecificDatesText }}
@@ -926,7 +970,7 @@ onBeforeUnmount(() => {
                                         Terminal Leave
                                     </label>
                                 </div>
-                                <textarea placeholder="Specify..."></textarea>
+                                <textarea v-model="reasonSpecify" placeholder="Specify..." />
                             </label>
                             <label>
                                 Commutation
@@ -1050,7 +1094,9 @@ onBeforeUnmount(() => {
                                 )
                             }}
                         </p>
-                        <button class="clear-btn" type="button">Clear</button>
+                        <button class="clear-btn" type="button" @click="clearLeaveRequestForm">
+                            Clear
+                        </button>
                         <button class="apply-btn" type="button" @click="submitLeaveApplication">
                             Apply Leave
                             <SendHorizontal :size="14" />
@@ -1189,23 +1235,6 @@ onBeforeUnmount(() => {
     align-items: center;
     justify-content: space-between;
     gap: 0.5rem;
-}
-
-.clear-specific-dates-btn {
-    border: 0;
-    background: transparent;
-    color: hsl(var(--primary));
-    font-size: 0.75rem;
-    font-weight: 600;
-    cursor: pointer;
-    text-decoration: underline;
-    padding: 0;
-}
-
-.clear-specific-dates-btn:disabled {
-    color: hsl(var(--muted-foreground));
-    cursor: not-allowed;
-    text-decoration: none;
 }
 
 .leave-type :deep(svg) {
@@ -1516,6 +1545,11 @@ onBeforeUnmount(() => {
 .clear-btn {
     background: hsl(var(--card));
     color: hsl(var(--primary));
+}
+
+.clear-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
 }
 
 .apply-btn {
