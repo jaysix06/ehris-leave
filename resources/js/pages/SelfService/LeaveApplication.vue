@@ -712,13 +712,11 @@ onBeforeUnmount(() => {
                                     </option>
                                 </select>
                             </label>
-                            <label v-if="selectedLeaveType === 'Others'">
-                                <textarea placeholder="Specify..."></textarea>
-                            </label>
                             <label>
                                 Leave For
                                 <select>
-                                    <option>Full Day</option>
+                                    <option>Specific days</option>
+                                    <option>Within selected date range</option>
                                 </select>
                             </label>
 
@@ -745,60 +743,43 @@ onBeforeUnmount(() => {
                                 </label>
                             </div>
 
-                            <label v-if="selectedLeaveType === 'Sick Leave'">
-                                Reason for Sick Leave
-                                <div class="flex flex-wrap gap-12 mt-2">
-                                    <label class="radio-option inline-flex  gap-2 cursor-pointer">
+                            <label>
+                                Reason for {{ selectedLeaveType }}
+                                <div class="flex flex-wrap gap-12 mt-2" :class="selectedLeaveType === 'Study Leave' ? 'gap-12' : 'gap-4'"0>
+                                    <!-- Sick Leave -->
+                                    <label  v-if="selectedLeaveType === 'Sick Leave'" class="radio-option inline-flex  gap-2 cursor-pointer">
                                         <input type="radio" v-model="reason" name="choice" value="a" />
                                         In Hospital
                                     </label>
-                                    <label class="radio-option inline-flex  gap-2 cursor-pointer">
+                                    <label  v-if="selectedLeaveType === 'Sick Leave'" class="radio-option inline-flex  gap-2 cursor-pointer">
                                         <input type="radio" v-model="reason" name="choice" value="b" />
                                         Outpatient
                                     </label>
-                                </div>
-                                <textarea placeholder="Specify Illness..."></textarea>
-                            </label>
-                            <label v-else-if="selectedLeaveType === 'Vacation Leave' || selectedLeaveType === 'Special Privilege Leave'">
-                                Reason for {{ selectedLeaveType }}
-                                <div class="flex flex-wrap gap-12 mt-2">
-                                    <label class="radio-option inline-flex  gap-2 cursor-pointer">
+
+                                    <!-- Vacation Leave or Special Privilege Leave -->
+                                    <label v-if="selectedLeaveType === 'Vacation Leave' || selectedLeaveType === 'Special Privilege Leave'" class="radio-option inline-flex  gap-2 cursor-pointer">
                                         <input type="radio" v-model="reason" name="within" value="Within the Philippines" />
                                         Within the Philippines
                                     </label>
-                                    <label class="radio-option inline-flex  gap-2 cursor-pointer">
+                                    <label v-if="selectedLeaveType === 'Vacation Leave' || selectedLeaveType === 'Special Privilege Leave'" class="radio-option inline-flex  gap-2 cursor-pointer">
                                         <input type="radio" v-model="reason" name="abroad" value="Abroad" />
                                         Abroad
                                     </label>
-                                </div>
-                                <textarea placeholder="Specify..."></textarea>
-                            </label>
-                            <label v-else-if="selectedLeaveType === 'Special Leave Benefits for Women'">
-                                Reason for {{ selectedLeaveType }}
-                                <textarea placeholder="Specify..."></textarea>
-                            </label>
-                            <label v-else-if="selectedLeaveType === 'Study Leave'">
-                                Reason for {{ selectedLeaveType }}
-                                <div class="flex flex-wrap gap-2 mt-2">
-                                    <label class="radio-option inline-flex  gap-1 cursor-pointer">
+
+                                    <label v-if="selectedLeaveType === 'Study Leave'" class="radio-option inline-flex  gap-1 cursor-pointer">
                                         <input type="radio" v-model="reason" name="masters" value="Completion of Master's Degree" />
                                         Completion of Master's Degree
                                     </label>
-                                    <label class="radio-option inline-flex  gap-1 cursor-pointer">
+                                    <label v-if="selectedLeaveType === 'Study Leave'" class="radio-option inline-flex  gap-1 cursor-pointer">
                                         <input type="radio" v-model="reason" name="review" value="BAR/Board Examination Review" />
                                         BAR/Board Examination Review
                                     </label>
-                                </div>
-                                <textarea placeholder="Specify..."></textarea>
-                            </label>
-                            <label v-else-if="selectedLeaveType === 'Others'">
-                                Reason for {{ selectedLeaveType }}
-                                <div class="flex flex-wrap gap-2 mt-2">
-                                    <label class="radio-option inline-flex  gap-1 cursor-pointer">
+
+                                    <label v-if="selectedLeaveType === 'Others'" class="radio-option inline-flex  gap-1 cursor-pointer">
                                         <input type="radio" v-model="reason" name="monetization" value="Monetization of Leave Credits" />
                                         Monetization of Leave Credits
                                     </label>
-                                    <label class="radio-option inline-flex  gap-1 cursor-pointer">
+                                    <label v-if="selectedLeaveType === 'Others'" class="radio-option inline-flex  gap-1 cursor-pointer">
                                         <input type="radio" v-model="reason" name="terminal" value="Terminal Leave" />
                                         Terminal Leave
                                     </label>
@@ -817,123 +798,6 @@ onBeforeUnmount(() => {
                                         Not Requested
                                     </label>
                                 </div>
-                            </label>
-
-                            <label v-if="isVacationLeave || isSpecialPrivilegeLeave">
-                                Destination Scope
-                                <div class="flex flex-wrap gap-12 mt-2">
-                                    <label class="radio-option inline-flex gap-2 cursor-pointer">
-                                        <input type="radio" v-model="destinationScope" value="within_ph" />
-                                        Within Philippines
-                                    </label>
-                                    <label class="radio-option inline-flex gap-2 cursor-pointer">
-                                        <input type="radio" v-model="destinationScope" value="abroad" />
-                                        Abroad
-                                    </label>
-                                </div>
-                            </label>
-                            <label v-if="isVacationLeave || isSpecialPrivilegeLeave">
-                                Destination Details (Optional)
-                                <input v-model="destinationDetails" type="text" />
-                            </label>
-                            <label v-if="isVacationLeave || isSpecialPrivilegeLeave">
-                                Travel Authority No. (Optional)
-                                <input v-model="travelAuthorityNo" type="text" />
-                            </label>
-
-                            <label v-if="isSpecialPrivilegeLeave">
-                                <span class="inline-flex items-center gap-2">
-                                    <input v-model="isEmergencySpl" type="checkbox" />
-                                    Emergency filing
-                                </span>
-                            </label>
-                            <label v-if="isSpecialPrivilegeLeave && isEmergencySpl">
-                                Emergency Reason
-                                <textarea v-model="emergencyReason" placeholder="Provide emergency justification..." />
-                            </label>
-
-                            <label v-if="isVacationLeave || isSoloParentLeave || isRehabilitationLeave">
-                                <span class="inline-flex items-center gap-2">
-                                    <input v-model="isTimingOverride" type="checkbox" />
-                                    Timing exception override
-                                </span>
-                            </label>
-                            <label v-if="(isVacationLeave || isSoloParentLeave || isRehabilitationLeave) && isTimingOverride">
-                                Timing Override Reason
-                                <textarea v-model="timingOverrideReason" placeholder="Explain why normal filing window is not possible..." />
-                            </label>
-
-                            <label v-if="isRehabilitationLeave">
-                                Accident Date
-                                <input v-model="accidentDate" type="date" />
-                            </label>
-                            <label v-if="isRehabilitationLeave">
-                                <span class="inline-flex items-center gap-2">
-                                    <input v-model="isPrivatePhysician" type="checkbox" />
-                                    Attending physician is private
-                                </span>
-                            </label>
-
-                            <label v-if="isSpecialWomenLeave">
-                                Surgery Date
-                                <input v-model="surgeryDate" type="date" />
-                            </label>
-
-                            <label v-if="isCalamityLeave">
-                                Calamity Date
-                                <input v-model="calamityDate" type="date" />
-                            </label>
-                            <label v-if="isCalamityLeave">
-                                Calamity Type
-                                <input v-model="calamityType" type="text" />
-                            </label>
-                            <label v-if="isCalamityLeave">
-                                Calamity Area
-                                <input v-model="calamityArea" type="text" />
-                            </label>
-                            <label v-if="isCalamityLeave">
-                                Residence Address Snapshot
-                                <input v-model="residenceAddressSnapshot" type="text" />
-                            </label>
-
-                            <label v-if="isSoloParentLeave">
-                                Solo Parent ID No. (Optional)
-                                <input v-model="soloParentIdNo" type="text" />
-                            </label>
-                            <label v-if="isSoloParentLeave">
-                                Solo Parent ID Valid Until (Optional)
-                                <input v-model="soloParentIdValidUntil" type="date" />
-                            </label>
-
-                            <label v-if="isStudyLeave">
-                                Study Contract ID (Optional)
-                                <input v-model="studyContractId" type="text" />
-                            </label>
-
-                            <label v-if="isMonetizationLeave">
-                                Credits Monetized
-                                <input v-model.number="creditsMonetized" type="number" min="0" step="0.01" />
-                            </label>
-
-                            <label v-if="isTerminalLeave">
-                                Separation Type
-                                <select v-model="separationType">
-                                    <option value="">Select separation type</option>
-                                    <option value="resignation">Resignation</option>
-                                    <option value="retirement">Retirement</option>
-                                    <option value="separation">Separation</option>
-                                </select>
-                            </label>
-                            <label v-if="isTerminalLeave">
-                                Separation Effective Date
-                                <input v-model="separationEffectiveDate" type="date" />
-                            </label>
-
-                            <label v-if="isVacationLeave || isMandatoryForceLeave">
-                                <span class="inline-flex items-center gap-2">
-                                    <input v-model="isMandatoryLeave" type="checkbox" />
-                                    Count toward mandatory VL
-                                </span>
                             </label>
 
                             <label>
@@ -957,219 +821,8 @@ onBeforeUnmount(() => {
                                 />
                                 <div v-if="isLeaveTypeUnselected" class="calendar-disabled-overlay" />
                             </div>
-                            <div
-                                v-if="isSickLeave && requiresSupportingDoc"
-                                class="medical-cert-panel"
-                            >
-                                <p class="upload-title">Supporting Documents Required</p>
-                                <p class="dropzone-sub">
-                                    Required when filed in advance or exceeding 5 days. Provide a medical certificate or an affidavit.
-                                </p>
+                            
 
-                                <label class="radio-option inline-flex gap-2 cursor-pointer">
-                                    <input type="radio" v-model="consultationAvailed" name="consultation" value="yes" />
-                                    Medical consultation availed
-                                </label>
-                                <label class="radio-option inline-flex gap-2 cursor-pointer">
-                                    <input type="radio" v-model="consultationAvailed" name="consultation" value="no" />
-                                    No medical consultation (affidavit)
-                                </label>
-
-                                <template v-if="consultationAvailed === 'yes'">
-                                    <div
-                                        v-if="!medicalCertification"
-                                        class="medical-dropzone"
-                                        :class="{ 'is-active': isMedicalDropActive }"
-                                        @click="openMedicalFilePicker"
-                                        @dragover.prevent="isMedicalDropActive = true"
-                                        @dragleave.prevent="isMedicalDropActive = false"
-                                        @drop="onMedicalDrop"
-                                    >
-                                        <div class="dropzone-icon-wrap">
-                                            <ImagePlus :size="30" />
-                                        </div>
-                                        <p class="dropzone-main">
-                                            Drag &amp; drop
-                                            <span>medical certificate</span>
-                                        </p>
-                                        <p class="dropzone-sub">
-                                            or
-                                            <button type="button" class="browse-link" @click.stop="openMedicalFilePicker">
-                                                browse files
-                                            </button>
-                                            on your computer
-                                        </p>
-                                        <input
-                                            ref="medicalFileInput"
-                                            type="file"
-                                            accept=".pdf,.jpg,.jpeg,.png"
-                                            class="sr-only"
-                                            @change="onMedicalCertificationChange"
-                                        />
-                                    </div>
-
-                                    <div v-if="medicalCertification" class="medical-file-row">
-                                        <div class="file-meta">
-                                            <p class="file-name">{{ medicalCertification.name }}</p>
-                                            <p class="file-info">
-                                                {{ Math.max(1, Math.round(medicalCertification.size / 1024)) }} KB
-                                            </p>
-                                        </div>
-                                        <button type="button" class="remove-file-btn" @click="clearMedicalCertification">
-                                            <X :size="16" />
-                                        </button>
-                                    </div>
-                                </template>
-
-                                <template v-else-if="consultationAvailed === 'no'">
-                                    <div
-                                        v-if="!affidavitFile"
-                                        class="medical-dropzone"
-                                        :class="{ 'is-active': isAffidavitDropActive }"
-                                        @click="openAffidavitFilePicker"
-                                        @dragover.prevent="isAffidavitDropActive = true"
-                                        @dragleave.prevent="isAffidavitDropActive = false"
-                                        @drop="onAffidavitDrop"
-                                    >
-                                        <div class="dropzone-icon-wrap">
-                                            <ImagePlus :size="30" />
-                                        </div>
-                                        <p class="dropzone-main">
-                                            Drag &amp; drop
-                                            <span>affidavit</span>
-                                        </p>
-                                        <p class="dropzone-sub">
-                                            or
-                                            <button type="button" class="browse-link" @click.stop="openAffidavitFilePicker">
-                                                browse files
-                                            </button>
-                                            on your computer
-                                        </p>
-                                        <input
-                                            ref="affidavitFileInput"
-                                            type="file"
-                                            accept=".pdf,.jpg,.jpeg,.png"
-                                            class="sr-only"
-                                            @change="onAffidavitChange"
-                                        />
-                                    </div>
-
-                                    <div v-if="affidavitFile" class="medical-file-row">
-                                        <div class="file-meta">
-                                            <p class="file-name">{{ affidavitFile.name }}</p>
-                                            <p class="file-info">
-                                                {{ Math.max(1, Math.round(affidavitFile.size / 1024)) }} KB
-                                            </p>
-                                        </div>
-                                        <button type="button" class="remove-file-btn" @click="clearAffidavit">
-                                            <X :size="16" />
-                                        </button>
-                                    </div>
-                                </template>
-                            </div>
-
-                            <div
-                                v-else-if="isMaternityLeave"
-                                class="medical-cert-panel"
-                            >
-                                <p class="upload-title">Proof of Pregnancy</p>
-
-                                <div
-                                    v-if="!medicalCertification"
-                                    class="medical-dropzone"
-                                    :class="{ 'is-active': isMedicalDropActive }"
-                                    @click="openMedicalFilePicker"
-                                    @dragover.prevent="isMedicalDropActive = true"
-                                    @dragleave.prevent="isMedicalDropActive = false"
-                                    @drop="onMedicalDrop"
-                                >
-                                    <div class="dropzone-icon-wrap">
-                                        <ImagePlus :size="30" />
-                                    </div>
-                                    <p class="dropzone-main">
-                                        Drag &amp; drop
-                                        <span>images, videos, or any file</span>
-                                    </p>
-                                    <p class="dropzone-sub">
-                                        or
-                                        <button type="button" class="browse-link" @click.stop="openMedicalFilePicker">
-                                            browse files
-                                        </button>
-                                        on your computer
-                                    </p>
-                                    <input
-                                        ref="medicalFileInput"
-                                        type="file"
-                                        accept=".pdf,.jpg,.jpeg,.png"
-                                        class="sr-only"
-                                        @change="onMedicalCertificationChange"
-                                    />
-                                </div>
-
-                                <div v-if="medicalCertification" class="medical-file-row">
-                                    <div class="file-meta">
-                                        <p class="file-name">{{ medicalCertification.name }}</p>
-                                        <p class="file-info">
-                                            {{ Math.max(1, Math.round(medicalCertification.size / 1024)) }} KB
-                                        </p>
-                                    </div>
-                                    <button type="button" class="remove-file-btn" @click="clearMedicalCertification">
-                                        <X :size="16" />
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div
-                                v-else-if="isPaternityLeave"
-                                class="medical-cert-panel"
-                            >
-                                <p class="upload-title">Proof of Child's Delivery</p>
-                                <p class="dropzone-sub">
-                                    Required for Paternity Leave (max 7 days). Upload one document as proof (e.g. birth certificate, medical certificate, or marriage contract).
-                                </p>
-                                <div
-                                    v-if="!proofOfDelivery"
-                                    class="medical-dropzone"
-                                    :class="{ 'is-active': isProofOfDeliveryDropActive }"
-                                    @click="openProofOfDeliveryPicker"
-                                    @dragover.prevent="isProofOfDeliveryDropActive = true"
-                                    @dragleave.prevent="isProofOfDeliveryDropActive = false"
-                                    @drop="onProofOfDeliveryDrop"
-                                >
-                                    <div class="dropzone-icon-wrap">
-                                        <ImagePlus :size="30" />
-                                    </div>
-                                    <p class="dropzone-main">
-                                        Drag &amp; drop
-                                        <span>proof of child's delivery</span>
-                                    </p>
-                                    <p class="dropzone-sub">
-                                        or
-                                        <button type="button" class="browse-link" @click.stop="openProofOfDeliveryPicker">
-                                            browse files
-                                        </button>
-                                        on your computer
-                                    </p>
-                                    <input
-                                        ref="proofOfDeliveryInput"
-                                        type="file"
-                                        accept=".pdf,.jpg,.jpeg,.png"
-                                        class="sr-only"
-                                        @change="onProofOfDeliveryChange"
-                                    />
-                                </div>
-                                <div v-if="proofOfDelivery" class="medical-file-row">
-                                    <div class="file-meta">
-                                        <p class="file-name">{{ proofOfDelivery.name }}</p>
-                                        <p class="file-info">
-                                            {{ Math.max(1, Math.round(proofOfDelivery.size / 1024)) }} KB
-                                        </p>
-                                    </div>
-                                    <button type="button" class="remove-file-btn" @click="clearProofOfDelivery">
-                                        <X :size="16" />
-                                    </button>
-                                </div>
-                            </div>
 
                             <div class="medical-cert-panel">
                                 <p class="upload-title">Supporting Documents</p>
@@ -1272,7 +925,7 @@ onBeforeUnmount(() => {
                         <div class="info-readonly">{{ employeeDetails.position }}</div>
                     </label>
                     <label>
-                        Reporting
+                        Reporting Manager
                         <div class="info-readonly">{{ employeeDetails.reportingManager }}</div>
                     </label>
                 </aside>
