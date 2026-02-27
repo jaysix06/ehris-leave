@@ -8,7 +8,7 @@ import {
     SendHorizontal,
     X,
 } from 'lucide-vue-next';
-import { DatePicker } from 'v-calendar';
+import { Calendar, DatePicker } from 'v-calendar';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import selfServiceRoutes from '@/routes/self-service';
@@ -576,6 +576,21 @@ watch(selectedLeaveType, (newType, oldType) => {
     }
 });
 
+watch(leaveForMode, (newMode, oldMode) => {
+    if (newMode === oldMode) return;
+
+    if (newMode === 'Within selected date range') {
+        specificLeaveDates.value = [];
+    } else if (newMode === 'Specific dates') {
+        leaveRange.value = {
+            start: null,
+            end: null,
+        };
+    }
+
+    calendarKey.value += 1;
+});
+
 watch([minSelectableDate, leaveTypeDayLimit], () => {
     if (isSpecificDaysMode.value) {
         specificLeaveDates.value = clampSpecificLeaveDates(specificLeaveDates.value);
@@ -1006,10 +1021,9 @@ onBeforeUnmount(() => {
                                     :masks="{ weekdays: 'WWW' }"
                                     class="calendar-inline"
                                 />
-                                <DatePicker
+                                <Calendar
                                     v-else
                                     :key="`specific-${calendarKey}`"
-                                    is-inline
                                     expanded
                                     :attributes="specificDaysAttributes"
                                     :disabled-dates="disabledDates"
