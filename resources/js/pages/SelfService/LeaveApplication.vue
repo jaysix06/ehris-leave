@@ -36,6 +36,8 @@ const leaveRange = ref<{ start: Date | null; end: Date | null }>({
 });
 type LeaveRange = { start: Date | null; end: Date | null };
 type CalendarRangeModel = { start: Date; end: Date };
+type LeaveForMode = 'Specific dates' | 'Within selected date range' | '- Select Leave For -';
+type CalendarDayClick = { date: Date; isDisabled?: boolean };
 
 const formatter = new Intl.DateTimeFormat('en-GB', {
     day: '2-digit',
@@ -46,18 +48,62 @@ const formatter = new Intl.DateTimeFormat('en-GB', {
 const formatDate = (date: Date | null) =>
     date ? formatter.format(date) : '--/--/----';
 
-const selectedRangeText = computed(
-    () => `${formatDate(leaveRange.value.start)} to ${formatDate(leaveRange.value.end)}`,
+const leaveForMode = ref<LeaveForMode>('- Select Leave For -');
+const specificLeaveDates = ref<Date[]>([]);
+const isSpecificDaysMode = computed(() => leaveForMode.value === 'Specific dates');
+const isLeaveForUnselected = computed(() => leaveForMode.value === '- Select Leave For -');
+
+const dateKey = (date: Date) => {
+    const normalized = normalizeDate(date);
+    const year = normalized.getFullYear();
+    const month = `${normalized.getMonth() + 1}`.padStart(2, '0');
+    const day = `${normalized.getDate()}`.padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
+const sortedSpecificLeaveDates = computed(() =>
+    [...specificLeaveDates.value].sort((a, b) => a.getTime() - b.getTime()),
+);
+
+const selectedSpecificDatesText = computed(() => {
+    const dates = sortedSpecificLeaveDates.value.map((date) => formatDate(date));
+    return dates.length ? dates.join(', ') : '--/--/----';
+});
+
+const effectiveLeaveStartDate = computed(() => {
+    if (!isSpecificDaysMode.value) {
+        return leaveRange.value.start;
+    }
+    return sortedSpecificLeaveDates.value[0] ?? null;
+});
+
+const effectiveLeaveEndDate = computed(() => {
+    if (!isSpecificDaysMode.value) {
+        return leaveRange.value.end;
+    }
+    return sortedSpecificLeaveDates.value[sortedSpecificLeaveDates.value.length - 1] ?? null;
+});
+
+const selectedRangeText = computed(() =>
+    isSpecificDaysMode.value
+        ? selectedSpecificDatesText.value
+        : `${formatDate(leaveRange.value.start)} to ${formatDate(leaveRange.value.end)}`,
 );
 
 const noOfDays = computed(() => {
+    if (isSpecificDaysMode.value) {
+        return sortedSpecificLeaveDates.value.length;
+    }
+
     if (!leaveRange.value.start || !leaveRange.value.end) {
         return 0;
     }
     return differenceInDays(leaveRange.value.end, leaveRange.value.start) + 1;
 });
 
-const isFiledInAdvance = computed(() => !!leaveRange.value.start && leaveRange.value.start > today);
+const isFiledInAdvance = computed(
+    () => !!effectiveLeaveStartDate.value && effectiveLeaveStartDate.value > today,
+);
 const requiresSupportingDoc = computed(
     () => isSickLeave.value && (isFiledInAdvance.value || noOfDays.value > 5),
 );
@@ -155,6 +201,22 @@ const clampLeaveRange = (value: LeaveRange): LeaveRange => {
     return { start, end };
 };
 
+const clampSpecificLeaveDates = (value: Date[]) => {
+    const minimumDate = minSelectableDate.value ? normalizeDate(minSelectableDate.value) : null;
+    const uniqueSorted = [...value]
+        .map((date) => normalizeDate(date))
+        .filter((date) => !minimumDate || date >= minimumDate)
+        .filter((date, index, arr) => index === arr.findIndex((item) => dateKey(item) === dateKey(date)))
+        .sort((a, b) => a.getTime() - b.getTime());
+
+    const limit = leaveTypeDayLimit.value;
+    if (limit && uniqueSorted.length > limit) {
+        return uniqueSorted.slice(0, limit);
+    }
+
+    return uniqueSorted;
+};
+
 const disabledDates = ref([
   {
     repeat: {
@@ -192,6 +254,35 @@ const calendarLeaveRange = computed<CalendarRangeModel | undefined>({
         }
     },
 });
+
+const specificDaysAttributes = computed(() => [
+    {
+        key: 'specific-leave-days',
+        highlight: true,
+        dates: sortedSpecificLeaveDates.value,
+    },
+]);
+
+const onSpecificDayClick = (day: CalendarDayClick) => {
+    if (isLeaveTypeUnselected.value || day.isDisabled) {
+        return;
+    }
+
+    const pickedDate = normalizeDate(day.date);
+    const pickedKey = dateKey(pickedDate);
+    const existing = specificLeaveDates.value;
+    const hasDate = existing.some((date) => dateKey(date) === pickedKey);
+
+    const nextDates = hasDate
+        ? existing.filter((date) => dateKey(date) !== pickedKey)
+        : [...existing, pickedDate];
+
+    specificLeaveDates.value = clampSpecificLeaveDates(nextDates);
+};
+
+const clearSpecificLeaveDates = () => {
+    specificLeaveDates.value = [];
+};
 const reason = ref<string>('');
 const commutation = ref<string>('');
 const consultationAvailed = ref<'yes' | 'no' | ''>('');
@@ -428,7 +519,14 @@ watch(selectedLeaveType, (newType, oldType) => {
             start: null,
             end: null,
         };
+        specificLeaveDates.value = [];
         calendarKey.value += 1;
+    }
+});
+
+watch([minSelectableDate, leaveTypeDayLimit], () => {
+    if (isSpecificDaysMode.value) {
+        specificLeaveDates.value = clampSpecificLeaveDates(specificLeaveDates.value);
     }
 });
 
@@ -525,13 +623,21 @@ const formatDateForSubmit = (date: Date) => {
 
 const submitLeaveApplication = () => {
     submitError.value = null;
+    const leaveStartDate = effectiveLeaveStartDate.value;
+    const leaveEndDate = effectiveLeaveEndDate.value;
 
     if (selectedLeaveType.value === defaultLeaveTypeLabel) {
         submitError.value = 'Please select a leave type.';
         return;
     }
-    if (!leaveRange.value.start || !leaveRange.value.end) {
-        submitError.value = 'Please select both start and end dates.';
+    if (isLeaveForUnselected.value) {
+        submitError.value = 'Please select Leave For.';
+        return;
+    }
+    if (!leaveStartDate || !leaveEndDate) {
+        submitError.value = isSpecificDaysMode.value
+            ? 'Please select at least one leave date.'
+            : 'Please select both start and end dates.';
         return;
     }
 
@@ -596,8 +702,8 @@ const submitLeaveApplication = () => {
         selfServiceRoutes.leaveApplication().url,
         {
             leave_type: selectedLeaveType.value,
-            leave_start_date: formatDateForSubmit(leaveRange.value.start),
-            leave_end_date: formatDateForSubmit(leaveRange.value.end),
+            leave_start_date: formatDateForSubmit(leaveStartDate),
+            leave_end_date: formatDateForSubmit(leaveEndDate),
             reason: reason.value || null,
             commutation: commutation.value || null,
             consultation_availed: consultationAvailed.value || null,
@@ -627,6 +733,10 @@ const submitLeaveApplication = () => {
             credits_monetized: creditsMonetized.value ?? null,
             is_mandatory_leave: isMandatoryLeave.value,
             supporting_documents: supportingDocuments.value,
+            leave_for_mode: leaveForMode.value,
+            leave_specific_dates: isSpecificDaysMode.value
+                ? sortedSpecificLeaveDates.value.map((date) => formatDateForSubmit(date)).join(',')
+                : null,
         },
         {
             forceFormData: true,
@@ -699,7 +809,7 @@ onBeforeUnmount(() => {
                 <article class="ehris-card request-card">
                     <div class="request-head">
                         <h3>Create Leave request</h3>
-                        <p class="date-range">{{ selectedRangeText }}</p>
+                        <p class="date-range">{{ today.toLocaleDateString('en-US', { month: 'long', day: '2-digit', year: 'numeric' }) }}</p>
                     </div>
 
                     <div class="request-grid">
@@ -707,20 +817,26 @@ onBeforeUnmount(() => {
                             <label>
                                 Leave Type
                                 <select v-model="selectedLeaveType" class="border-5 border-primary">
-                                    <option v-for="option in leaveTypeOptions" :key="option.value" :value="option.value">
+                                    <option
+                                        v-for="option in leaveTypeOptions"
+                                        :key="option.value"
+                                        :value="option.value"
+                                        :disabled="option.value === defaultLeaveTypeLabel"
+                                    >
                                         {{ option.label }}
                                     </option>
                                 </select>
                             </label>
                             <label>
                                 Leave For
-                                <select>
-                                    <option>Specific days</option>
-                                    <option>Within selected date range</option>
+                                <select v-model="leaveForMode">
+                                    <option value="- Select Leave For -" disabled selected>- Select Leave For -</option>
+                                    <option value="Specific dates">Specific dates</option>
+                                    <option value="Within selected date range">Within selected date range</option>
                                 </select>
                             </label>
 
-                            <div class="date-range-row">
+                            <div v-if="!isSpecificDaysMode" class="date-range-row">
                                 <label>
                                     Start date
                                     <div class="date-readonly">
@@ -743,9 +859,35 @@ onBeforeUnmount(() => {
                                 </label>
                             </div>
 
+                            <div v-else class="date-range-row-specific">
+                                <label>
+                                    <div class="specific-dates-label">
+                                        <span>Specific dates</span>
+                                        <button
+                                            type="button"
+                                            class="clear-specific-dates-btn"
+                                            :disabled="specificLeaveDates.length === 0"
+                                            @click="clearSpecificLeaveDates"
+                                        >
+                                            Clear
+                                        </button>
+                                    </div>
+                                    <div class="date-readonly">
+                                        {{ selectedSpecificDatesText }}
+                                    </div>
+                                </label>
+
+                                <label>
+                                    No. of Days
+                                    <div class="date-readonly">
+                                        {{ noOfDays }}
+                                    </div>
+                                </label>
+                            </div>
+
                             <label>
                                 Reason for {{ selectedLeaveType }}
-                                <div class="flex flex-wrap gap-12 mt-2" :class="selectedLeaveType === 'Study Leave' ? 'gap-12' : 'gap-4'"0>
+                                <div class="flex flex-wrap mt-2" :class="selectedLeaveType === 'Study Leave' || selectedLeaveType === 'Others' ? 'gap-3' : 'gap-12'">
                                     <!-- Sick Leave -->
                                     <label  v-if="selectedLeaveType === 'Sick Leave'" class="radio-option inline-flex  gap-2 cursor-pointer">
                                         <input type="radio" v-model="reason" name="choice" value="a" />
@@ -807,8 +949,9 @@ onBeforeUnmount(() => {
                         </div>
 
                         <div class="calendar-box">
-                            <div class="calendar-picker-wrap" :class="{ 'is-disabled': isLeaveTypeUnselected }">
+                            <div class="calendar-picker-wrap" :class="{ 'is-disabled': isLeaveTypeUnselected || isLeaveForUnselected }">
                                 <DatePicker
+                                    v-if="!isSpecificDaysMode"
                                     :key="calendarKey"
                                     v-model="calendarLeaveRange"
                                     is-range
@@ -819,7 +962,19 @@ onBeforeUnmount(() => {
                                     :masks="{ weekdays: 'WWW' }"
                                     class="calendar-inline"
                                 />
-                                <div v-if="isLeaveTypeUnselected" class="calendar-disabled-overlay" />
+                                <DatePicker
+                                    v-else
+                                    :key="`specific-${calendarKey}`"
+                                    is-inline
+                                    expanded
+                                    :attributes="specificDaysAttributes"
+                                    :disabled-dates="disabledDates"
+                                    :min-date="minSelectableDate ?? undefined"
+                                    :masks="{ weekdays: 'WWW' }"
+                                    class="calendar-inline"
+                                    @dayclick="onSpecificDayClick"
+                                />
+                                <div v-if="isLeaveTypeUnselected || isLeaveForUnselected" class="calendar-disabled-overlay" />
                             </div>
                             
 
@@ -1021,6 +1176,36 @@ onBeforeUnmount(() => {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
     gap: 0.7rem;
+}
+
+.date-range-row-specific {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 0.7rem;
+}
+
+.specific-dates-label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.clear-specific-dates-btn {
+    border: 0;
+    background: transparent;
+    color: hsl(var(--primary));
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: underline;
+    padding: 0;
+}
+
+.clear-specific-dates-btn:disabled {
+    color: hsl(var(--muted-foreground));
+    cursor: not-allowed;
+    text-decoration: none;
 }
 
 .leave-type :deep(svg) {
@@ -1228,6 +1413,8 @@ onBeforeUnmount(() => {
     text-align: left;
     cursor: default;
     user-select: none;
+    white-space: normal;
+    word-break: break-word;
 }
 
 .left-form textarea {
