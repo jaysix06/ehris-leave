@@ -7,11 +7,8 @@ import {
     ChevronLeft,
     ChevronRight,
     ChevronUp,
-    Download,
     Filter,
-    Printer,
     RefreshCw,
-    Search,
 } from 'lucide-vue-next';
 import { Doughnut, Bar } from 'vue-chartjs';
 import {
@@ -25,9 +22,8 @@ import {
     Tooltip,
 } from 'chart.js';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { DataTable, type DataTableColumn, type PaginationMeta } from '@/components/DataTable';
+import { DataTable, type DataTableColumn } from '@/components/DataTable';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { employeeListing } from '@/routes/reports';
@@ -196,9 +192,7 @@ const selectedEmploymentStatus = ref<string>(props.filters.employment_status || 
 const selectedSalaryGrade = ref<string>(props.filters.salary_grade || '');
 const searchQuery = ref<string>(props.filters.search || '');
 
-// Client-side table search (filters displayed rows)
-const tableSearch = ref<string>('');
-
+// Note: Search is now handled by DataTables built-in search
 // Table data ref - holds current table payload (same shape as props.employees)
 // Initialized from props.employees and kept in sync
 const tableData = ref<PaginatedData>(props.employees);
@@ -209,6 +203,17 @@ const EMPLOYEE_LISTING_API = '/api/reports/employee-listing';
 // Loading state for table operations
 const isLoading = ref(false);
 
+// Summary stats - reactive ref that updates when filters change
+const summaryStatsData = ref<{
+    total: number;
+    permanent: number;
+    avgLeaveBalance: string;
+}>({
+    total: props.summaryStats.total,
+    permanent: props.summaryStats.permanent,
+    avgLeaveBalance: props.summaryStats.avgLeaveBalance,
+});
+
 // Watch props.employees to sync tableData when filters change (Inertia updates)
 watch(
     () => props.employees,
@@ -218,22 +223,12 @@ watch(
     { deep: true },
 );
 
-// Pagination meta for DataTable
-const paginationMeta = computed<PaginationMeta>(() => ({
-    data: tableData.value.data,
-    current_page: tableData.value.current_page,
-    last_page: tableData.value.last_page,
-    per_page: tableData.value.per_page,
-    total: tableData.value.total,
-    from: tableData.value.from,
-    to: tableData.value.to,
-    links: tableData.value.links,
-}));
+// Note: Pagination is now handled by DataTables server-side processing
 
 // Empty message for DataTable
 const emptyMessage = computed(() => {
-    if (tableSearch.value || searchQuery.value) {
-        return `No employees found matching "${tableSearch.value || searchQuery.value}"`;
+    if (searchQuery.value) {
+        return `No employees found matching "${searchQuery.value}"`;
     }
     return 'No employees found matching your criteria';
 });
@@ -241,18 +236,6 @@ const emptyMessage = computed(() => {
 // Dropdown states for "others" records
 const showEmploymentStatusOthers = ref(false);
 const showSchoolOthers = ref(false);
-
-// Accordion state - track which employee row is expanded
-const expandedRow = ref<number | null>(null);
-
-// Toggle accordion row
-const toggleRow = (hrid: number) => {
-    if (expandedRow.value === hrid) {
-        expandedRow.value = null;
-    } else {
-        expandedRow.value = hrid;
-    }
-};
 
 // Track hidden items (items unchecked will be hidden from chart)
 // Initialize with all items beyond top 5 hidden by default
@@ -297,56 +280,7 @@ watch(searchQuery, () => {
     debouncedSearch();
 });
 
-// Dynamic table search via JSON API (server-side)
-const searchTableViaAPI = useDebounceFn(async () => {
-    isLoading.value = true;
-    try {
-        const queryParams = new URLSearchParams();
-        
-        // Add all current filters
-        if (props.filters.school) queryParams.append('school', props.filters.school);
-        if (props.filters.job_title) queryParams.append('job_title', props.filters.job_title);
-        if (props.filters.subject) queryParams.append('subject', props.filters.subject);
-        if (props.filters.grade_level) queryParams.append('grade_level', props.filters.grade_level);
-        if (props.filters.employment_status) queryParams.append('employment_status', props.filters.employment_status);
-        if (props.filters.salary_grade) queryParams.append('salary_grade', props.filters.salary_grade);
-        
-        // Add table search
-        if (tableSearch.value.trim()) {
-            queryParams.append('search', tableSearch.value.trim());
-        }
-        
-        queryParams.append('page', '1'); // Reset to first page on search
-        queryParams.append('per_page', tableData.value.per_page.toString());
-        
-        const apiUrl = `${EMPLOYEE_LISTING_API}?${queryParams.toString()}`;
-        
-        const response = await fetch(apiUrl, {
-            method: 'GET',
-            headers: {
-                'Accept': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest',
-            },
-            credentials: 'same-origin',
-        });
-        
-        if (response.ok) {
-            const data = await response.json();
-            tableData.value = data;
-        } else {
-            console.error('Search failed:', response.statusText);
-        }
-    } catch (error) {
-        console.error('Search error:', error);
-    } finally {
-        isLoading.value = false;
-    }
-}, 500);
-
-// Watch tableSearch for dynamic server-side search
-watch(tableSearch, () => {
-    searchTableViaAPI();
-});
+// Note: Search is now handled by DataTables built-in search functionality
 
 // Methods to toggle item visibility
 const toggleEmploymentStatusVisibility = (label: string) => {
@@ -490,34 +424,49 @@ const barOptions = {
     },
 };
 
+// Function to fetch summary stats based on current filters
+const fetchSummaryStats = async () => {
+    try {
+        const params = new URLSearchParams();
+        const filters = {
+            school: selectedSchool.value,
+            job_title: selectedJobTitle.value,
+            subject: selectedSubject.value,
+            grade_level: selectedGradeLevel.value,
+            employment_status: selectedEmploymentStatus.value,
+            salary_grade: selectedSalaryGrade.value,
+        };
+
+        Object.entries(filters).forEach(([key, value]) => {
+            if (value) {
+                params.append(key, value);
+            }
+        });
+
+        const response = await fetch(`/api/reports/employee-listing/summary-stats?${params.toString()}`, {
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            credentials: 'same-origin',
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            summaryStatsData.value = data;
+        }
+    } catch (error) {
+        console.error('Failed to fetch summary stats:', error);
+    }
+};
+
 // Methods
 const applyFilters = () => {
-    // Reset chart hidden items when filters change (new data will come from server)
-    hiddenEmploymentStatus.value = [];
-    hiddenSchools.value = [];
-    
-    router.get(
-        employeeListing().url,
-        {
-            school: selectedSchool.value || undefined,
-            job_title: selectedJobTitle.value || undefined,
-            subject: selectedSubject.value || undefined,
-            grade_level: selectedGradeLevel.value || undefined,
-            employment_status: selectedEmploymentStatus.value || undefined,
-            salary_grade: selectedSalaryGrade.value || undefined,
-            search: searchQuery.value || undefined,
-            page: 1, // Reset to first page when filters change
-        },
-        {
-            preserveState: false, // Don't preserve state to ensure fresh data
-            preserveScroll: false, // Don't preserve scroll position
-            replace: false, // Allow browser history
-            onSuccess: () => {
-                // Re-initialize hidden items after new data loads
-                initializeHiddenItems();
-            },
-        },
-    );
+    // DataTable will auto-reload when getAjaxParams changes (watched by DataTable component)
+    // Fetch updated summary stats based on current filters
+    fetchSummaryStats();
+    // No need to reload full page - graphs stay static and unaffected by filters
+    // The computed getAjaxParams will update when filter refs change, triggering DataTable reload
 };
 
 const clearFilters = () => {
@@ -532,14 +481,44 @@ const clearFilters = () => {
 };
 
 const employeeColumns: DataTableColumn[] = [
-    { key: 'hrid', label: 'HRID', width: '5rem' },
-    { key: 'employee_id', label: 'Employee ID', width: '7rem' },
-    { key: 'firstname', label: 'Name', slot: 'name', class: 'ehris-col-name', width: '20rem' },
-    { key: 'arrow', label: '', width: '3rem' },
-    { key: 'job_title', label: 'Job Title', slot: 'job_title', class: 'ehris-col-job', width: '15rem' },
-    { key: 'employ_status', label: 'Status', slot: 'employ_status', width: '10rem' },
-    { key: 'leave_balance', label: 'Leave Balance', class: 'ehris-col-leave', slot: 'leave_balance', width: '9rem' },
+    { key: 'hrid', label: 'HRID', width: '5rem', data: 'hrid' },
+    { key: 'employee_id', label: 'Employee ID', width: '7rem', data: 'employee_id' },
+    { key: 'name', label: 'Name', slot: 'name', class: 'ehris-col-name', width: '20rem', data: 'name' },
+    { key: 'job_title', label: 'Job Title', slot: 'job_title', class: 'ehris-col-job', width: '15rem', data: 'job_title' },
+    // Additional info previously shown in accordion, now as table columns
+    { key: 'subject_taught', label: 'Subjects', data: 'subject_taught', width: '12rem' },
+    { key: 'grade_level', label: 'Grade Level', data: 'grade_level', width: '8rem' },
+    { key: 'office', label: 'School/Office', data: 'office', width: '14rem' },
+    { key: 'station_code', label: 'Station Code', data: 'station_code', width: '8rem' },
+    { key: 'salary_grade', label: 'SG', data: 'salary_grade', width: '5rem' },
+    { key: 'salary_step', label: 'Step', data: 'salary_step', width: '5rem' },
+    { key: 'employ_status', label: 'Status', slot: 'employ_status', width: '10rem', data: 'employ_status' },
+    { key: 'leave_balance', label: 'Leave Balance', class: 'ehris-col-leave', slot: 'leave_balance', width: '9rem', data: 'leave_balance' },
 ];
+
+// Cell renderers for DataTables - must be functions, not computed
+const cellRenderers = {
+    name: (row: Employee, value: any) => {
+        const name = fullName(row);
+        return `<span title="${name}">${name}</span>`;
+    },
+    job_title: (row: Employee, value: any) => {
+        const jobTitle = value || '-';
+        return `<span class="inline-flex items-center rounded-md border border-input bg-background px-2 py-1 text-xs font-medium whitespace-nowrap max-w-full truncate">${jobTitle}</span>`;
+    },
+    employ_status: (row: Employee, value: any) => {
+        const status = value || '-';
+        const variant = status === 'Permanent' ? 'default' : 'secondary';
+        const bgColor = variant === 'default' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground';
+        return `<span class="inline-flex items-center rounded-md ${bgColor} px-2 py-1 text-xs font-medium">${status}</span>`;
+    },
+    leave_balance: (row: Employee, value: any) => {
+        const balance = (value as number) ?? 0;
+        const variant = balance < 5 ? 'destructive' : 'outline';
+        const bgColor = variant === 'destructive' ? 'bg-destructive text-destructive-foreground' : 'border-input bg-background';
+        return `<span class="inline-flex items-center rounded-md border ${bgColor} px-2 py-1 text-xs font-medium">${balance} days</span>`;
+    },
+};
 
 const changePage = async (url: string | null) => {
     if (!url) return;
@@ -596,7 +575,6 @@ const changePerPage = async (perPage: number) => {
         if (props.filters.employment_status) queryParams.append('employment_status', props.filters.employment_status);
         if (props.filters.salary_grade) queryParams.append('salary_grade', props.filters.salary_grade);
         if (props.filters.search) queryParams.append('search', props.filters.search);
-        if (tableSearch.value.trim()) queryParams.append('search', tableSearch.value.trim());
         
         queryParams.append('page', '1'); // Reset to first page
         queryParams.append('per_page', perPage.toString());
@@ -666,56 +644,17 @@ const isNavigationLink = (label: string): boolean => {
     return cleaned === 'previous' || cleaned === 'next';
 };
 
-const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
-    // Build query string from current filters
-    const queryParams = new URLSearchParams();
-    
-    if (props.filters.school) {
-        queryParams.append('school', props.filters.school);
-    }
-    if (props.filters.job_title) {
-        queryParams.append('job_title', props.filters.job_title);
-    }
-    if (props.filters.subject) {
-        queryParams.append('subject', props.filters.subject);
-    }
-    if (props.filters.grade_level) {
-        queryParams.append('grade_level', props.filters.grade_level);
-    }
-    if (props.filters.employment_status) {
-        queryParams.append('employment_status', props.filters.employment_status);
-    }
-    if (props.filters.salary_grade) {
-        queryParams.append('salary_grade', props.filters.salary_grade);
-    }
-    if (props.filters.search) {
-        queryParams.append('search', props.filters.search);
-    }
-    
-    const queryString = queryParams.toString();
-    const baseUrl = window.location.origin;
-    
-    if (format === 'csv') {
-        const url = `${baseUrl}/reports/employee-listing/export/csv${queryString ? `?${queryString}` : ''}`;
-        window.open(url, '_blank');
-    } else if (format === 'excel') {
-        const url = `${baseUrl}/reports/employee-listing/export/excel${queryString ? `?${queryString}` : ''}`;
-        window.open(url, '_blank');
-    } else if (format === 'pdf') {
-        // For print, use Inertia to navigate to print view
-        const url = `/reports/employee-listing/export/print${queryString ? `?${queryString}` : ''}`;
-        router.visit(url, {
-            preserveState: false,
-            preserveScroll: false,
-            onSuccess: () => {
-                // Trigger print dialog after page loads
-                setTimeout(() => {
-                    window.print();
-                }, 500);
-            },
-        });
-    }
-};
+// Get AJAX params for DataTables (excludes DataTables search - handled separately by DataTables)
+// Uses local refs so DataTable auto-reloads when filters change, without affecting graphs
+const getAjaxParams = computed(() => () => ({
+    school: selectedSchool.value || undefined,
+    job_title: selectedJobTitle.value || undefined,
+    subject: selectedSubject.value || undefined,
+    grade_level: selectedGradeLevel.value || undefined,
+    employment_status: selectedEmploymentStatus.value || undefined,
+    salary_grade: selectedSalaryGrade.value || undefined,
+    // Note: search is NOT included here - DataTables handles its own search parameter
+}));
 </script>
 
 <template>
@@ -1110,173 +1049,42 @@ const exportReport = (format: 'pdf' | 'excel' | 'csv') => {
 
             <!-- Report Results Section -->
             <section class="border border-border rounded-lg bg-white p-6 shadow-sm">
-                <div class="flex items-center justify-between mb-4">
-                    <div>
-                        <h2 class="text-xl font-semibold">Employee Listing Results</h2>
-                        <p class="text-sm text-muted-foreground mt-1">
-                            Showing {{ tableData.from }} to {{ tableData.to }} of {{ tableData.total }} records
-                        </p>
-                    </div>
-                    <div class="flex gap-2">
-                        <Button variant="outline" size="sm" @click="exportReport('csv')">
-                            <Download class="mr-2 h-4 w-4" />
-                            CSV
-                        </Button>
-                        <Button variant="outline" size="sm" @click="exportReport('excel')">
-                            <Download class="mr-2 h-4 w-4" />
-                            Excel
-                        </Button>
-                        <Button variant="outline" size="sm" @click="exportReport('pdf')">
-                            <Printer class="mr-2 h-4 w-4" />
-                            Print
-                        </Button>
-                    </div>
+                <div class="mb-4">
+                    <h2 class="text-xl font-semibold">Employee Listing Results</h2>
+                    <p class="text-sm text-muted-foreground mt-1">
+                        Showing {{ tableData.from }} to {{ tableData.to }} of {{ tableData.total }} records
+                    </p>
                 </div>
 
                 <!-- Summary Statistics -->
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                     <div class="rounded-lg border p-4 bg-white">
                         <div class="text-sm text-muted-foreground">Total Employees</div>
-                        <div class="text-2xl font-bold mt-1 text-primary">{{ summaryStats.total }}</div>
+                        <div class="text-2xl font-bold mt-1 text-primary">{{ summaryStatsData.total }}</div>
                     </div>
                     <div class="rounded-lg border p-4 bg-white">
                         <div class="text-sm text-muted-foreground">Permanent</div>
-                        <div class="text-2xl font-bold mt-1 text-primary">{{ summaryStats.permanent }}</div>
+                        <div class="text-2xl font-bold mt-1 text-primary">{{ summaryStatsData.permanent }}</div>
                     </div>
                     <div class="rounded-lg border p-4 bg-white">
                         <div class="text-sm text-muted-foreground">Avg Leave Balance</div>
-                        <div class="text-2xl font-bold mt-1 text-primary">{{ summaryStats.avgLeaveBalance }}</div>
+                        <div class="text-2xl font-bold mt-1 text-primary">{{ summaryStatsData.avgLeaveBalance }}</div>
                     </div>
                 </div>
 
                 <!-- Data Table -->
                 <div class="rounded-md border overflow-x-auto w-full">
-                    <!-- Table Search -->
-                    <div class="p-4 border-b bg-muted/30">
-                        <div class="flex items-center gap-2">
-                            <Search class="h-4 w-4 text-muted-foreground" />
-                            <Input
-                                v-model="tableSearch"
-                                placeholder="Search all records by name, ID, job title, or status (e.g., 'jean')..."
-                                class="max-w-sm"
-                            />
-                            <Button
-                                v-if="tableSearch"
-                                variant="ghost"
-                                size="sm"
-                                @click="tableSearch = ''"
-                                class="text-muted-foreground hover:text-foreground"
-                            >
-                                Clear
-                            </Button>
-                        </div>
-                        <p v-if="tableSearch" class="text-xs text-muted-foreground mt-2">
-                            Searching all records for "{{ tableSearch }}"... Showing {{ tableData.total }} results
-                        </p>
-                    </div>
-                    
                     <DataTable
                         :columns="employeeColumns"
-                        :data="tableData.data"
-                        :pagination="paginationMeta"
+                        ajax-url="/api/reports/employee-listing/datatables"
+                        :get-ajax-params="getAjaxParams"
                         row-key="hrid"
                         :loading="isLoading"
                         :empty-message="emptyMessage"
-                        :is-row-expanded="(row) => expandedRow === (row as Employee).hrid"
-                        :on-row-click="(row) => toggleRow((row as Employee).hrid)"
-                        :row-class="(row) => expandedRow === (row as Employee).hrid ? 'bg-muted/30' : ''"
-                        :show-pagination-top="true"
-                        @page-change="changePage"
-                        @per-page-change="changePerPage"
-                    >
-                        <!-- HRID Column -->
-                        <template #cell-hrid="{ value }">
-                            <span class="whitespace-nowrap" style="font-size: 0.75rem;">{{ value }}</span>
-                        </template>
-                        
-                        <!-- Employee ID Column -->
-                        <template #cell-employee_id="{ value }">
-                            <span class="whitespace-nowrap" style="font-size: 0.75rem;">{{ value }}</span>
-                        </template>
-                        
-                        <!-- Name Column -->
-                        <template #cell-name="{ row }">
-                            <div class="flex items-center gap-2">
-                                <ChevronRight
-                                    class="h-4 w-4 text-muted-foreground transition-transform flex-shrink-0"
-                                    :class="expandedRow === (row as Employee).hrid ? 'rotate-90' : ''"
-                                />
-                                <span :title="fullName(row as Employee)">{{ fullName(row as Employee) }}</span>
-                            </div>
-                        </template>
-                        
-                        <!-- Arrow Column -->
-                        <template #cell-arrow="{ row }">
-                            <div class="text-center">
-                                <ChevronDown
-                                    v-if="expandedRow !== (row as Employee).hrid"
-                                    class="h-5 w-5 text-muted-foreground transition-transform mx-auto"
-                                />
-                                <ChevronUp
-                                    v-else
-                                    class="h-5 w-5 text-muted-foreground transition-transform mx-auto"
-                                />
-                            </div>
-                        </template>
-                        
-                        <!-- Job Title Column -->
-                        <template #cell-job_title="{ value }">
-                            <Badge variant="outline" class="whitespace-nowrap max-w-full truncate inline-block">
-                                {{ value || '-' }}
-                            </Badge>
-                        </template>
-                        
-                        <!-- Status Column -->
-                        <template #cell-employ_status="{ value }">
-                            <Badge :variant="value === 'Permanent' ? 'default' : 'secondary'">
-                                {{ value || '-' }}
-                            </Badge>
-                        </template>
-                        
-                        <!-- Leave Balance Column -->
-                        <template #cell-leave_balance="{ value }">
-                            <Badge :variant="((value as number) || 0) < 5 ? 'destructive' : 'outline'">
-                                {{ (value as number) ?? 0 }} days
-                            </Badge>
-                        </template>
-                        
-                        <!-- Accordion Content Slot -->
-                        <template #accordion="{ row }">
-                            <div class="bg-muted/30 p-6 border-t">
-                                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                                    <div class="space-y-1">
-                                        <div class="text-sm font-semibold text-muted-foreground">Subjects</div>
-                                        <div class="text-base font-normal">{{ (row as Employee).subject_taught || '-' }}</div>
-                                    </div>
-                                    <div class="space-y-1">
-                                        <div class="text-sm font-semibold text-muted-foreground">Grade Level</div>
-                                        <div class="text-base font-normal">{{ (row as Employee).grade_level || '-' }}</div>
-                                    </div>
-                                    <div class="space-y-1">
-                                        <div class="text-sm font-semibold text-muted-foreground">School/Office</div>
-                                        <div class="text-base font-normal">{{ (row as Employee).office || '-' }}</div>
-                                    </div>
-                                    <div class="space-y-1">
-                                        <div class="text-sm font-semibold text-muted-foreground">Station Code</div>
-                                        <div class="text-base font-normal">{{ (row as Employee).station_code || '-' }}</div>
-                                    </div>
-                                    <div class="space-y-1">
-                                        <div class="text-sm font-semibold text-muted-foreground">Salary Grade</div>
-                                        <div class="text-base font-normal">{{ (row as Employee).salary_grade ? 'SG ' + (row as Employee).salary_grade : '-' }}</div>
-                                    </div>
-                                    <div class="space-y-1">
-                                        <div class="text-sm font-semibold text-muted-foreground">Salary Step</div>
-                                        <div class="text-base font-normal">{{ (row as Employee).salary_step || '-' }}</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </template>
-                    </DataTable>
+                        :show-export-buttons="true"
+                        :cell-renderers="cellRenderers"
+                        :per-page-options="[10, 25, 50, 100, -1]"
+                    />
                 </div>
             </section>
         </div>

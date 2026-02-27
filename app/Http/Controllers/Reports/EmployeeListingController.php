@@ -173,14 +173,23 @@ class EmployeeListingController extends Controller
             $query->where('salary_grade', $request->salary_grade);
         }
 
-        if ($request->filled('search')) {
-            $search = $request->search;
-            $query->where(function ($q) use ($search) {
-                $q->where('firstname', 'like', '%'.$search.'%')
-                    ->orWhere('lastname', 'like', '%'.$search.'%')
-                    ->orWhere('employee_id', 'like', '%'.$search.'%')
-                    ->orWhere('hrid', 'like', '%'.$search.'%');
-            });
+        // Handle search parameter - could be string or array from DataTables
+        $searchValue = $request->input('search');
+        if ($searchValue) {
+            // If it's an array (from DataTables), get the value
+            if (is_array($searchValue)) {
+                $searchValue = $searchValue['value'] ?? null;
+            }
+            // Only apply if we have a valid string
+            if ($searchValue && is_string($searchValue) && trim($searchValue) !== '') {
+                $search = trim($searchValue);
+                $query->where(function ($q) use ($search) {
+                    $q->where('firstname', 'like', '%'.$search.'%')
+                        ->orWhere('lastname', 'like', '%'.$search.'%')
+                        ->orWhere('employee_id', 'like', '%'.$search.'%')
+                        ->orWhere('hrid', 'like', '%'.$search.'%');
+                });
+            }
         }
 
         return $query;
@@ -196,6 +205,166 @@ class EmployeeListingController extends Controller
         $employees = $query->paginate($perPage)->withQueryString();
 
         return response()->json($employees);
+    }
+
+    /**
+     * API endpoint for summary stats (filtered)
+     */
+    public function summaryStats(Request $request)
+    {
+        $query = $this->buildEmployeeQuery($request);
+
+        $total = $query->count();
+        $permanentQuery = clone $query;
+        $permanent = $permanentQuery->where('employ_status', 'Permanent')->count();
+
+        $avgLeaveBalanceQuery = clone $query;
+        $avgLeaveBalance = $avgLeaveBalanceQuery->avg('leave_balance') ?? 0;
+
+        return response()->json([
+            'total' => $total,
+            'permanent' => $permanent,
+            'avgLeaveBalance' => number_format($avgLeaveBalance, 1),
+        ]);
+    }
+
+    /**
+     * DataTables server-side processing endpoint
+     */
+    public function datatables(Request $request)
+    {
+        try {
+            // Build base query with filters (but not search yet)
+            $baseQuery = $this->buildEmployeeQuery($request);
+
+            // DataTables parameters
+            $draw = (int) $request->get('draw', 1);
+            $start = (int) $request->get('start', 0);
+            $length = (int) $request->get('length', 10);
+
+            // Check if "All" option was selected (-1 means show all records)
+            $showAll = $length === -1;
+
+            // Get total count before any filters or search (for recordsTotal)
+            $totalRecords = Employee::count();
+
+            // Handle DataTables search parameter (global search)
+            // DataTables sends search as: search[value] = "search term"
+            $searchValue = $request->input('search.value');
+
+            $query = clone $baseQuery; // Clone to avoid modifying base query
+
+            if ($searchValue && trim($searchValue) !== '') {
+                $searchTerm = trim($searchValue);
+                $query->where(function ($q) use ($searchTerm) {
+                    $q->where('firstname', 'like', '%'.$searchTerm.'%')
+                        ->orWhere('lastname', 'like', '%'.$searchTerm.'%')
+                        ->orWhere('middlename', 'like', '%'.$searchTerm.'%')
+                        ->orWhere('employee_id', 'like', '%'.$searchTerm.'%')
+                        ->orWhere('hrid', 'like', '%'.$searchTerm.'%')
+                        ->orWhere('job_title', 'like', '%'.$searchTerm.'%')
+                        ->orWhere('employ_status', 'like', '%'.$searchTerm.'%');
+                });
+            }
+
+            // Get filtered count (after applying filters and search)
+            $filteredRecords = $query->count();
+
+            // Handle "All" option - set length to filtered count and reset start
+            if ($showAll) {
+                $length = $filteredRecords;
+                $start = 0; // Reset start when showing all
+            } else {
+                $length = $length > 0 ? $length : 10;
+            }
+
+            // Handle DataTables ordering
+            $orderColumnIndex = (int) ($request->input('order.0.column', 0));
+            $orderDir = $request->input('order.0.dir', 'asc');
+
+            // Map column index to database column
+            // Column order (must match frontend DataTable columns):
+            // hrid, employee_id, name, job_title,
+            // subject_taught, grade_level, office, station_code, salary_grade, salary_step,
+            // employ_status, leave_balance
+            $columns = [
+                'hrid',
+                'employee_id',
+                'name',
+                'job_title',
+                'subject_taught',
+                'grade_level',
+                'office',
+                'station_code',
+                'salary_grade',
+                'salary_step',
+                'employ_status',
+                'leave_balance',
+            ];
+            $orderColumn = $columns[$orderColumnIndex] ?? 'hrid';
+
+            // Handle special case for 'name' column (needs to sort by firstname, lastname)
+            if ($orderColumn === 'name') {
+                $query->orderBy('firstname', $orderDir)
+                    ->orderBy('lastname', $orderDir);
+            } elseif ($orderColumn === 'leave_balance') {
+                $query->orderBy('leave_balance', $orderDir);
+            } else {
+                $query->orderBy($orderColumn, $orderDir);
+            }
+
+            // Apply pagination
+            $employees = $query->skip($start)->take($length)->get();
+
+            // Transform to DataTables format
+            $data = $employees->map(function ($employee) {
+                $fullName = trim(implode(' ', array_filter([
+                    $employee->firstname,
+                    $employee->middlename,
+                    $employee->lastname,
+                    $employee->extension,
+                ])));
+
+                return [
+                    'hrid' => $employee->hrid ?? '',
+                    'employee_id' => $employee->employee_id ?? '',
+                    'name' => $fullName,
+                    'job_title' => $employee->job_title ?? '',
+                    'employ_status' => $employee->employ_status ?? '',
+                    'leave_balance' => $employee->leave_balance ?? 0,
+                    'subject_taught' => $employee->subject_taught ?? '',
+                    'grade_level' => $employee->grade_level ?? '',
+                    'office' => $employee->office ?? '',
+                    'station_code' => $employee->station_code ?? '',
+                    'salary_grade' => $employee->salary_grade ?? '',
+                    'salary_step' => $employee->salary_step ?? '',
+                    // Include full employee object for custom rendering
+                    '_raw' => $employee,
+                ];
+            });
+
+            return response()->json([
+                'draw' => $draw,
+                'recordsTotal' => $totalRecords,
+                'recordsFiltered' => $filteredRecords,
+                'data' => $data,
+            ]);
+        } catch (\Exception $e) {
+            // Log the error for debugging
+            \Log::error('DataTables Error: '.$e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'request' => $request->all(),
+            ]);
+
+            // Return error response in DataTables format
+            return response()->json([
+                'draw' => (int) $request->get('draw', 1),
+                'recordsTotal' => 0,
+                'recordsFiltered' => 0,
+                'data' => [],
+                'error' => 'An error occurred while processing your request. Please try again.',
+            ], 500);
+        }
     }
 
     /**
