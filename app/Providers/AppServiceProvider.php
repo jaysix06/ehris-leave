@@ -32,6 +32,9 @@ use Illuminate\Validation\Rules\Password;
 use Illuminate\Notifications\Messages\MailMessage;
 use Laravel\Fortify\Contracts\LoginResponse as LoginResponseContract;
 use Laravel\Fortify\Contracts\VerifyEmailResponse as VerifyEmailResponseContract;
+use Illuminate\Support\Facades\URL;
+
+
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -49,6 +52,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // in boot():
+        URL::forceRootUrl(config('app.url'));
         $this->configureDefaults();
         $this->registerMyDetailsRealtimeBroadcasts();
         $this->configureVerifyEmailNotification();
