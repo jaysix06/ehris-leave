@@ -12,16 +12,14 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: pageTitle },
 ];
 
-// Default ID photo when user has no photo (neutral silhouette)
-const defaultIdPhotoSvg =
-    'data:image/svg+xml,' +
-    encodeURIComponent(
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%239ca3af"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-6 8-6s8 2 8 6"/></svg>'
-    );
+// Default ID photo when user has no custom avatar
+const defaultIdPhoto = '/avatar-default.jpg';
 
 // Local previews for uploaded files (before or instead of server save)
 const idPhotoPreview = ref<string | null>(null);
 const signaturePreview = ref<string | null>(null);
+const idPhotoFile = ref<File | null>(null);
+const signatureFile = ref<File | null>(null);
 const idPhotoInput = ref<HTMLInputElement | null>(null);
 const signatureInput = ref<HTMLInputElement | null>(null);
 
@@ -38,6 +36,7 @@ function onIdPhotoChange(event: Event) {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file || !file.type.startsWith('image/')) return;
+    idPhotoFile.value = file;
     readFileAsDataUrl(file).then((url) => {
         idPhotoPreview.value = url;
     });
@@ -48,6 +47,7 @@ function onSignatureChange(event: Event) {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file || !file.type.startsWith('image/')) return;
+    signatureFile.value = file;
     readFileAsDataUrl(file).then((url) => {
         signaturePreview.value = url;
     });
@@ -60,13 +60,21 @@ const idPhotoSrc = computed((): string => {
     const avatar = props.profile?.avatar;
     if (typeof avatar === 'string') {
         const s = avatar.trim();
-        // Treat the system default filename as "no photo yet"
-        if (s !== '' && s !== 'avatar-default.jpg' && s !== '/avatar-default.jpg') {
-            return s;
+        if (s !== '') {
+            // Compare using basename without query/hash to detect default avatar values.
+            const cleaned = s.split('?')[0]?.split('#')[0] ?? '';
+            const normalizedName = cleaned.split('/').pop()?.toLowerCase() ?? '';
+            if (normalizedName !== 'avatar-default.jpg') {
+                // Make relative paths root-relative so nested routes don't cause 404s.
+                if (/^(https?:)?\/\//i.test(s) || s.startsWith('/') || s.startsWith('data:') || s.startsWith('blob:')) {
+                    return s;
+                }
+                return `/${s}`;
+            }
         }
     }
 
-    return defaultIdPhotoSvg;
+    return defaultIdPhoto;
 });
 
 function splitFullName(fullname: unknown): { firstname: string; middlename: string; lastname: string } {
@@ -90,7 +98,21 @@ const props = defineProps<{
     contactInfo?: Record<string, unknown> | null;
     templates?: string[];
     templateBaseUrl?: string;
+    signaturePath?: string | null;
 }>();
+
+const signatureSrc = computed((): string | null => {
+    if (signaturePreview.value) return signaturePreview.value;
+
+    const raw = props.signaturePath;
+    if (typeof raw !== 'string') return null;
+    const s = raw.trim();
+    if (s === '') return null;
+    if (/^(https?:)?\/\//i.test(s) || s.startsWith('/') || s.startsWith('data:') || s.startsWith('blob:')) {
+        return s;
+    }
+    return `/${s}`;
+});
 
 // Form state for User Details (synced from props, can be edited)
 const form = ref({
@@ -165,7 +187,8 @@ const displayDeptId = computed(() => val(props.officialInfo?.division_code ?? pr
 // (Print section removed)
 
 function applyChanges() {
-    router.put('/self-service/id-card/update', {
+    router.post('/self-service/id-card/update', {
+        _method: 'put',
         hrid: form.value.hrid || undefined,
         employee_id: form.value.employee_id || undefined,
         prefix_name: form.value.prefix_name || undefined,
@@ -185,6 +208,14 @@ function applyChanges() {
         emergency_name: form.value.emergency_name || undefined,
         emergency_contact: form.value.emergency_contact || undefined,
         emergency_email: form.value.emergency_email || undefined,
+        id_photo: idPhotoFile.value ?? undefined,
+        signature: signatureFile.value ?? undefined,
+    }, {
+        forceFormData: true,
+        onSuccess: () => {
+            idPhotoFile.value = null;
+            signatureFile.value = null;
+        },
     });
 }
 </script>
@@ -225,8 +256,8 @@ function applyChanges() {
                         </button>
                         <div class="w-40 h-16 rounded border border-sidebar-border/70 bg-muted/30 flex items-center justify-center overflow-hidden">
                             <img
-                                v-if="signaturePreview"
-                                :src="signaturePreview"
+                                v-if="signatureSrc"
+                                :src="signatureSrc"
                                 alt="Signature"
                                 class="max-w-full max-h-full object-contain"
                             />

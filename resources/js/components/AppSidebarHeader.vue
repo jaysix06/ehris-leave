@@ -19,6 +19,25 @@ const props = withDefaults(
 const page = usePage();
 const user = computed(() => page.props.auth.user);
 const { getInitials } = useInitials();
+const avatarSrc = computed(() => {
+    const avatar = user.value?.avatar;
+    if (typeof avatar !== 'string') return null;
+
+    const s = avatar.trim();
+    if (s === '') return null;
+
+    const cleaned = s.split('?')[0]?.split('#')[0] ?? '';
+    const normalizedName = cleaned.split('/').pop()?.toLowerCase() ?? '';
+    if (normalizedName === 'avatar-default.jpg') {
+        return '/avatar-default.jpg';
+    }
+
+    if (/^(https?:)?\/\//i.test(s) || s.startsWith('/') || s.startsWith('data:') || s.startsWith('blob:')) {
+        return s;
+    }
+
+    return `/${s}`;
+});
 
 const currentTitle = computed(() => {
     if (!props.breadcrumbs.length) {
@@ -43,8 +62,8 @@ const currentTitle = computed(() => {
             <div class="ehris-user-chip">
                 <Avatar class="h-10 w-10 overflow-hidden rounded-full border border-border/60">
                     <AvatarImage
-                        v-if="user.avatar"
-                        :src="user.avatar"
+                        v-if="avatarSrc"
+                        :src="avatarSrc"
                         :alt="user.name"
                     />
                     <AvatarFallback class="bg-primary/10 text-primary">

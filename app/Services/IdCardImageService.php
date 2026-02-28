@@ -23,9 +23,16 @@ class IdCardImageService
         }
         $candidates = [
             public_path('id-card-templates'),
+            base_path('TEMPLATE_ID'),
+            base_path('TEMPLATE_ID'.DIRECTORY_SEPARATOR.'TEMPLATE'),
+            base_path('../TEMPLATE_ID'),
+            base_path('..'.DIRECTORY_SEPARATOR.'TEMPLATE_ID'),
+            base_path('..'.DIRECTORY_SEPARATOR.'TEMPLATE_ID'.DIRECTORY_SEPARATOR.'TEMPLATE'),
             base_path('TEMPLATE ID/TEMPLATE'),
+            base_path('TEMPLATE ID'),
             base_path('TEMPLATE ID'.DIRECTORY_SEPARATOR.'TEMPLATE'),
             base_path('../TEMPLATE ID/TEMPLATE'),
+            base_path('..'.DIRECTORY_SEPARATOR.'TEMPLATE ID'),
             base_path('..'.DIRECTORY_SEPARATOR.'TEMPLATE ID'.DIRECTORY_SEPARATOR.'TEMPLATE'),
         ];
         foreach ($candidates as $dir) {
@@ -44,7 +51,7 @@ class IdCardImageService
      * @param  string|null  $jobShorten  e.g. "TRAINEE" — if a file {jobShorten}.png exists, use it
      * @param  string|null  $role  e.g. "System Admin" — if mapped in role_to_template, that template is used first
      */
-    public static function eodbTemplatePath(?string $employStatus = null, ?string $jobShorten = null, ?string $role = null): ?string
+    public static function eodbTemplatePath(?string $employStatus = null, ?string $jobShorten = null, ?string $role = null, ?string $jobTitle = null): ?string
     {
         $dir = self::templatesPath();
         if ($dir === null) {
@@ -74,6 +81,11 @@ class IdCardImageService
                     return $path;
                 }
             }
+
+            $roleMatched = self::findTemplateByLabel($dir, $role);
+            if ($roleMatched !== null) {
+                return $roleMatched;
+            }
         }
 
         // 2) Job-based override: if job_shorten template exists (e.g. TRAINEE.png), use it
@@ -81,6 +93,13 @@ class IdCardImageService
             $path = $tryFile($jobShorten . '.png') ?? $tryFile($jobShorten);
             if ($path !== null) {
                 return $path;
+            }
+        }
+
+        if ($jobTitle !== null && $jobTitle !== '') {
+            $jobMatched = self::findTemplateByLabel($dir, $jobTitle);
+            if ($jobMatched !== null) {
+                return $jobMatched;
             }
         }
 
@@ -120,6 +139,35 @@ class IdCardImageService
         return null;
     }
 
+    private static function findTemplateByLabel(string $dir, string $label): ?string
+    {
+        $needle = self::normalizeTemplateToken($label);
+        if ($needle === '') {
+            return null;
+        }
+
+        foreach (File::files($dir) as $file) {
+            $path = is_string($file) ? $file : $file->getPathname();
+            if (strtolower(pathinfo($path, PATHINFO_EXTENSION)) !== 'png') {
+                continue;
+            }
+
+            $base = pathinfo($path, PATHINFO_FILENAME);
+            $token = self::normalizeTemplateToken($base);
+            if ($token === $needle || str_contains($token, $needle) || str_contains($needle, $token)) {
+                return $path;
+            }
+        }
+
+        return null;
+    }
+
+    private static function normalizeTemplateToken(string $value): string
+    {
+        $upper = strtoupper(trim($value));
+        return preg_replace('/[^A-Z0-9]+/', '', $upper) ?? '';
+    }
+
     /**
      * Check whether the GD extension is available (required for image generation).
      */
@@ -134,7 +182,7 @@ class IdCardImageService
      * 2. Overlay variable data: name, division, ID no, role label, photo, QR code.
      * The card design (seal, colors, layout) comes from the template; PHP only overlays data.
      *
-     * @param  array{fullname: string, employee_id: string, division: string, photo_path: string|null, employ_status?: string|null, job_shorten?: string|null, role?: string|null}  $data
+     * @param  array{fullname: string, employee_id: string, division: string, photo_path: string|null, signature_path?: string|null, employ_status?: string|null, job_shorten?: string|null, job_title?: string|null, role?: string|null}  $data
      */
     public static function buildEodbCard(array $data): ?string
     {
@@ -147,7 +195,8 @@ class IdCardImageService
         $templatePath = self::eodbTemplatePath(
             $data['employ_status'] ?? null,
             $data['job_shorten'] ?? null,
-            $data['role'] ?? null
+            $data['role'] ?? null,
+            $data['job_title'] ?? null
         );
         if ($templatePath === null || ! File::isFile($templatePath)) {
             return null;
@@ -191,6 +240,7 @@ class IdCardImageService
         $employeeId = trim($data['employee_id'] ?? '');
         $division = trim($data['division'] ?? 'DIVISION OFFICE');
         $photoPath = isset($data['photo_path']) && $data['photo_path'] !== '' ? $data['photo_path'] : null;
+        $signaturePath = isset($data['signature_path']) && $data['signature_path'] !== '' ? $data['signature_path'] : null;
         $roleLabel = trim($data['role'] ?? '');
         if ($roleLabel !== '') {
             $roleLabel = strtoupper(preg_replace('/\s+/', ' ', $roleLabel));
@@ -278,6 +328,32 @@ class IdCardImageService
                     \imagecopyresampled($img, $photo, $cardWidth + $dstX, $dstY, 0, 0, $dstW, $dstH, $photoW, $photoH);
                 }
                 \imagedestroy($photo);
+            }
+        }
+
+        // Signature: draw near the lower-right area of each card.
+        if ($signaturePath !== null && File::isFile($signaturePath)) {
+            $signature = self::loadImage($signaturePath);
+            if ($signature !== null) {
+                $srcW = \imagesx($signature);
+                $srcH = \imagesy($signature);
+
+                if ($srcW > 0 && $srcH > 0) {
+                    $dstW = (int) round($cardWidth * 0.24);
+                    $dstH = (int) round($h * 0.10);
+                    $dstX = (int) round($cardWidth * 0.62);
+                    $dstY = (int) round($h * 0.85);
+
+                    \imagealphablending($img, true);
+                    \imagesavealpha($img, true);
+
+                    \imagecopyresampled($img, $signature, $dstX, $dstY, 0, 0, $dstW, $dstH, $srcW, $srcH);
+                    if ($twoCards) {
+                        \imagecopyresampled($img, $signature, $cardWidth + $dstX, $dstY, 0, 0, $dstW, $dstH, $srcW, $srcH);
+                    }
+                }
+
+                \imagedestroy($signature);
             }
         }
 

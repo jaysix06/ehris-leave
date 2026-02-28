@@ -10,6 +10,7 @@ use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -148,6 +149,7 @@ class IdCardController extends Controller
 
         $templates = $this->listTemplates();
         $templateBaseUrl = url('/self-service/id-card/template');
+        $signaturePath = $this->resolveStoredSignaturePath($hrid, $email);
 
         return Inertia::render('SelfService/IdCard', [
             'profile' => $profile,
@@ -156,6 +158,7 @@ class IdCardController extends Controller
             'contactInfo' => $contactInfo,
             'templates' => $templates,
             'templateBaseUrl' => $templateBaseUrl,
+            'signaturePath' => $signaturePath,
         ]);
     }
 
@@ -224,6 +227,8 @@ class IdCardController extends Controller
             'emergency_name' => ['nullable', 'string', 'max:255'],
             'emergency_contact' => ['nullable', 'string', 'max:64'],
             'emergency_email' => ['nullable', 'string', 'max:255'],
+            'id_photo' => ['nullable', 'file', 'image', 'max:5120'],
+            'signature' => ['nullable', 'file', 'image', 'max:5120'],
         ]);
 
         // If the user entered an HRID, persist it to tbl_user.hrId and migrate existing rows if needed.
@@ -367,6 +372,187 @@ class IdCardController extends Controller
             }
         }
 
+        $fileKey = (string) ($profile?->userId ?? $hrid);
+        $uploadedPhotoPath = null;
+        $uploadedSignPath = null;
+
+        try {
+            if ($request->hasFile('id_photo')) {
+                $uploadedPhotoPath = $this->storePublicUpload(
+                    $request->file('id_photo'),
+                    'uploads/'.$hrid,
+                    (string) $hrid
+                );
+
+                if ($uploadedPhotoPath !== null && $profile instanceof User && Schema::hasColumn('tbl_user', 'avatar')) {
+                    $profile->avatar = $uploadedPhotoPath;
+                    $profile->save();
+                }
+
+                // Keep legacy print_id image path in sync for tables still using old flow.
+                $legacyImagePath = $this->storePublicUpload(
+                    $request->file('id_photo'),
+                    'asset/uploads/print_id/image',
+                    $fileKey
+                );
+                if ($legacyImagePath !== null) {
+                    $uploadedPhotoPath = $legacyImagePath;
+                }
+            }
+
+            if ($request->hasFile('signature')) {
+                $uploadedSignPath = $this->storePublicUpload(
+                    $request->file('signature'),
+                    'asset/uploads/print_id/sign',
+                    $fileKey
+                );
+            }
+
+            if (Schema::hasTable('tbl_printingid_depaide')) {
+                $email = $profile?->email ?? $authUser?->email;
+                $existing = DB::table('tbl_printingid_depaide')
+                    ->where(function ($q) use ($hrid, $email) {
+                        $hasAny = false;
+                        if ($hrid !== null && $hrid !== '') {
+                            $q->where('hr_id', (string) $hrid);
+                            $hasAny = true;
+                        }
+                        if ($email !== null && $email !== '') {
+                            if ($hasAny) {
+                                $q->orWhere('email', $email);
+                            } else {
+                                $q->where('email', $email);
+                            }
+                        }
+                    })
+                    ->orderByDesc('id')
+                    ->first();
+
+                $basePayload = array_filter([
+                    'email' => $email,
+                    'hr_id' => (string) $hrid,
+                    'tin_no' => (string) ($data['tin'] ?? ''),
+                    'fname' => (string) ($data['firstname'] ?? ''),
+                    'lname' => (string) ($data['lastname'] ?? ''),
+                    'mname' => (string) ($data['middlename'] ?? ''),
+                    'ext_name' => (string) ($data['extension'] ?? ''),
+                    'job_title' => (string) ($data['job_title'] ?? ''),
+                    'role' => (string) ($profile?->role ?? ''),
+                    'dep_id' => (string) (($profile?->department_id ?? '') ?? ''),
+                    'emp_id' => is_numeric($data['employee_id'] ?? null) ? (int) $data['employee_id'] : null,
+                    'prc_no' => (string) ($data['prc_no'] ?? ''),
+                    'emrgncy_no' => (string) ($data['emergency_contact'] ?? ''),
+                    'emrgncy_name' => (string) ($data['emergency_name'] ?? ''),
+                    'emrgncy_email' => (string) ($data['emergency_email'] ?? ''),
+                    'prfx_name' => (string) ($data['prefix_name'] ?? ''),
+                    'bday' => (string) ($data['birth_date'] ?? ''),
+                    'gsis_no' => (string) ($data['gsis'] ?? ''),
+                    'pagibig_no' => (string) ($data['pag_ibig'] ?? ''),
+                    'philhealth_no' => (string) ($data['philhealth'] ?? ''),
+                    'blood_type' => (string) ($data['blood_type'] ?? ''),
+                ], fn ($v) => $v !== null && $v !== '');
+
+                // Legacy table fallback: update existing row; create minimal row if missing.
+                if ($existing) {
+                    $updatePayload = $basePayload;
+                    if ($uploadedPhotoPath !== null && $uploadedPhotoPath !== '') {
+                        $updatePayload['image'] = $uploadedPhotoPath;
+                    }
+                    if ($uploadedSignPath !== null && $uploadedSignPath !== '') {
+                        $updatePayload['sign'] = $uploadedSignPath;
+                    }
+                    DB::table('tbl_printingid_depaide')->where('id', $existing->id)->update($updatePayload);
+                } else {
+                    $insert = $basePayload;
+                    if ($uploadedPhotoPath !== null && $uploadedPhotoPath !== '') {
+                        $insert['image'] = $uploadedPhotoPath;
+                    }
+                    if ($uploadedSignPath !== null && $uploadedSignPath !== '') {
+                        $insert['sign'] = $uploadedSignPath;
+                    }
+                    DB::table('tbl_printingid_depaide')->insert($insert);
+                }
+            }
+        } catch (\Throwable $e) {
+            \Log::warning('ID card file upload step failed', [
+                'error' => $e->getMessage(),
+                'hrid' => $hrid,
+                'email' => $profile?->email ?? $authUser?->email,
+            ]);
+        }
+
         return redirect()->route('self-service.id-card')->with('status', 'Details updated.');
+    }
+
+    private function storePublicUpload($file, string $relativeDir, string $baseName): ?string
+    {
+        if (! $file) {
+            return null;
+        }
+
+        $ext = strtolower((string) $file->getClientOriginalExtension());
+        if ($ext === '' || ! in_array($ext, ['jpg', 'jpeg', 'png', 'webp'], true)) {
+            $ext = 'jpg';
+        }
+
+        $dirPath = public_path(trim($relativeDir, '/'));
+        if (! File::exists($dirPath)) {
+            File::makeDirectory($dirPath, 0755, true, true);
+        }
+
+        $filename = trim($baseName).'.'.$ext;
+        $targetPath = $dirPath.DIRECTORY_SEPARATOR.$filename;
+        $sourcePath = $file->getRealPath();
+        if (! is_string($sourcePath) || ! is_file($sourcePath)) {
+            return null;
+        }
+
+        if (File::exists($targetPath)) {
+            File::delete($targetPath);
+        }
+        File::copy($sourcePath, $targetPath);
+
+        return trim($relativeDir, '/').'/'.$filename;
+    }
+
+    private function resolveStoredSignaturePath(mixed $hrid, ?string $email): ?string
+    {
+        if (($hrid !== null && $hrid !== '')) {
+            $hridKey = (string) $hrid;
+            foreach (['png', 'jpg', 'jpeg', 'webp'] as $ext) {
+                $relative = 'asset/uploads/print_id/sign/'.$hridKey.'.'.$ext;
+                if (is_file(public_path($relative))) {
+                    return $relative;
+                }
+            }
+        }
+
+        if (! Schema::hasTable('tbl_printingid_depaide')) {
+            return null;
+        }
+        if (($hrid === null || $hrid === '') && ($email === null || $email === '')) {
+            return null;
+        }
+
+        $row = DB::table('tbl_printingid_depaide')
+            ->where(function ($q) use ($hrid, $email) {
+                $hasAny = false;
+                if ($hrid !== null && $hrid !== '') {
+                    $q->where('hr_id', (string) $hrid);
+                    $hasAny = true;
+                }
+                if ($email !== null && $email !== '') {
+                    if ($hasAny) {
+                        $q->orWhere('email', $email);
+                    } else {
+                        $q->where('email', $email);
+                    }
+                }
+            })
+            ->orderByDesc('id')
+            ->first();
+
+        $sign = isset($row?->sign) ? trim((string) $row->sign) : '';
+        return $sign !== '' ? $sign : null;
     }
 }

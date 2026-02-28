@@ -111,14 +111,16 @@ const paginated = computed(() => {
                                 </td>
                                 <td class="p-3">
                                     <div class="flex flex-wrap items-center gap-2">
-                                        <button
-                                            type="button"
+                                        <a
+                                            :href="`/employee-management/id-card-printing/${row.id}/eodb-id`"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
                                             class="inline-flex items-center gap-1 rounded border border-input bg-background px-2 py-1 text-xs font-medium hover:bg-muted/50"
-                                            title="EODB ID"
+                                            title="EODB ID (opens in new tab)"
                                         >
                                             <Printer class="size-3.5" />
                                             EODB ID
-                                        </button>
+                                        </a>
                                         <a
                                             :href="`/employee-management/id-card-printing/${row.id}/eodb-id-bb`"
                                             target="_blank"

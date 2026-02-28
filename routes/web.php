@@ -103,6 +103,9 @@ Route::get('employee-management/id-card-printing', [IdCardPrintingController::cl
 Route::get('employee-management/id-card-printing/{id}/eodb-id-bb', [IdCardPrintingController::class, 'eodbIdBb'])
     ->middleware(['auth', 'verified'])
     ->name('employee-management.id-card-printing.eodb-id-bb');
+Route::get('employee-management/id-card-printing/{id}/eodb-id', [IdCardPrintingController::class, 'eodbId'])
+    ->middleware(['auth', 'verified'])
+    ->name('employee-management.id-card-printing.eodb-id');
 Route::get('employee-management/deped-email-requests', function () {
     return Inertia::render('EmployeeManagement/DepedEmailRequests');
 })->middleware(['auth', 'verified'])->name('employee-management.deped-email-requests');

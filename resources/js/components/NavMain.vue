@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
+import { ref, watch } from 'vue';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
     SidebarGroup,
@@ -15,15 +16,50 @@ import { useCurrentUrl } from '@/composables/useCurrentUrl';
 import { type NavItem } from '@/types';
 import { ChevronRight } from 'lucide-vue-next';
 
-defineProps<{
+const props = defineProps<{
     items: NavItem[];
 }>();
 
-const { isCurrentUrl } = useCurrentUrl();
+const { isCurrentUrl, currentUrl } = useCurrentUrl();
+const dropdownOpen = ref<Record<string, boolean>>({});
 
 const itemHasChildren = (item: NavItem) => Boolean(item.children?.length);
 const itemHasActiveChild = (item: NavItem) =>
-    item.children?.some((child) => (child.href ? isCurrentUrl(child.href) : false)) ?? false;
+    item.children?.some((child) => (child.href ? isSidebarActive(child.href) : false)) ?? false;
+
+const isSidebarActive = (href: string): boolean => {
+    if (isCurrentUrl(href)) return true;
+
+    const current = currentUrl.value;
+    if (!href || href === '/') return current === '/';
+    return current === href || current.startsWith(`${href}/`);
+};
+
+const dropdownKey = (item: NavItem) => item.title;
+const isDropdownOpen = (item: NavItem): boolean =>
+    itemHasActiveChild(item) || Boolean(dropdownOpen.value[dropdownKey(item)]);
+
+const setDropdownOpen = (item: NavItem, open: boolean): void => {
+    const key = dropdownKey(item);
+    // Keep active section expanded.
+    if (itemHasActiveChild(item)) {
+        dropdownOpen.value[key] = true;
+        return;
+    }
+    dropdownOpen.value[key] = open;
+};
+
+watch(
+    currentUrl,
+    () => {
+        for (const item of props.items) {
+            if (itemHasChildren(item) && itemHasActiveChild(item)) {
+                dropdownOpen.value[dropdownKey(item)] = true;
+            }
+        }
+    },
+    { immediate: true },
+);
 </script>
 
 <template>
@@ -34,7 +70,7 @@ const itemHasActiveChild = (item: NavItem) =>
                 <template v-if="!itemHasChildren(item) && item.href">
                     <SidebarMenuButton
                         as-child
-                        :is-active="isCurrentUrl(item.href)"
+                        :is-active="isSidebarActive(item.href)"
                         :tooltip="item.title"
                     >
                         <Link :href="item.href">
@@ -44,7 +80,11 @@ const itemHasActiveChild = (item: NavItem) =>
                     </SidebarMenuButton>
                 </template>
 
-                <Collapsible v-else :default-open="itemHasActiveChild(item)">
+                <Collapsible
+                    v-else
+                    :open="isDropdownOpen(item)"
+                    @update:open="(open) => setDropdownOpen(item, open)"
+                >
                     <CollapsibleTrigger as-child>
                         <SidebarMenuButton
                             class="group/dropdown-trigger"
@@ -68,7 +108,7 @@ const itemHasActiveChild = (item: NavItem) =>
                                 <SidebarMenuSubButton
                                     v-if="child.href"
                                     as-child
-                                    :is-active="isCurrentUrl(child.href)"
+                                    :is-active="isSidebarActive(child.href)"
                                 >
                                     <Link :href="child.href">
                                         <component :is="child.icon" v-if="child.icon" />
