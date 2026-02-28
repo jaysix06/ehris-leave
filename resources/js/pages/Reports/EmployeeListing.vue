@@ -481,26 +481,33 @@ const clearFilters = () => {
 };
 
 const employeeColumns: DataTableColumn[] = [
-    { key: 'hrid', label: 'HRID', width: '5rem', data: 'hrid' },
+    // Visible columns
     { key: 'employee_id', label: 'Employee ID', width: '7rem', data: 'employee_id' },
     { key: 'name', label: 'Name', slot: 'name', class: 'ehris-col-name', width: '20rem', data: 'name' },
     { key: 'job_title', label: 'Job Title', slot: 'job_title', class: 'ehris-col-job', width: '15rem', data: 'job_title' },
-    // Additional info previously shown in accordion, now as table columns
-    { key: 'subject_taught', label: 'Subjects', data: 'subject_taught', width: '12rem' },
     { key: 'grade_level', label: 'Grade Level', data: 'grade_level', width: '8rem' },
     { key: 'office', label: 'School/Office', data: 'office', width: '14rem' },
-    { key: 'station_code', label: 'Station Code', data: 'station_code', width: '8rem' },
-    { key: 'salary_grade', label: 'SG', data: 'salary_grade', width: '5rem' },
-    { key: 'salary_step', label: 'Step', data: 'salary_step', width: '5rem' },
     { key: 'employ_status', label: 'Status', slot: 'employ_status', width: '10rem', data: 'employ_status' },
     { key: 'leave_balance', label: 'Leave Balance', class: 'ehris-col-leave', slot: 'leave_balance', width: '9rem', data: 'leave_balance' },
+    // Hidden columns - moved to accordion but kept for export (CSV, Excel, Print)
+    { key: 'hrid', label: 'HRID', data: 'hrid', width: '5rem', visible: false },
+    { key: 'subject_taught', label: 'Subjects', data: 'subject_taught', width: '12rem', visible: false },
+    { key: 'station_code', label: 'Station Code', data: 'station_code', width: '8rem', visible: false },
+    { key: 'salary_grade', label: 'SG', data: 'salary_grade', width: '5rem', visible: false },
+    { key: 'salary_step', label: 'Step', data: 'salary_step', width: '5rem', visible: false },
 ];
 
 // Cell renderers for DataTables - must be functions, not computed
 const cellRenderers = {
     name: (row: Employee, value: any) => {
         const name = fullName(row);
-        return `<span title="${name}">${name}</span>`;
+        // Add minimalistic arrow icon on the right side to indicate accordion is available
+        return `
+            <div class="flex items-center justify-between gap-2">
+                <span title="${name}">${name}</span>
+                <span class="accordion-arrow text-muted-foreground transition-transform" style="display: inline-block; font-size: 1.25rem;">›</span>
+            </div>
+        `;
     },
     job_title: (row: Employee, value: any) => {
         const jobTitle = value || '-';
@@ -518,6 +525,36 @@ const cellRenderers = {
         const bgColor = variant === 'destructive' ? 'bg-destructive text-destructive-foreground' : 'border-input bg-background';
         return `<span class="inline-flex items-center rounded-md border ${bgColor} px-2 py-1 text-xs font-medium">${balance} days</span>`;
     },
+};
+
+// Accordion renderer function - displays HRID, Subjects, Station Code, SG, and Step
+const accordionRenderer = (row: Employee): string => {
+    return `
+        <div class="accordion-content-row p-4 bg-muted/30 border-t">
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+                <div>
+                    <div class="text-xs font-semibold text-muted-foreground mb-1">HRID</div>
+                    <div class="text-sm font-medium">${row.hrid || '-'}</div>
+                </div>
+                <div>
+                    <div class="text-xs font-semibold text-muted-foreground mb-1">Subjects</div>
+                    <div class="text-sm font-medium">${row.subject_taught || '-'}</div>
+                </div>
+                <div>
+                    <div class="text-xs font-semibold text-muted-foreground mb-1">Station Code</div>
+                    <div class="text-sm font-medium">${row.station_code || '-'}</div>
+                </div>
+                <div>
+                    <div class="text-xs font-semibold text-muted-foreground mb-1">SG</div>
+                    <div class="text-sm font-medium">${row.salary_grade || '-'}</div>
+                </div>
+                <div>
+                    <div class="text-xs font-semibold text-muted-foreground mb-1">Step</div>
+                    <div class="text-sm font-medium">${row.salary_step || '-'}</div>
+                </div>
+            </div>
+        </div>
+    `;
 };
 
 const changePage = async (url: string | null) => {
@@ -1083,6 +1120,7 @@ const getAjaxParams = computed(() => () => ({
                         :empty-message="emptyMessage"
                         :show-export-buttons="true"
                         :cell-renderers="cellRenderers"
+                        :accordion-renderer="accordionRenderer"
                         :per-page-options="[10, 25, 50, 100, -1]"
                     />
                 </div>
