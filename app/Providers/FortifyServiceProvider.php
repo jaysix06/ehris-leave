@@ -4,6 +4,9 @@ namespace App\Providers;
 
 use App\Actions\Fortify\CreateNewUser;
 use App\Actions\Fortify\ResetUserPassword;
+use App\Models\BusinessUnit;
+use App\Models\Department;
+use App\Models\EmploymentStatus;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -66,7 +69,17 @@ class FortifyServiceProvider extends ServiceProvider
             'status' => $request->session()->get('status'),
         ]));
 
-        Fortify::registerView(fn () => Inertia::render('auth/Register'));
+        Fortify::registerView(fn () => Inertia::render('auth/Register', [
+            'employmentStatuses' => EmploymentStatus::orderBy('id')->pluck('emp_status')->values()->all(),
+            'districts' => BusinessUnit::orderBy('id')->get()->map(fn ($row) => [
+                'id' => $row->BusinessUnitId,
+                'name' => $row->BusinessUnit,
+            ])->values()->all(),
+            'stations' => Department::orderBy('id')->get()->map(fn ($row) => [
+                'id' => $row->department_id,
+                'name' => $row->department_name,
+            ])->values()->all(),
+        ]));
 
         Fortify::twoFactorChallengeView(fn () => Inertia::render('auth/TwoFactorChallenge'));
 

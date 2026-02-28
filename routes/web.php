@@ -1,17 +1,16 @@
 <?php
 
-<<<<<<< HEAD
 use App\Http\Controllers\MyDetails\FamilyController;
+use App\Http\Controllers\MyDetailsController;
+use App\Http\Controllers\SelfService\LeaveApplicationController;
+use App\Http\Controllers\Utilities\LeaveTypeController;
+use App\Http\Controllers\Utilities\UserListController;
 use App\Models\EmpFamilyInfo;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-=======
-use App\Http\Controllers\MyDetailsController;
-use App\Http\Controllers\SelfService\LeaveApplicationController;
-use App\Http\Controllers\Utilities\LeaveTypeController;
->>>>>>> 28cd2466f1c978f8628c442848035637ca473213
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
 
@@ -111,7 +110,6 @@ Route::get('request-status/my-leave', function () {
     return Inertia::render('RequestStatus/MyLeave');
 })->middleware(['auth', 'verified'])->name('request-status.my-leave');
 
-<<<<<<< HEAD
 Route::get('my-details', function (Request $request) {
     $authUser = $request->user();
     $dbProfile = null;
@@ -241,11 +239,6 @@ Route::get('my-details', function (Request $request) {
         'familyUpdateUrl' => route('my-details.family.store'),
     ]);
 })->middleware(['auth', 'verified'])->name('my-details');
-=======
-Route::get('my-details', [MyDetailsController::class, 'show'])
-    ->middleware(['auth', 'verified'])
-    ->name('my-details');
->>>>>>> 28cd2466f1c978f8628c442848035637ca473213
 
 Route::post('my-details/family', [FamilyController::class, 'store'])
     ->middleware(['auth', 'verified'])
@@ -257,9 +250,15 @@ Route::get('utilities', function () {
 Route::get('utilities/employee-list', function () {
     return Inertia::render('Utilities/EmployeeList');
 })->middleware(['auth', 'verified'])->name('utilities.employee-list');
-Route::get('utilities/user-list', function () {
-    return Inertia::render('Utilities/UserList');
-})->middleware(['auth', 'verified'])->name('utilities.user-list');
+Route::get('utilities/user-list', [UserListController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('utilities.user-list');
+Route::get('api/utilities/users', [UserListController::class, 'api'])
+    ->middleware(['auth'])
+    ->name('utilities.user-list.api');
+Route::patch('api/utilities/users/{user}/status', [UserListController::class, 'updateStatus'])
+    ->middleware(['auth'])
+    ->name('utilities.user-list.update-status');
 Route::get('utilities/business-department-list', function () {
     return Inertia::render('Utilities/BusinessDepartmentList');
 })->middleware(['auth', 'verified'])->name('utilities.business-department-list');
