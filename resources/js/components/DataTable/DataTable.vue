@@ -1,30 +1,11 @@
 <!--
-  Vue.js DataTable: server-side chunk + lazy loading.
-  - Chunk: only one page of data is requested from the server (no full dataset).
-  - Lazy: optional "Load more" appends next chunk on demand.
-  Avoids retrieving all data and prevents UI freezing/lag.
+  DataTable using datatables.net-vue3 with server-side processing.
+  Supports custom cell rendering, accordion rows, and backend export buttons.
 -->
 <script setup lang="ts">
-import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-vue-next';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-
-export type PaginationLink = {
-    url: string | null;
-    label: string;
-    active: boolean;
-};
-
-export type PaginationMeta = {
-    data: unknown[];
-    current_page: number;
-    last_page: number;
-    per_page: number;
-    total: number;
-    from: number;
-    to: number;
-    links: PaginationLink[];
-};
+import { ref, onMounted, watch, nextTick, onUnmounted } from 'vue';
+import { DataTablesCore } from '@/config/datatables';
+import type { Config } from 'datatables.net';
 
 export type DataTableColumn = {
     key: string;
@@ -33,333 +14,348 @@ export type DataTableColumn = {
     class?: string;
     thClass?: string;
     tdClass?: string;
-    /** Slot name for custom cell content: use slot "cell-{slot}" */
+    /** Slot name for custom cell content */
     slot?: string;
     /** Width style, e.g. "8rem" or "minmax(100px, 1fr)" */
     width?: string;
+    /** DataTables column data source (defaults to key) */
+    data?: string;
+    /** Custom render function for the column */
+    render?: (data: unknown, type: string, row: any, meta: any) => string;
 };
+
 
 const props = withDefaults(
     defineProps<{
         /** Column definitions */
         columns: DataTableColumn[];
-        /** Current page (or accumulated) rows */
-        data: unknown[];
-        /** Laravel-style pagination meta */
-        pagination: PaginationMeta;
+        /** Server-side processing API URL */
+        ajaxUrl?: string;
+        /** Function to get query params for ajax requests */
+        getAjaxParams?: () => Record<string, string | undefined>;
         /** Row key for :key (e.g. "id", "hrid") */
         rowKey: string;
         /** Show loading overlay when fetching */
         loading?: boolean;
-        /** Show "Load more" instead of page numbers; parent appends next chunk */
-        loadMoreMode?: boolean;
-        /** Per-page options (chunk sizes) */
+        /** Per-page options */
         perPageOptions?: number[];
         /** Message when no data */
         emptyMessage?: string;
-        /** Min width for table container (e.g. "1200px") */
-        minTableWidth?: string;
-        /** Show pagination above the table as well (default false) */
-        showPaginationTop?: boolean;
         /** Function to check if a row is expanded (for accordion) */
         isRowExpanded?: (row: unknown) => boolean;
         /** Row click handler */
         onRowClick?: (row: unknown) => void;
         /** Row class function */
         rowClass?: (row: unknown) => string | string[];
+        /** Show built-in export buttons (CSV, Excel, Print) */
+        showExportButtons?: boolean;
+        /** Custom cell renderers - function that returns HTML string */
+        cellRenderers?: Record<string, (row: any, value: any) => string>;
+        /** Accordion content renderer - function that returns HTML string */
+        accordionRenderer?: (row: any) => string;
     }>(),
     {
         loading: false,
-        loadMoreMode: false,
         perPageOptions: () => [10, 25, 50, 100],
         emptyMessage: 'No records found',
-        minTableWidth: '1200px',
-        showPaginationTop: false,
         isRowExpanded: undefined,
         onRowClick: undefined,
         rowClass: undefined,
+        showExportButtons: false,
+        cellRenderers: undefined,
+        accordionRenderer: undefined,
     },
 );
 
 const emit = defineEmits<{
-    'page-change': [url: string | null];
-    'per-page-change': [perPage: number];
-    'load-more': [];
     'row-click': [row: unknown];
+    'row-expand': [row: unknown];
+    'row-collapse': [row: unknown];
+    'row-toggle': [row: unknown, isExpanded: boolean];
 }>();
 
-function cleanPaginationLabel(label: string): string {
-    return label
-        .replace(/&laquo;/g, '')
-        .replace(/&raquo;/g, '')
-        .replace(/&lsaquo;/g, '')
-        .replace(/&rsaquo;/g, '')
-        .trim();
-}
+const tableRef = ref<HTMLTableElement | null>(null);
+let dataTableInstance: any = null;
+const expandedRows = ref<Set<string | number>>(new Set());
 
-function isNavigationLink(label: string): boolean {
-    const cleaned = cleanPaginationLabel(label).toLowerCase();
-    return cleaned === 'previous' || cleaned === 'next';
-}
-
-function changePage(url: string | null) {
-    if (url) emit('page-change', url);
-}
-
-function changePerPage(perPage: number) {
-    emit('per-page-change', perPage);
-}
-
-function getCellValue(row: Record<string, unknown>, key: string): unknown {
-    const parts = key.split('.');
-    let v: unknown = row;
-    for (const p of parts) {
-        if (v != null && typeof v === 'object' && p in v) v = (v as Record<string, unknown>)[p];
-        else return undefined;
+// Toggle row expansion
+function toggleRow(row: any, rowElement?: HTMLElement) {
+    const rowKey = row._raw?.[props.rowKey];
+    if (!rowKey || !dataTableInstance) return;
+    
+    let rowEl = rowElement;
+    if (!rowEl && tableRef.value) {
+        rowEl = tableRef.value.querySelector(`tr[data-row-key="${rowKey}"]`) as HTMLElement;
     }
-    return v;
+    
+    if (!rowEl) return;
+    
+    const wasExpanded = expandedRows.value.has(rowKey);
+    if (wasExpanded) {
+        expandedRows.value.delete(rowKey);
+        dataTableInstance.row(rowEl).child.hide();
+        emit('row-collapse', row._raw);
+        emit('row-toggle', row._raw, false);
+    } else {
+        expandedRows.value.add(rowKey);
+        if (props.accordionRenderer) {
+            const content = props.accordionRenderer(row._raw);
+            dataTableInstance.row(rowEl).child(content).show();
+        }
+        emit('row-expand', row._raw);
+        emit('row-toggle', row._raw, true);
+    }
+    
+    // Redraw to update icons
+    dataTableInstance.draw(false);
 }
 
-function handleRowClick(row: unknown) {
-    if (props.onRowClick) {
-        props.onRowClick(row);
+// Initialize DataTable
+onMounted(() => {
+    if (!tableRef.value || !props.ajaxUrl) return;
+    
+    nextTick(() => {
+        const table = tableRef.value;
+        if (!table) return;
+        
+        // Build DataTables columns configuration
+        const dtColumns = props.columns.map((col) => {
+            const columnConfig: any = {
+                data: col.data || col.key,
+                title: col.label,
+                className: col.class || col.tdClass || '',
+                orderable: true, // Enable column sorting
+                searchable: true, // Enable column search
+            };
+            
+            // Custom render function
+            if (col.render) {
+                columnConfig.render = col.render;
+            } else if (col.slot && props.cellRenderers?.[col.slot]) {
+                columnConfig.render = (data: unknown, type: string, row: any) => {
+                    if (type === 'display' || type === 'type') {
+                        return props.cellRenderers![col.slot!](row._raw, data);
+                    }
+                    return data ?? '';
+                };
+            } else if (col.slot) {
+                // Default renderer for slots
+                columnConfig.render = (data: unknown, type: string, row: any) => {
+                    if (type === 'display' || type === 'type') {
+                        return String(data ?? '-');
+                    }
+                    return data ?? '';
+                };
+            }
+            
+            if (col.width) {
+                columnConfig.width = col.width;
+            }
+            
+            return columnConfig;
+        });
+        
+        // Built-in DataTables buttons configuration
+        const buttons: any[] = [];
+        
+        if (props.showExportButtons) {
+            buttons.push('csv', 'excel', 'print');
+        }
+        
+        // DataTables configuration
+        const dtConfig: any = {
+            processing: true,
+            serverSide: true,
+            searchDelay: 400, // Wait 400ms after user stops typing before searching (dynamic search)
+            ajax: {
+                url: props.ajaxUrl,
+                type: 'GET',
+                data: (d: any) => {
+                    // Merge DataTables params with custom params
+                    // IMPORTANT: Preserve DataTables search parameter
+                    const customParams = props.getAjaxParams?.() || {};
+                    
+                    // Extract search from DataTables params to preserve it
+                    const dataTablesSearch = d.search;
+                    
+                    // Merge params (custom params may override some DataTables params)
+                    const merged = {
+                        ...d, // DataTables params come first
+                        ...customParams, // Custom params override
+                    };
+                    
+                    // Always preserve DataTables search parameter (it should never be overridden)
+                    if (dataTablesSearch) {
+                        merged.search = dataTablesSearch;
+                    }
+                    
+                    return merged;
+                },
+                dataSrc: (json: any) => {
+                    // Debug: Log the response
+                    console.log('DataTables Response:', json);
+                    
+                    // Check if response has error
+                    if (json.error) {
+                        console.error('DataTables AJAX Error:', json.error);
+                        return [];
+                    }
+                    
+                    // Check if data exists and is an array
+                    if (!json || !json.data) {
+                        console.warn('DataTables: No data in response', json);
+                        return [];
+                    }
+                    
+                    // Return data array
+                    return Array.isArray(json.data) ? json.data : [];
+                },
+                error: (xhr: any, error: string, thrown: string) => {
+                    console.error('DataTables AJAX Request Failed:', {
+                        error,
+                        thrown,
+                        status: xhr.status,
+                        statusText: xhr.statusText,
+                        responseText: xhr.responseText,
+                        url: props.ajaxUrl,
+                    });
+                    // Show user-friendly error message
+                    alert(`Failed to load data. Please check the console for details. Status: ${xhr.status}`);
+                },
+            },
+            columns: dtColumns,
+            pageLength: props.perPageOptions[0] || 10,
+            lengthMenu: [
+                props.perPageOptions.map(opt => opt === -1 ? -1 : opt),
+                props.perPageOptions.map(opt => opt === -1 ? 'All' : String(opt))
+            ],
+            order: [[0, 'asc']],
+            language: {
+                emptyTable: props.emptyMessage,
+                processing: '<div class="flex items-center justify-center gap-2"><div class="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div><span>Loading...</span></div>',
+                lengthMenu: 'Show _MENU_ entries',
+                info: 'Showing _START_ to _END_ of _TOTAL_ entries',
+                infoEmpty: 'Showing 0 to 0 of 0 entries',
+                infoFiltered: '(filtered from _MAX_ total entries)',
+                search: 'Search:',
+                searchPlaceholder: 'Search ID or Name...',
+                paginate: {
+                    first: 'First',
+                    last: 'Last',
+                    next: 'Next',
+                    previous: 'Previous',
+                },
+            },
+            buttons: buttons.length > 0 ? {
+                dom: {
+                    button: {
+                        className: 'px-3 py-1.5 text-sm font-medium rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground',
+                    },
+                },
+                buttons: buttons,
+            } : undefined,
+            // Show pagination controls both at the top (in header row 2) and bottom (footer)
+            // Top pagination: length menu on left, pagination on right
+            dom: buttons.length > 0
+                ? '<"dataTables-header"<"dataTables-header-row-1"<"dataTables-header-left"f><"dataTables-header-right"B>><"dataTables-header-row-2"<"dataTables-header-row-2-left"l><"dataTables-header-row-2-right"p>>>rt<"dataTables-footer"ip>'
+                : '<"dataTables-header"<"dataTables-header-row-1"f><"dataTables-header-row-2"<"dataTables-header-row-2-left"l><"dataTables-header-row-2-right"p>>>rt<"dataTables-footer"ip>',
+            responsive: true,
+            rowCallback: (row: Node, data: any) => {
+                const rowElement = row as HTMLElement;
+                const rowKey = data._raw?.[props.rowKey];
+                
+                // Add data attribute for row identification
+                if (rowKey) {
+                    rowElement.setAttribute('data-row-key', String(rowKey));
+                }
+                
+                // Apply row classes
+                if (props.rowClass && data._raw) {
+                    const classes = props.rowClass(data._raw);
+                    if (typeof classes === 'string') {
+                        rowElement.className += ` ${classes}`;
+                    } else if (Array.isArray(classes)) {
+                        rowElement.className += ` ${classes.join(' ')}`;
+                    }
+                }
+                
+                // Handle row click - toggle accordion on any row click
+                if (data._raw) {
+                    rowElement.style.cursor = 'pointer';
+                    // Use a single event listener to avoid duplicates
+                    const clickHandler = (e: Event) => {
+                        // Toggle accordion when clicking anywhere on the row
+                        if (props.accordionRenderer) {
+                            toggleRow(data, rowElement);
+                        }
+                        // Also call custom row click handler if provided
+                        if (props.onRowClick) {
+                            props.onRowClick(data._raw);
+                        }
+                        emit('row-click', data._raw);
+                    };
+                    // Remove any existing listener and add new one
+                    rowElement.removeEventListener('click', clickHandler);
+                    rowElement.addEventListener('click', clickHandler);
+                }
+                
+                // Handle accordion expansion state
+                if (rowKey && expandedRows.value.has(rowKey)) {
+                    rowElement.classList.add('expanded');
+                    if (dataTableInstance && props.accordionRenderer) {
+                        const content = props.accordionRenderer(data._raw);
+                        dataTableInstance.row(rowElement).child(content).show();
+                    }
+                }
+            },
+            drawCallback: () => {
+                // Note: Row click handlers are attached in rowCallback, so they're automatically
+                // re-attached when DataTables redraws. The expand button is just visual - clicking
+                // anywhere on the row will toggle the accordion.
+            },
+        };
+        
+        // Initialize DataTable
+        // @ts-ignore - DataTables types
+        dataTableInstance = new DataTablesCore(table, dtConfig);
+    });
+});
+
+// Watch for changes and reload
+watch(
+    () => [props.getAjaxParams?.(), props.ajaxUrl],
+    () => {
+        if (dataTableInstance) {
+            dataTableInstance.ajax.reload();
+        }
+    },
+    { deep: true },
+);
+
+// Watch for accordion state changes to update row rendering
+watch(
+    () => props.isRowExpanded,
+    () => {
+        if (dataTableInstance) {
+            // Redraw to update cell renderers (especially name column with expand icon)
+            dataTableInstance.draw(false);
+        }
+    },
+    { deep: true },
+);
+
+// Cleanup on unmount
+onUnmounted(() => {
+    if (dataTableInstance) {
+        dataTableInstance.destroy();
+        dataTableInstance = null;
     }
-    emit('row-click', row);
-}
+});
 </script>
 
 <template>
     <div class="data-table-wrapper">
-        <!-- Pagination above table -->
-        <div
-            v-if="showPaginationTop"
-            class="data-table-pagination data-table-pagination-top flex items-center justify-between mb-4 pb-3 pt-3 border-b gap-6"
-        >
-            <div class="flex items-center gap-4">
-                <div class="text-sm text-muted-foreground">
-                    Showing {{ pagination.from }} to {{ pagination.to }} of {{ pagination.total }} results
-                </div>
-                <div v-if="!loadMoreMode" class="flex items-center gap-2">
-                    <Label class="text-sm">Per page:</Label>
-                    <select
-                        :value="pagination.per_page"
-                        @change="changePerPage(Number(($event.target as HTMLSelectElement).value))"
-                        class="rounded-md border border-input bg-background px-2 py-1 text-sm"
-                    >
-                        <option v-for="n in perPageOptions" :key="n" :value="n">{{ n }}</option>
-                    </select>
-                </div>
-            </div>
-            <div class="flex gap-2">
-                <template v-if="loadMoreMode">
-                    <Button
-                        v-if="pagination.current_page < pagination.last_page"
-                        variant="outline"
-                        size="sm"
-                        :disabled="loading"
-                        @click="emit('load-more')"
-                    >
-                        <Loader2 v-if="loading" class="h-4 w-4 animate-spin mr-2" />
-                        Load more
-                    </Button>
-                    <span v-else-if="pagination.data.length > 0" class="text-sm text-muted-foreground">
-                        All {{ pagination.total }} loaded
-                    </span>
-                </template>
-                <template v-else>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        :disabled="pagination.current_page === 1"
-                        @click="changePage(pagination.links.find((l) => isNavigationLink(l.label) && cleanPaginationLabel(l.label).toLowerCase() === 'previous')?.url ?? null)"
-                    >
-                        <ChevronLeft class="h-4 w-4" />
-                        Previous
-                    </Button>
-                    <template v-for="(link, idx) in pagination.links" :key="'top-' + idx">
-                        <Button
-                            v-if="!isNavigationLink(link.label)"
-                            variant="outline"
-                            size="sm"
-                            :class="{ 'bg-primary text-primary-foreground': link.active }"
-                            :disabled="!link.url"
-                            @click="changePage(link.url)"
-                        >
-                            {{ cleanPaginationLabel(link.label) }}
-                        </Button>
-                    </template>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        :disabled="pagination.current_page === pagination.last_page"
-                        @click="changePage(pagination.links.find((l) => isNavigationLink(l.label) && cleanPaginationLabel(l.label).toLowerCase() === 'next')?.url ?? null)"
-                    >
-                        Next
-                        <ChevronRight class="h-4 w-4" />
-                    </Button>
-                </template>
-            </div>
-        </div>
-
-        <div class="rounded-md border overflow-x-auto w-full">
-            <div v-if="loading" class="data-table-loading">
-                <Loader2 class="h-8 w-8 animate-spin text-muted-foreground" />
-                <span class="text-sm text-muted-foreground">Loading...</span>
-            </div>
-            <table
-                class="data-table ehris-employee-table w-full border-collapse"
-                :style="{ minWidth: minTableWidth }"
-            >
-                <thead class="bg-muted/50">
-                    <tr>
-                        <th
-                            v-for="col in columns"
-                            :key="col.key"
-                            class="data-table-th ehris-th"
-                            :class="[col.class, col.thClass]"
-                            :style="col.width ? { width: col.width, minWidth: col.width } : undefined"
-                        >
-                            {{ col.label }}
-                        </th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <template v-for="(row, index) in data" :key="(row as Record<string, unknown>)[rowKey] ?? index">
-                        <!-- Main row -->
-                        <tr
-                            :class="[
-                                'hover:bg-muted/50 border-b transition-colors',
-                                isRowExpanded && isRowExpanded(row) ? 'bg-muted/30' : '',
-                                rowClass ? (typeof rowClass(row) === 'string' ? rowClass(row) : (rowClass(row) as string[]).join(' ')) : '',
-                                (onRowClick || isRowExpanded) ? 'cursor-pointer' : '',
-                            ]"
-                            @click="handleRowClick(row)"
-                        >
-                            <td
-                                v-for="col in columns"
-                                :key="col.key"
-                                class="data-table-td ehris-td"
-                                :class="[col.class, col.tdClass]"
-                            >
-                                <slot
-                                    v-if="col.slot"
-                                    :name="`cell-${col.slot}`"
-                                    :row="row"
-                                    :value="getCellValue(row as Record<string, unknown>, col.key)"
-                                >
-                                    {{ getCellValue(row as Record<string, unknown>, col.key) ?? '-' }}
-                                </slot>
-                                <template v-else>
-                                    {{ getCellValue(row as Record<string, unknown>, col.key) ?? '-' }}
-                                </template>
-                            </td>
-                        </tr>
-                        
-                        <!-- Accordion row (if expanded) -->
-                        <tr
-                            v-if="isRowExpanded && isRowExpanded(row)"
-                            class="accordion-content-row"
-                        >
-                            <td :colspan="columns.length" class="p-0">
-                                <slot
-                                    name="accordion"
-                                    :row="row"
-                                >
-                                    <!-- Default accordion content slot -->
-                                </slot>
-                            </td>
-                        </tr>
-                    </template>
-                    
-                    <tr v-if="data.length === 0">
-                        <td :colspan="columns.length" class="data-table-empty">
-                            <slot name="empty">
-                                {{ emptyMessage }}
-                            </slot>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-
-        <!-- Pagination -->
-        <div class="data-table-pagination flex items-center justify-between mt-6 pt-4 pb-2 border-t gap-6">
-            <div class="flex items-center gap-4">
-                <div class="text-sm text-muted-foreground">
-                    Showing {{ pagination.from }} to {{ pagination.to }} of {{ pagination.total }} results
-                </div>
-                <div v-if="!loadMoreMode" class="flex items-center gap-2">
-                    <Label class="text-sm">Per page:</Label>
-                    <select
-                        :value="pagination.per_page"
-                        @change="changePerPage(Number(($event.target as HTMLSelectElement).value))"
-                        class="rounded-md border border-input bg-background px-2 py-1 text-sm"
-                    >
-                        <option
-                            v-for="n in perPageOptions"
-                            :key="n"
-                            :value="n"
-                        >
-                            {{ n }}
-                        </option>
-                    </select>
-                </div>
-            </div>
-            <div class="flex gap-2">
-                <!-- Load more mode: single "Load more" button -->
-                <template v-if="loadMoreMode">
-                    <Button
-                        v-if="pagination.current_page < pagination.last_page"
-                        variant="outline"
-                        size="sm"
-                        :disabled="loading"
-                        @click="emit('load-more')"
-                    >
-                        <Loader2 v-if="loading" class="h-4 w-4 animate-spin mr-2" />
-                        Load more
-                    </Button>
-                    <span
-                        v-else-if="pagination.data.length > 0"
-                        class="text-sm text-muted-foreground"
-                    >
-                        All {{ pagination.total }} loaded
-                    </span>
-                </template>
-                <!-- Classic pagination -->
-                <template v-else>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        :disabled="pagination.current_page === 1"
-                        @click="changePage(pagination.links.find((l) => isNavigationLink(l.label) && cleanPaginationLabel(l.label).toLowerCase() === 'previous')?.url ?? null)"
-                    >
-                        <ChevronLeft class="h-4 w-4" />
-                        Previous
-                    </Button>
-                    <template v-for="(link, idx) in pagination.links" :key="idx">
-                        <Button
-                            v-if="!isNavigationLink(link.label)"
-                            variant="outline"
-                            size="sm"
-                            :class="{ 'bg-primary text-primary-foreground': link.active }"
-                            :disabled="!link.url"
-                            @click="changePage(link.url)"
-                        >
-                            {{ cleanPaginationLabel(link.label) }}
-                        </Button>
-                    </template>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        :disabled="pagination.current_page === pagination.last_page"
-                        @click="changePage(pagination.links.find((l) => isNavigationLink(l.label) && cleanPaginationLabel(l.label).toLowerCase() === 'next')?.url ?? null)"
-                    >
-                        Next
-                        <ChevronRight class="h-4 w-4" />
-                    </Button>
-                </template>
-            </div>
-        </div>
+        <table ref="tableRef" class="display" style="width: 100%"></table>
     </div>
 </template>
 
@@ -368,116 +364,223 @@ function handleRowClick(row: unknown) {
     position: relative;
 }
 
-.data-table-pagination-top {
-    margin-top: 1rem;
+/* Override DataTables styles to match existing design */
+:deep(.dataTables_wrapper) {
+    padding: 1rem;
+}
+
+/* Header container */
+:deep(.dataTables-header) {
     margin-bottom: 1rem;
 }
 
-.data-table-pagination {
-    padding-top: 1rem;
-    padding-bottom: 0.5rem;
-}
-
-.data-table-loading {
-    position: absolute;
-    inset: 0;
-    background: hsl(var(--background) / 0.8);
+/* First row: Search on left, Buttons on right */
+:deep(.dataTables-header-row-1) {
     display: flex;
-    flex-direction: column;
+    justify-content: space-between;
     align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    z-index: 10;
-    border-radius: 0.375rem;
+    margin-bottom: 0.75rem;
+    gap: 1rem;
 }
 
-.data-table {
-    table-layout: fixed;
-    min-width: 0;
+/* Header left: Search */
+:deep(.dataTables-header-left) {
+    flex: 1;
+}
+
+/* Header right: Buttons */
+:deep(.dataTables-header-right) {
+    display: flex;
+    gap: 0.5rem;
+}
+
+/* Second row: Length menu on left, Pagination on right */
+:deep(.dataTables-header-row-2) {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 0.5rem;
+    gap: 1rem;
+}
+
+/* Header row 2 left: Length menu */
+:deep(.dataTables-header-row-2-left) {
+    flex: 0 0 auto;
+}
+
+/* Header row 2 right: Top pagination */
+:deep(.dataTables-header-row-2-right) {
+    flex: 0 0 auto;
+    display: flex;
+    justify-content: flex-end;
+}
+
+/* Search bar styling */
+:deep(.dataTables_filter) {
+    margin: 0;
+    float: none;
+    text-align: left;
+}
+
+:deep(.dataTables_filter label) {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 500;
+    margin: 0;
+}
+
+:deep(.dataTables_filter input) {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid hsl(var(--input));
+    border-radius: 0.375rem;
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-size: 0.875rem;
+    width: 250px;
+    transition: border-color 0.2s;
+}
+
+:deep(.dataTables_filter input:focus) {
+    outline: none;
+    border-color: hsl(var(--ring));
+    box-shadow: 0 0 0 2px hsl(var(--ring) / 0.2);
+}
+
+/* Buttons container - positioned on the right */
+:deep(.dt-buttons) {
+    margin: 0;
+    display: flex;
+    gap: 0.5rem;
+}
+
+:deep(.dt-buttons .dt-button) {
+    padding: 0.5rem 1rem;
+    border: 1px solid hsl(var(--input));
+    border-radius: 0.375rem;
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
+    cursor: pointer;
+    font-size: 0.875rem;
+    transition: all 0.2s;
+}
+
+:deep(.dt-buttons .dt-button:hover) {
+    background: hsl(var(--accent));
+    color: hsl(var(--accent-foreground));
+}
+
+/* Length menu styling */
+:deep(.dataTables_length) {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+:deep(.dataTables_length label) {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0;
+    font-weight: 500;
+}
+
+:deep(.dataTables_length select) {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid hsl(var(--input));
+    border-radius: 0.375rem;
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: border-color 0.2s;
+}
+
+:deep(.dataTables_length select:focus) {
+    outline: none;
+    border-color: hsl(var(--ring));
+    box-shadow: 0 0 0 2px hsl(var(--ring) / 0.2);
+}
+
+/* Footer section container */
+:deep(.dataTables-footer) {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 1rem;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+:deep(.dataTables_info) {
+    margin: 0;
+    color: hsl(var(--muted-foreground));
+}
+
+:deep(.dataTables_paginate) {
+    margin: 0;
+}
+
+:deep(.dataTables_paginate .paginate_button) {
+    padding: 0.5rem 0.75rem;
+    margin: 0 0.25rem;
+    border: 1px solid hsl(var(--input));
+    border-radius: 0.375rem;
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
+    cursor: pointer;
+}
+
+:deep(.dataTables_paginate .paginate_button:hover) {
+    background: hsl(var(--accent));
+    color: hsl(var(--accent-foreground));
+}
+
+:deep(.dataTables_paginate .paginate_button.current) {
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+    border-color: hsl(var(--primary));
+}
+
+:deep(.dataTables_paginate .paginate_button.disabled) {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+
+/* Accordion row styles */
+:deep(tr.expanded) {
+    background-color: hsl(var(--muted) / 0.3);
+}
+
+:deep(.child) {
+    background-color: hsl(var(--muted) / 0.1);
+    padding: 1rem;
+}
+
+/* Table styling */
+:deep(table.dataTable) {
+    border-collapse: collapse;
     width: 100%;
 }
 
-.data-table th,
-.data-table td {
-    vertical-align: middle;
-    word-wrap: break-word;
-    overflow-wrap: break-word;
-}
-
-.data-table-th {
-    padding: 0.375rem 0.5rem;
+:deep(table.dataTable thead th) {
+    background-color: hsl(var(--muted) / 0.5);
+    padding: 0.75rem;
     text-align: left;
-    font-size: 0.75rem;
     font-weight: 600;
+    font-size: 0.75rem;
     color: hsl(var(--muted-foreground));
     border-bottom: 1px solid hsl(var(--border));
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
 }
 
-.data-table-td {
-    padding: 0.375rem 0.5rem;
-    font-size: 0.875rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
+:deep(table.dataTable tbody td) {
+    padding: 0.75rem;
+    border-bottom: 1px solid hsl(var(--border));
 }
 
-.data-table-empty {
-    padding: 1rem 0.5rem;
-    text-align: center;
-    color: hsl(var(--muted-foreground));
-}
-
-/* EHRIS column constraints (same as EmployeeListing) */
-.ehris-employee-table td,
-.ehris-employee-table th {
-    max-width: 0;
-}
-
-.ehris-employee-table th.ehris-th,
-.ehris-employee-table td.ehris-td {
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-/* Optional column width classes (match EHRIS design) */
-.data-table .ehris-col-name {
-    max-width: 10rem;
-    min-width: 8rem;
-}
-.data-table .ehris-col-job {
-    max-width: 9rem;
-    min-width: 6rem;
-}
-.data-table .ehris-col-office {
-    max-width: 10rem;
-    min-width: 7rem;
-}
-.data-table .ehris-col-subject {
-    max-width: 15rem;
-    min-width: 10rem;
-}
-.data-table .ehris-col-leave {
-    min-width: 5.5rem;
-}
-.data-table td.ehris-td:not(.ehris-col-name):not(.ehris-col-job):not(.ehris-col-office):not(.ehris-col-subject) {
-    white-space: nowrap;
-}
-
-/* Accordion content row animation */
-.accordion-content-row {
-    animation: slideDown 0.3s ease-out;
-}
-
-@keyframes slideDown {
-    from {
-        opacity: 0;
-        max-height: 0;
-    }
-    to {
-        opacity: 1;
-        max-height: 1000px;
-    }
+:deep(table.dataTable tbody tr:hover) {
+    background-color: hsl(var(--muted) / 0.5);
 }
 </style>

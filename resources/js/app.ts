@@ -7,6 +7,8 @@ import '../css/app.css';
 import 'v-calendar/style.css';
 import { initializeTheme } from './composables/useAppearance';
 import { configureEcho } from '@laravel/echo-vue';
+// Initialize DataTables configuration
+import './config/datatables';
 
 // Prevent failed navigations from leaving the UI unresponsive
 router.on('error', (event) => {

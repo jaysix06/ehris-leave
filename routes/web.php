@@ -1,15 +1,15 @@
 <?php
 
-use App\Http\Controllers\MyDetailsController;
 use App\Http\Controllers\Auth\PasswordResetOtpController;
+use App\Http\Controllers\MyDetailsController;
 use App\Http\Controllers\SelfService\LeaveApplicationController;
 use App\Http\Controllers\Utilities\LeaveTypeController;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use App\Models\FamilyInfo;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
 
@@ -355,6 +355,9 @@ Route::get('survey/gad', function () {
 Route::get('api/reports/employee-listing', [App\Http\Controllers\Reports\EmployeeListingController::class, 'api'])
     ->middleware(['auth', 'verified'])
     ->name('api.reports.employee-listing');
+Route::get('api/reports/employee-listing/datatables', [App\Http\Controllers\Reports\EmployeeListingController::class, 'datatables'])
+    ->middleware(['auth', 'verified'])
+    ->name('api.reports.employee-listing.datatables');
 
 Route::get('reports/employee-listing', [App\Http\Controllers\Reports\EmployeeListingController::class, 'index'])
     ->middleware(['auth', 'verified'])
@@ -371,5 +374,9 @@ Route::get('reports/employee-listing/export/excel', [App\Http\Controllers\Report
 Route::get('reports/employee-listing/export/print', [App\Http\Controllers\Reports\EmployeeListingController::class, 'exportPrint'])
     ->middleware(['auth', 'verified'])
     ->name('reports.employee-listing.export.print');
+
+Route::get('api/reports/employee-listing/summary-stats', [App\Http\Controllers\Reports\EmployeeListingController::class, 'summaryStats'])
+    ->middleware(['auth', 'verified'])
+    ->name('reports.employee-listing.summary-stats');
 
 require __DIR__.'/settings.php';
