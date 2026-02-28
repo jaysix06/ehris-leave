@@ -7,10 +7,11 @@ use App\Concerns\ProfileValidationRules;
 use App\Mail\NewUserRegistrationAdminMail;
 use App\Models\BusinessUnit;
 use App\Models\Department;
-use App\Models\Employee;
 use App\Models\EmploymentStatus;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Laravel\Fortify\Contracts\CreatesNewUsers;
@@ -74,16 +75,24 @@ class CreateNewUser implements CreatesNewUsers
         $hrid = (int) $user->hrId;
         $nickname = trim((string) ($input['firstname'] ?? '')) ?: '—';
 
-        Employee::updateOrCreate(['hrid' => $hrid], [
-            'firstname' => $input['firstname'],
-            'middlename' => $input['middlename'] ?? '',
-            'lastname' => $input['lastname'],
-            'extension' => $input['extname'] ?? '',
-            'nickname' => $nickname,
-            'employ_status' => $input['employment_status'],
-            'business_id' => (string) $input['district'],
-            'department_id' => (string) $input['station'],
-        ]);
+        // Sync to tbl_emp_official_info if the table exists (no Employee model in this project)
+        if (Schema::hasTable('tbl_emp_official_info')) {
+            DB::table('tbl_emp_official_info')->updateOrInsert(
+                ['hrid' => $hrid],
+                [
+                    'id' => $hrid,
+                    'hrid' => $hrid,
+                    'firstname' => $input['firstname'],
+                    'middlename' => $input['middlename'] ?? '',
+                    'lastname' => $input['lastname'],
+                    'extension' => $input['extname'] ?? '',
+                    'nickname' => $nickname,
+                    'employ_status' => $input['employment_status'],
+                    'business_id' => (string) $input['district'],
+                    'department_id' => (string) $input['station'],
+                ]
+            );
+        }
 
         // Notify admin
         try {
