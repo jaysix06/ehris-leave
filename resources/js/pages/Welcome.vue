@@ -2,42 +2,11 @@
 import { Head, Link } from '@inertiajs/vue3';
 import {
     ArrowRight,
-    CalendarDays,
-    ClipboardList,
-    Clock,
     FileText,
     Megaphone,
     Shield,
-    Wallet,
 } from 'lucide-vue-next';
 import { login, register } from '@/routes';
-
-const features = [
-    {
-        title: 'Leave Management',
-        description:
-            'File, monitor, and review leave applications with clear approval tracking.',
-        icon: CalendarDays,
-    },
-    {
-        title: 'Attendance / DTR',
-        description:
-            'Monitor daily time records and attendance summaries in one place.',
-        icon: Clock,
-    },
-    {
-        title: 'Payroll & Payslips',
-        description:
-            'Access payroll details and pay documents for authorized personnel.',
-        icon: Wallet,
-    },
-    {
-        title: 'Service Records',
-        description:
-            'Maintain and view employment history and official personnel records.',
-        icon: ClipboardList,
-    },
-];
 
 const announcements = [
     {
@@ -65,11 +34,11 @@ const announcements = [
     <div class="min-h-screen bg-background text-foreground">
         <header class="sticky top-0 z-30 border-b border-border/80 bg-card/95 backdrop-blur">
             <div class="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
-                <div class="flex min-w-0 items-center gap-3">
+                <div class="flex min-w-0 items-center">
                     <img
                         src="/logo-sximo.png"
                         alt="DepEd Ozamiz City seal"
-                        class="size-10 shrink-0 rounded-full"
+                        class="size-10 shrink-0 rounded-full object-cover"
                     />
                     <div class="hidden min-w-0 sm:block">
                         <p class="truncate text-sm font-bold leading-tight text-foreground">
@@ -107,23 +76,26 @@ const announcements = [
 
                 <div class="relative mx-auto flex w-full max-w-6xl flex-col items-center gap-8 px-4 py-16 text-center sm:px-6 sm:py-20 lg:px-8 lg:py-24">
                     <img
-                        src="/depedozamiz.png"
-                        alt="DepEd Ozamiz"
-                        class="h-14 object-contain sm:h-16"
+                        src="/ehris.png"
+                        alt="DepEd eHRIS"
+                        class="h-20 object-contain sm:h-24"
                     />
 
                     <div class="max-w-2xl space-y-4">
-                        <h1 class="text-3xl font-extrabold tracking-tight sm:text-4xl lg:text-5xl">
-                            Centralized HR Services for
-                            <span class="text-primary">Government Personnel</span>
-                        </h1>
                         <p class="mx-auto max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg">
-                            Manage employee services, records, and HR transactions through one secure
-                            and streamlined platform.
+                            Manage employee services, records, and HR transactions through one secure platform.
                         </p>
                     </div>
 
                     <div class="flex flex-wrap items-center justify-center gap-4">
+                    
+                        <Link
+                            :href="register()"
+                            class="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-6 py-3 text-sm font-semibold text-foreground shadow-sm transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                        >
+                            Create Account
+                        </Link>
+
                         <Link
                             :href="login()"
                             class="inline-flex items-center gap-2 rounded-lg bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground shadow-md transition hover:opacity-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
@@ -131,44 +103,7 @@ const announcements = [
                             Access HRIS Portal
                             <ArrowRight class="size-4" />
                         </Link>
-
-                        <Link
-                            :href="register()"
-                            class="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-6 py-3 text-sm font-semibold text-foreground shadow-sm transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                        >
-                            Create Account
-                        </Link>
                     </div>
-                </div>
-            </section>
-
-            <section class="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6 lg:px-8 lg:py-16" aria-labelledby="features-title">
-                <div class="mb-8 max-w-lg">
-                    <p class="text-xs font-bold uppercase tracking-widest text-primary">Modules</p>
-                    <h2 id="features-title" class="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">
-                        Core HR Services
-                    </h2>
-                    <p class="mt-2 text-sm leading-relaxed text-muted-foreground sm:text-base">
-                        Everything you need to manage personnel workflows, all in one portal.
-                    </p>
-                </div>
-
-                <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-                    <article
-                        v-for="feature in features"
-                        :key="feature.title"
-                        class="group relative rounded-xl border border-border bg-card p-6 shadow-sm transition hover:border-primary/40 hover:shadow-md"
-                    >
-                        <div class="mb-4 inline-flex size-11 items-center justify-center rounded-lg bg-primary/10 text-primary transition group-hover:bg-primary group-hover:text-primary-foreground">
-                            <component :is="feature.icon" class="size-5" />
-                        </div>
-                        <h3 class="text-base font-semibold text-foreground">
-                            {{ feature.title }}
-                        </h3>
-                        <p class="mt-2 text-sm leading-relaxed text-muted-foreground">
-                            {{ feature.description }}
-                        </p>
-                    </article>
                 </div>
             </section>
 
