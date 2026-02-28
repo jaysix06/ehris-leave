@@ -11,6 +11,7 @@ use App\Models\EmploymentStatus;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
@@ -113,9 +114,23 @@ class CreateNewUser implements CreatesNewUsers
                 'requested_at' => now()->format('Y-m-d H:i'),
             ];
 
-            Mail::to([$adminEmail => $adminName])->send(new NewUserRegistrationAdminMail($payload));
+            Log::info('Sending NewUserRegistrationAdminMail', [
+                'to' => $adminEmail,
+                'name' => $adminName,
+                'payload' => $payload,
+            ]);
+
+            // Explicitly pass email and name to avoid any ambiguity.
+            Mail::to($adminEmail, $adminName)->send(new NewUserRegistrationAdminMail($payload));
+
+            Log::info('NewUserRegistrationAdminMail sent successfully', [
+                'to' => $adminEmail,
+            ]);
         } catch (\Throwable $e) {
-            //
+            Log::error('Failed to send NewUserRegistrationAdminMail', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
         }
 
         return $user;

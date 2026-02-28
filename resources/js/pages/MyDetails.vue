@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { Head, usePage } from '@inertiajs/vue3';
-import { User } from 'lucide-vue-next';
-import { computed, ref, watch } from 'vue';
+import { Head, router, usePage } from '@inertiajs/vue3';
+import { echo } from '@laravel/echo-vue';
+import { Download, User } from 'lucide-vue-next';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { BreadcrumbItem } from '@/types';
+import { useSidebar } from '@/components/ui/sidebar/utils';
 import Affiliation from '@/pages/MyDetails/Affiliation.vue';
 import EducationBackground from '@/pages/MyDetails/EducationBackground.vue';
 import Eligibility from '@/pages/MyDetails/Eligibility.vue';
@@ -83,11 +85,18 @@ const props = defineProps<{
     researches?: Record<string, unknown>[];
     expertise?: Record<string, unknown>[];
     affiliation?: Record<string, unknown>[];
-    familyUpdateUrl?: string;
 }>();
 
 const page = usePage();
 const authUser = computed(() => page.props.auth.user);
+
+// Sidebar context may be unavailable during certain render timings.
+let sidebarContext: ReturnType<typeof useSidebar> | null = null;
+try {
+    sidebarContext = useSidebar();
+} catch (error) {
+    console.debug('[MyDetails] Sidebar context not available');
+}
 
 const employeeName = computed(() => {
     if (props.profile?.fullname) {
@@ -111,6 +120,13 @@ const employeeId = computed(() => {
     if (o?.hrid != null) return String(o.hrid);
     const authId = authUser.value?.id;
     return authId !== null && authId !== undefined ? String(authId) : 'N/A';
+});
+
+const currentHrid = computed<number | null>(() => {
+    const rawHrid = props.profile?.hrId ?? props.officialInfo?.hrid ?? authUser.value?.hrId;
+    const parsedHrid = Number(rawHrid);
+
+    return Number.isFinite(parsedHrid) ? parsedHrid : null;
 });
 
 const employeeEmail = computed(() => {
@@ -156,9 +172,14 @@ function sectionProps(index: number): Record<string, unknown> {
         case 0:
             return { officialInfo: props.officialInfo };
         case 1:
-            return { personalInfo: props.personalInfo };
+            return {
+                personalInfo: props.personalInfo,
+                officialInfo: props.officialInfo,
+                contactInfo: props.contactInfo,
+                profile: props.profile,
+            };
         case 2:
-            return { family: props.family, familyUpdateUrl: props.familyUpdateUrl };
+            return { family: props.family };
         case 3:
             return { education: props.education };
         case 4:
@@ -183,6 +204,82 @@ function sectionProps(index: number): Record<string, unknown> {
             return {};
     }
 }
+const myDetailsReloadProps = [
+    'profile',
+    'officialInfo',
+    'personalInfo',
+    'contactInfo',
+    'family',
+    'education',
+    'workExperience',
+    'eligibility',
+    'serviceRecord',
+    'leaveHistory',
+    'documents',
+    'training',
+    'awards',
+    'performance',
+    'researches',
+    'expertise',
+    'affiliation',
+];
+
+const refreshMyDetails = () => {
+    router.reload({
+        only: myDetailsReloadProps,
+    });
+};
+
+const exportPdsExcel = () => {
+    window.location.href = '/my-details/pds-export';
+};
+
+const onMyDetailsUpdated = (event: { hrid?: number | string } = {}) => {
+    const updatedHrid = Number(event.hrid);
+    if (!Number.isFinite(updatedHrid) || currentHrid.value === null || updatedHrid !== currentHrid.value) {
+        return;
+    }
+
+    console.info('[MyDetails] MyDetailsUpdated received. Refreshing details.');
+    refreshMyDetails();
+};
+
+let isRealtimeBound = false;
+
+onMounted(() => {
+    // Close mobile sidebar if open to prevent overlay from blocking clicks.
+    if (sidebarContext && sidebarContext.isMobile.value) {
+        sidebarContext.setOpenMobile(false);
+        setTimeout(() => {
+            if (sidebarContext && sidebarContext.isMobile.value && sidebarContext.openMobile.value) {
+                sidebarContext.setOpenMobile(false);
+            }
+        }, 200);
+    }
+
+    try {
+        const realtime = echo();
+
+        if (realtime && typeof realtime.channel === 'function') {
+            realtime.channel('my-details').listen('.MyDetailsUpdated', onMyDetailsUpdated);
+            isRealtimeBound = true;
+        }
+    } catch (error) {
+        console.warn('[MyDetails] Realtime channel unavailable:', error);
+    }
+});
+
+onBeforeUnmount(() => {
+    if (!isRealtimeBound) {
+        return;
+    }
+
+    try {
+        echo().leave('my-details');
+    } catch (error) {
+        console.warn('[MyDetails] Failed to leave realtime channel:', error);
+    }
+});
 </script>
 
 <template>
@@ -246,7 +343,13 @@ function sectionProps(index: number): Record<string, unknown> {
                 </div>
             </section>
 
-            <h2 class="ehris-page-title">{{ tabs[activeTab] }}</h2>
+            <div class="flex items-center justify-between gap-3">
+                <h2 class="ehris-page-title mb-0!">{{ tabs[activeTab] }}</h2>
+                <button type="button" class="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90" @click="exportPdsExcel">
+                    <Download class="h-4 w-4" />
+                    Export PDS Excel
+                </button>
+            </div>
 
             <component
                 :is="sectionComponents[activeTab]"

@@ -88,6 +88,11 @@ class UserListController extends Controller
             $user->hrId = $user->getKey();
         }
 
+        // When an account is activated, treat it as "email verified"
+        if (! $wasActive && $user->active && $user->email_verified_at === null) {
+            $user->email_verified_at = now();
+        }
+
         $user->save();
 
         // If account has just been activated, notify the user via email

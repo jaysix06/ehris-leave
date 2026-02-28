@@ -8,7 +8,6 @@ import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import AuthLayout from '@/layouts/AuthLayout.vue';
 import { login } from '@/routes';
-import { email } from '@/routes/password';
 
 defineProps<{
     status?: string;
@@ -18,19 +17,16 @@ defineProps<{
 <template>
     <AuthLayout
         title="Forgot password"
-        description="Enter your email to receive a password reset link"
+        description="Enter your email first to continue"
     >
         <Head title="Forgot password" />
 
-        <div
-            v-if="status"
-            class="mb-4 text-center text-sm font-medium text-green-600"
-        >
-            {{ status }}
-        </div>
-
         <div class="space-y-6">
-            <Form v-bind="email.form()" v-slot="{ errors, processing }">
+            <Form
+                action="/forgot-password/otp/send"
+                method="post"
+                v-slot="{ errors, processing }"
+            >
                 <div class="grid gap-2">
                     <Label for="email">Email address</Label>
                     <Input
@@ -48,10 +44,10 @@ defineProps<{
                     <Button
                         class="w-full"
                         :disabled="processing"
-                        data-test="email-password-reset-link-button"
+                        data-test="email-otp-send-button"
                     >
                         <Spinner v-if="processing" />
-                        Email password reset link
+                        Send OTP
                     </Button>
                 </div>
             </Form>

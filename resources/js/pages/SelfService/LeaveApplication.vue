@@ -1,18 +1,18 @@
 <script setup lang="ts">
 import { Head, router, usePage } from '@inertiajs/vue3';
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { DatePicker } from 'v-calendar';
+import { echo } from '@laravel/echo-vue';
+import { addDays, differenceInDays } from 'date-fns';
 import {
     CheckCircle2,
     ImagePlus,
     SendHorizontal,
     X,
 } from 'lucide-vue-next';
+import { Calendar, DatePicker } from 'v-calendar';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import selfServiceRoutes from '@/routes/self-service';
 import { type BreadcrumbItem, type User } from '@/types';
-import { addDays, differenceInDays } from 'date-fns';
-import { echo } from '@laravel/echo-vue';
 
 const pageTitle = 'Leave Application';
 
@@ -30,10 +30,14 @@ const breadcrumbs: BreadcrumbItem[] = [
 const today = new Date();
 today.setHours(0, 0, 0, 0);
 
-const leaveRange = ref<{ start: Date; end: Date }>({
-    start: today,
-    end: today,
+const leaveRange = ref<{ start: Date | null; end: Date | null }>({
+    start: null,
+    end: null,
 });
+type LeaveRange = { start: Date | null; end: Date | null };
+type CalendarRangeModel = { start: Date; end: Date };
+type LeaveForMode = 'Specific dates' | 'Within selected date range' | '- Select Leave For -';
+type CalendarDayClick = { date: Date; isDisabled?: boolean };
 
 const formatter = new Intl.DateTimeFormat('en-GB', {
     day: '2-digit',
@@ -44,18 +48,59 @@ const formatter = new Intl.DateTimeFormat('en-GB', {
 const formatDate = (date: Date | null) =>
     date ? formatter.format(date) : '--/--/----';
 
-const selectedRangeText = computed(
-    () => `${formatDate(leaveRange.value.start)} to ${formatDate(leaveRange.value.end)}`,
+const leaveForMode = ref<LeaveForMode>('- Select Leave For -');
+const specificLeaveDates = ref<Date[]>([]);
+const isSpecificDaysMode = computed(() => leaveForMode.value === 'Specific dates');
+const isLeaveForUnselected = computed(() => leaveForMode.value === '- Select Leave For -');
+
+const dateKey = (date: Date) => {
+    const normalized = normalizeDate(date);
+    const year = normalized.getFullYear();
+    const month = `${normalized.getMonth() + 1}`.padStart(2, '0');
+    const day = `${normalized.getDate()}`.padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
+const sortedSpecificLeaveDates = computed(() =>
+    [...specificLeaveDates.value].sort((a, b) => a.getTime() - b.getTime()),
+);
+const specificDatesSignature = computed(() =>
+    sortedSpecificLeaveDates.value.map((date) => dateKey(date)).join('|'),
 );
 
+const selectedSpecificDatesText = computed(() => {
+    const dates = sortedSpecificLeaveDates.value.map((date) => formatDate(date));
+    return dates.length ? dates.join(', ') : '--/--/----';
+});
+
+const effectiveLeaveStartDate = computed(() => {
+    if (!isSpecificDaysMode.value) {
+        return leaveRange.value.start;
+    }
+    return sortedSpecificLeaveDates.value[0] ?? null;
+});
+
+const effectiveLeaveEndDate = computed(() => {
+    if (!isSpecificDaysMode.value) {
+        return leaveRange.value.end;
+    }
+    return sortedSpecificLeaveDates.value[sortedSpecificLeaveDates.value.length - 1] ?? null;
+});
+
 const noOfDays = computed(() => {
+    if (isSpecificDaysMode.value) {
+        return sortedSpecificLeaveDates.value.length;
+    }
+
     if (!leaveRange.value.start || !leaveRange.value.end) {
         return 0;
     }
     return differenceInDays(leaveRange.value.end, leaveRange.value.start) + 1;
 });
 
-const isFiledInAdvance = computed(() => leaveRange.value.start > today);
+const isFiledInAdvance = computed(
+    () => !!effectiveLeaveStartDate.value && effectiveLeaveStartDate.value > today,
+);
 const requiresSupportingDoc = computed(
     () => isSickLeave.value && (isFiledInAdvance.value || noOfDays.value > 5),
 );
@@ -68,34 +113,279 @@ const requiredDocType = computed(() => {
 
 const defaultLeaveTypeLabel = '- Select Leave Type -';
 const selectedLeaveType = ref<string>(defaultLeaveTypeLabel);
+const isLeaveTypeUnselected = computed(() => selectedLeaveType.value === defaultLeaveTypeLabel);
+const calendarKey = ref(0);
 const isSickLeave = computed(() => selectedLeaveType.value === 'Sick Leave');
+const isMaternityLeave = computed(() => selectedLeaveType.value === 'Maternity Leave');
+const isPaternityLeave = computed(() => selectedLeaveType.value === 'Paternity Leave');
+const isVacationLeave = computed(() => selectedLeaveType.value === 'Vacation Leave');
+const isSpecialPrivilegeLeave = computed(() => selectedLeaveType.value === 'Special Privilege Leave');
+const isSoloParentLeave = computed(() => selectedLeaveType.value === 'Solo Parent Leave');
+const isStudyLeave = computed(() => selectedLeaveType.value === 'Study Leave');
+const isVawcLeave = computed(
+    () => selectedLeaveType.value === 'VAWC Leave' || selectedLeaveType.value === '10-Day VAWC Leave',
+);
+const isRehabilitationLeave = computed(
+    () => selectedLeaveType.value === 'Rehabilitation Leave' || selectedLeaveType.value === 'Rehabilitation Privilege',
+);
+const isSpecialWomenLeave = computed(() => selectedLeaveType.value === 'Special Leave Benefits for Women');
+const isCalamityLeave = computed(() => selectedLeaveType.value === 'Special Emergency (Calamity) Leave');
+const isMonetizationLeave = computed(() => selectedLeaveType.value === 'Monetization of Leave Credits');
+const isTerminalLeave = computed(() => selectedLeaveType.value === 'Terminal Leave');
+const isMandatoryForceLeave = computed(
+    () =>
+        selectedLeaveType.value === 'Mandatory/Force Leave' ||
+        selectedLeaveType.value === 'Mandatory Leave' ||
+        selectedLeaveType.value === 'Forced Leave',
+);
+const leaveTypeDayLimit = computed<number | null>(() => {
+    if (isPaternityLeave.value) return 7;
+    if (isMaternityLeave.value) return 105;
+    if (isSpecialPrivilegeLeave.value) return 3;
+    if (isSoloParentLeave.value) return 7;
+    if (isStudyLeave.value) return 180;
+    if (isVawcLeave.value) return 10;
+    if (isRehabilitationLeave.value) return 180;
+    if (isSpecialWomenLeave.value) return 60;
+    if (isCalamityLeave.value) return 5;
+    if (isMandatoryForceLeave.value) return 5;
+    return null;
+});
 
 
 const minSelectableDate = computed<Date | null>(() => {
-    if (isSickLeave.value) {
+    if (isSickLeave.value || isVawcLeave.value || isSpecialWomenLeave.value) {
         return null;
     }
-    if (selectedLeaveType.value === 'Vacation Leave') {
+    if (isVacationLeave.value || isSoloParentLeave.value) {
         return addDays(today, 5);
+    }
+    if (isSpecialPrivilegeLeave.value) {
+        return addDays(today, 7);
     }
     return today;
 });
 
+const normalizeDate = (date: Date) => {
+    const normalized = new Date(date);
+    normalized.setHours(0, 0, 0, 0);
+    return normalized;
+};
+
+const clampLeaveRange = (value: LeaveRange): LeaveRange => {
+    let start = value.start ? normalizeDate(value.start) : null;
+    let end = value.end ? normalizeDate(value.end) : null;
+
+    if (!start || !end) {
+        return { start, end };
+    }
+
+    const minimumDate = minSelectableDate.value ? normalizeDate(minSelectableDate.value) : null;
+    if (minimumDate && start < minimumDate) {
+        start = minimumDate;
+        end = minimumDate;
+    }
+
+    const limit = leaveTypeDayLimit.value;
+    if (limit) {
+        const maxAllowedEnd = addDays(start, limit - 1);
+        if (end > maxAllowedEnd) {
+            end = maxAllowedEnd;
+        }
+    }
+
+    return { start, end };
+};
+
+const clampSpecificLeaveDates = (value: Date[]) => {
+    const minimumDate = minSelectableDate.value ? normalizeDate(minSelectableDate.value) : null;
+    const uniqueSorted = [...value]
+        .map((date) => normalizeDate(date))
+        .filter((date) => !minimumDate || date >= minimumDate)
+        .filter((date, index, arr) => index === arr.findIndex((item) => dateKey(item) === dateKey(date)))
+        .sort((a, b) => a.getTime() - b.getTime());
+
+    const limit = leaveTypeDayLimit.value;
+    if (limit && uniqueSorted.length > limit) {
+        return uniqueSorted.slice(0, limit);
+    }
+
+    return uniqueSorted;
+};
+
+const disabledDates = ref([
+  {
+    repeat: {
+      weekdays: [1, 7],
+    },
+  },
+]);
+
+const calendarLeaveRange = computed<CalendarRangeModel | undefined>({
+    get: () => {
+        const { start, end } = leaveRange.value;
+        if (!start || !end) {
+            return undefined;
+        }
+        return { start, end };
+    },
+    set: (value) => {
+        const incomingStart = value?.start ? normalizeDate(value.start) : null;
+        const incomingEnd = value?.end ? normalizeDate(value.end) : null;
+        const clamped = clampLeaveRange({
+            start: incomingStart,
+            end: incomingEnd,
+        });
+
+        leaveRange.value = clamped;
+
+        const wasClamped =
+            !!incomingStart &&
+            !!incomingEnd &&
+            (!!clamped.start && incomingStart.getTime() !== clamped.start.getTime() ||
+                !!clamped.end && incomingEnd.getTime() !== clamped.end.getTime());
+
+        if (wasClamped) {
+            calendarKey.value += 1;
+        }
+    },
+});
+
+const specificDaysAttributes = computed(() => [
+    {
+        key: `specific-leave-days-${specificDatesSignature.value}`,
+        highlight: true,
+        dates: sortedSpecificLeaveDates.value.map((date) => new Date(date)),
+    },
+]);
+
+const onSpecificDayClick = (day: CalendarDayClick) => {
+    if (isLeaveTypeUnselected.value || day.isDisabled) {
+        return;
+    }
+
+    const pickedDate = normalizeDate(day.date);
+    const pickedKey = dateKey(pickedDate);
+    const existing = specificLeaveDates.value;
+    const hasDate = existing.some((date) => dateKey(date) === pickedKey);
+
+    const nextDates = hasDate
+        ? existing.filter((date) => dateKey(date) !== pickedKey)
+        : [...existing, pickedDate];
+
+    specificLeaveDates.value = clampSpecificLeaveDates(nextDates);
+};
+
 const reason = ref<string>('');
+const reasonSpecify = ref<string>('');
 const commutation = ref<string>('');
 const consultationAvailed = ref<'yes' | 'no' | ''>('');
 const medicalCertification = ref<File | null>(null);
 const affidavitFile = ref<File | null>(null);
-const medicalFileInput = ref<HTMLInputElement | null>(null);
-const affidavitFileInput = ref<HTMLInputElement | null>(null);
+const proofOfDelivery = ref<File | null>(null);
 const isMedicalDropActive = ref(false);
 const isAffidavitDropActive = ref(false);
-const submitError = ref<string | null>(null);
+const isProofOfDeliveryDropActive = ref(false);
+const supportingDocuments = ref<File[]>([]);
+const supportingDocumentsInput = ref<HTMLInputElement | null>(null);
+const destinationScope = ref<'within_ph' | 'abroad' | ''>('');
+const destinationDetails = ref('');
+const travelAuthorityNo = ref('');
+const isEmergencySpl = ref(false);
+const emergencyReason = ref('');
+const isTimingOverride = ref(false);
+const timingOverrideReason = ref('');
+const accidentDate = ref('');
+const surgeryDate = ref('');
+const calamityDate = ref('');
+const calamityType = ref('');
+const calamityArea = ref('');
+const residenceAddressSnapshot = ref('');
+const soloParentIdNo = ref('');
+const soloParentIdValidUntil = ref('');
+const studyContractId = ref('');
+const isPrivatePhysician = ref(false);
+const supervisorNotes = ref('');
+const separationType = ref('');
+const separationEffectiveDate = ref('');
+const creditsMonetized = ref<number | null>(null);
+const isMandatoryLeave = ref(false);
+const toastVisible = ref(false);
+const toastMessage = ref('');
+const toastType = ref<'error' | 'success'>('error');
+let toastTimer: ReturnType<typeof setTimeout> | null = null;
+
+const showToast = (message: string, type: 'error' | 'success' = 'error') => {
+    toastMessage.value = message;
+    toastType.value = type;
+    toastVisible.value = true;
+
+    if (toastTimer) {
+        clearTimeout(toastTimer);
+    }
+    toastTimer = setTimeout(() => {
+        toastVisible.value = false;
+    }, 4000);
+};
+
+const clearLeaveRequestForm = () => {
+    toastVisible.value = false;
+
+    selectedLeaveType.value = defaultLeaveTypeLabel;
+    leaveForMode.value = '- Select Leave For -';
+    leaveRange.value = { start: null, end: null };
+    specificLeaveDates.value = [];
+    calendarKey.value += 1;
+
+    reason.value = '';
+    reasonSpecify.value = '';
+    commutation.value = '';
+    consultationAvailed.value = '';
+
+    medicalCertification.value = null;
+    affidavitFile.value = null;
+    proofOfDelivery.value = null;
+    supportingDocuments.value = [];
+    if (supportingDocumentsInput.value) supportingDocumentsInput.value.value = '';
+
+    isMedicalDropActive.value = false;
+    isAffidavitDropActive.value = false;
+    isProofOfDeliveryDropActive.value = false;
+
+    destinationScope.value = '';
+    destinationDetails.value = '';
+    travelAuthorityNo.value = '';
+    isEmergencySpl.value = false;
+    emergencyReason.value = '';
+    isTimingOverride.value = false;
+    timingOverrideReason.value = '';
+    accidentDate.value = '';
+    surgeryDate.value = '';
+    calamityDate.value = '';
+    calamityType.value = '';
+    calamityArea.value = '';
+    residenceAddressSnapshot.value = '';
+    soloParentIdNo.value = '';
+    soloParentIdValidUntil.value = '';
+    studyContractId.value = '';
+    isPrivatePhysician.value = false;
+    supervisorNotes.value = '';
+    separationType.value = '';
+    separationEffectiveDate.value = '';
+    creditsMonetized.value = null;
+    isMandatoryLeave.value = false;
+};
 
 const page = usePage();
 const authUser = computed(() => page.props.auth?.user as User | undefined);
 const leaveEmployee = computed(() => page.props.leaveEmployee as Record<string, unknown> | undefined);
 const dbLeaveTypes = computed(() => page.props.leaveTypes as string[] | undefined);
+const mandatoryLeaveSummary = computed(
+    () =>
+        page.props.mandatoryLeaveSummary as
+            | { year: number; usedDays: number; remainingDays: number; forfeitedDays: number }
+            | undefined,
+);
 const salaryFormatter = new Intl.NumberFormat('en-PH', {
     style: 'currency',
     currency: 'PHP',
@@ -194,59 +484,51 @@ const employeeDetails = computed(() => ({
         pickUserValue(['salary', 'monthly_salary', 'salary_grade']),
 }));
 
-const onMedicalCertificationChange = (event: Event) => {
+const onSupportingDocumentsChange = (event: Event) => {
     const target = event.target as HTMLInputElement;
-    medicalCertification.value = target.files?.[0] ?? null;
+    supportingDocuments.value = target.files ? Array.from(target.files) : [];
 };
 
-const openMedicalFilePicker = () => {
-    medicalFileInput.value?.click();
+const openSupportingDocumentsPicker = () => {
+    supportingDocumentsInput.value?.click();
 };
 
-const onMedicalDrop = (event: DragEvent) => {
-    event.preventDefault();
-    isMedicalDropActive.value = false;
-    const file = event.dataTransfer?.files?.[0] ?? null;
-    medicalCertification.value = file;
-};
-
-const clearMedicalCertification = () => {
-    medicalCertification.value = null;
-    if (medicalFileInput.value) {
-        medicalFileInput.value.value = '';
+const clearSupportingDocuments = () => {
+    supportingDocuments.value = [];
+    if (supportingDocumentsInput.value) {
+        supportingDocumentsInput.value.value = '';
     }
 };
 
-const onAffidavitChange = (event: Event) => {
-    const target = event.target as HTMLInputElement;
-    affidavitFile.value = target.files?.[0] ?? null;
-};
-
-const openAffidavitFilePicker = () => {
-    affidavitFileInput.value?.click();
-};
-
-const onAffidavitDrop = (event: DragEvent) => {
-    event.preventDefault();
-    isAffidavitDropActive.value = false;
-    const file = event.dataTransfer?.files?.[0] ?? null;
-    affidavitFile.value = file;
-};
-
-const clearAffidavit = () => {
-    affidavitFile.value = null;
-    if (affidavitFileInput.value) {
-        affidavitFileInput.value.value = '';
-    }
-};
-
-watch(selectedLeaveType, () => {
-    const minimumDate = minSelectableDate.value;
-    if (minimumDate && leaveRange.value.start < minimumDate) {
+watch(selectedLeaveType, (newType, oldType) => {
+    if (newType !== oldType || newType === defaultLeaveTypeLabel) {
         leaveRange.value = {
-            start: minimumDate,
-            end: minimumDate,
+            start: null,
+            end: null,
         };
+        specificLeaveDates.value = [];
+        calendarKey.value += 1;
+    }
+});
+
+watch(leaveForMode, (newMode, oldMode) => {
+    if (newMode === oldMode) return;
+
+    if (newMode === 'Within selected date range') {
+        specificLeaveDates.value = [];
+    } else if (newMode === 'Specific dates') {
+        leaveRange.value = {
+            start: null,
+            end: null,
+        };
+    }
+
+    calendarKey.value += 1;
+});
+
+watch([minSelectableDate, leaveTypeDayLimit], () => {
+    if (isSpecificDaysMode.value) {
+        specificLeaveDates.value = clampSpecificLeaveDates(specificLeaveDates.value);
     }
 });
 
@@ -258,13 +540,90 @@ watch(leaveTypeOptions, (options) => {
 });
 
 watch([selectedLeaveType, consultationAvailed], () => {
-    submitError.value = null;
     if (!requiresSupportingDoc.value) {
         consultationAvailed.value = '';
-        medicalCertification.value = null;
+        if (!isMaternityLeave.value) {
+            medicalCertification.value = null;
+        }
         affidavitFile.value = null;
     }
+
+    if (requiresSupportingDoc.value) {
+        if (consultationAvailed.value === 'yes') {
+            affidavitFile.value = null;
+        } else if (consultationAvailed.value === 'no') {
+            medicalCertification.value = null;
+        }
+    }
+
+    if (!isPaternityLeave.value) {
+        proofOfDelivery.value = null;
+    }
+
+    if (!(isVacationLeave.value || isSpecialPrivilegeLeave.value)) {
+        destinationScope.value = '';
+        destinationDetails.value = '';
+        travelAuthorityNo.value = '';
+    }
+
+    if (!isSpecialPrivilegeLeave.value) {
+        isEmergencySpl.value = false;
+        emergencyReason.value = '';
+    }
+
+    if (!(isVacationLeave.value || isSoloParentLeave.value || isRehabilitationLeave.value)) {
+        isTimingOverride.value = false;
+        timingOverrideReason.value = '';
+    }
+
+    if (!isRehabilitationLeave.value) {
+        accidentDate.value = '';
+        isPrivatePhysician.value = false;
+    }
+
+    if (!isSpecialWomenLeave.value) {
+        surgeryDate.value = '';
+    }
+
+    if (!isCalamityLeave.value) {
+        calamityDate.value = '';
+        calamityType.value = '';
+        calamityArea.value = '';
+        residenceAddressSnapshot.value = '';
+    }
+
+    if (!isSoloParentLeave.value) {
+        soloParentIdNo.value = '';
+        soloParentIdValidUntil.value = '';
+    }
+
+    if (!isStudyLeave.value) {
+        studyContractId.value = '';
+    }
+
+    if (!isMonetizationLeave.value) {
+        creditsMonetized.value = null;
+    }
+
+    if (!isTerminalLeave.value) {
+        separationType.value = '';
+        separationEffectiveDate.value = '';
+    }
+
+    if (!(isVacationLeave.value || isMandatoryForceLeave.value)) {
+        isMandatoryLeave.value = false;
+    }
 });
+
+watch(
+    () => (page.props.errors as Record<string, string>) ?? {},
+    (errors) => {
+        const firstError = Object.values(errors)[0];
+        if (firstError) {
+            showToast(firstError, 'error');
+        }
+    },
+);
 
 const formatDateForSubmit = (date: Date) => {
     const year = date.getFullYear();
@@ -274,39 +633,123 @@ const formatDateForSubmit = (date: Date) => {
 };
 
 const submitLeaveApplication = () => {
-    submitError.value = null;
+    toastVisible.value = false;
+    const leaveStartDate = effectiveLeaveStartDate.value;
+    const leaveEndDate = effectiveLeaveEndDate.value;
 
     if (selectedLeaveType.value === defaultLeaveTypeLabel) {
-        submitError.value = 'Please select a leave type.';
+        showToast('Please select a leave type.');
+        return;
+    }
+    if (isLeaveForUnselected.value) {
+        showToast('Please select Leave For.');
+        return;
+    }
+    if (!leaveStartDate || !leaveEndDate) {
+        showToast(
+            isSpecificDaysMode.value
+            ? 'Please select at least one leave date.'
+            : 'Please select both start and end dates.',
+        );
+        return;
+    }
+
+    if (leaveTypeDayLimit.value !== null && noOfDays.value > leaveTypeDayLimit.value) {
+        showToast(`${selectedLeaveType.value} cannot exceed ${leaveTypeDayLimit.value} days.`);
         return;
     }
 
     if (requiresSupportingDoc.value) {
         if (requiredDocType.value === 'medical' && !medicalCertification.value) {
-            submitError.value = 'Medical certificate is required when consultation was availed.';
+            showToast('Medical certificate is required when consultation was availed.');
             return;
         }
         if (requiredDocType.value === 'affidavit' && !affidavitFile.value) {
-            submitError.value = 'Affidavit is required when consultation was not availed.';
+            showToast('Affidavit is required when consultation was not availed.');
             return;
         }
         if (!requiredDocType.value && !medicalCertification.value && !affidavitFile.value) {
-            submitError.value = 'Please upload a medical certificate or an affidavit.';
+            showToast('Please upload a medical certificate or an affidavit.');
             return;
         }
+    }
+
+    if (isPaternityLeave.value) {
+        if (!proofOfDelivery.value) {
+            showToast('Please upload proof of child\'s delivery (e.g. birth certificate, medical certificate, or marriage contract).');
+            return;
+        }
+    }
+
+    if ((isVacationLeave.value || isSpecialPrivilegeLeave.value) && !destinationScope.value) {
+        showToast('Please indicate if your destination is within the Philippines or abroad.');
+        return;
+    }
+
+    if (isSpecialPrivilegeLeave.value && isEmergencySpl.value && !emergencyReason.value.trim()) {
+        showToast('Please provide emergency reason for Special Privilege Leave.');
+        return;
+    }
+
+    if (isRehabilitationLeave.value && !accidentDate.value) {
+        showToast('Accident date is required for Rehabilitation Leave.');
+        return;
+    }
+
+    if (isCalamityLeave.value && !calamityDate.value) {
+        showToast('Calamity date is required for Special Emergency (Calamity) Leave.');
+        return;
+    }
+
+    if (isMonetizationLeave.value && (!creditsMonetized.value || creditsMonetized.value <= 0)) {
+        showToast('Please provide credits to monetize.');
+        return;
+    }
+
+    if (isTerminalLeave.value && (!separationType.value || !separationEffectiveDate.value)) {
+        showToast('Please provide separation type and effective date for Terminal Leave.');
+        return;
     }
 
     router.post(
         selfServiceRoutes.leaveApplication().url,
         {
             leave_type: selectedLeaveType.value,
-            leave_start_date: formatDateForSubmit(leaveRange.value.start),
-            leave_end_date: formatDateForSubmit(leaveRange.value.end),
+            leave_start_date: formatDateForSubmit(leaveStartDate),
+            leave_end_date: formatDateForSubmit(leaveEndDate),
             reason: reason.value || null,
             commutation: commutation.value || null,
             consultation_availed: consultationAvailed.value || null,
             medical_certificate: medicalCertification.value,
             affidavit: affidavitFile.value,
+            proof_of_delivery: proofOfDelivery.value,
+            destination_scope: destinationScope.value || null,
+            destination_details: destinationDetails.value || null,
+            travel_authority_no: travelAuthorityNo.value || null,
+            is_emergency_spl: isEmergencySpl.value,
+            emergency_reason: emergencyReason.value || null,
+            is_timing_override: isTimingOverride.value,
+            timing_override_reason: timingOverrideReason.value || null,
+            accident_date: accidentDate.value || null,
+            surgery_date: surgeryDate.value || null,
+            calamity_date: calamityDate.value || null,
+            calamity_type: calamityType.value || null,
+            calamity_area: calamityArea.value || null,
+            residence_address_snapshot: residenceAddressSnapshot.value || null,
+            solo_parent_id_no: soloParentIdNo.value || null,
+            solo_parent_id_valid_until: soloParentIdValidUntil.value || null,
+            study_contract_id: studyContractId.value || null,
+            is_private_physician: isPrivatePhysician.value,
+            supervisor_notes: supervisorNotes.value || null,
+            separation_type: separationType.value || null,
+            separation_effective_date: separationEffectiveDate.value || null,
+            credits_monetized: creditsMonetized.value ?? null,
+            is_mandatory_leave: isMandatoryLeave.value,
+            supporting_documents: supportingDocuments.value,
+            leave_for_mode: leaveForMode.value,
+            leave_specific_dates: isSpecificDaysMode.value
+                ? sortedSpecificLeaveDates.value.map((date) => formatDateForSubmit(date)).join(',')
+                : null,
         },
         {
             forceFormData: true,
@@ -320,12 +763,29 @@ const refreshLeaveTypes = () => {
     router.reload({ only: ['leaveTypes'] });
 };
 
+const reverbEnabled = import.meta.env.VITE_REVERB_ENABLED !== 'false';
+
 onMounted(() => {
-    echo().channel('leave-types').listen('.LeaveTypeUpdated', refreshLeaveTypes);
+    if (reverbEnabled) {
+        try {
+            echo().channel('leave-types').listen('.LeaveTypeUpdated', refreshLeaveTypes);
+        } catch {
+            // Reverb not connected; real-time updates disabled
+        }
+    }
 });
 
 onBeforeUnmount(() => {
-    echo().channel('leave-types').stopListening('LeaveTypeUpdated');
+    if (toastTimer) {
+        clearTimeout(toastTimer);
+    }
+    if (reverbEnabled) {
+        try {
+            echo().channel('leave-types').stopListening('LeaveTypeUpdated');
+        } catch {
+            // ignore
+        }
+    }
 });
 </script>
 
@@ -334,6 +794,9 @@ onBeforeUnmount(() => {
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="ehris-page leave-application-page">
+            <div v-if="toastVisible" class="toast-banner" :class="toastType === 'error' ? 'is-error' : 'is-success'">
+                {{ toastMessage }}
+            </div>
 
             <section class="leave-summary-row">
                 <article class="ehris-card leave-highlight-card">
@@ -347,13 +810,17 @@ onBeforeUnmount(() => {
                 </article>
 
                 <article class="ehris-card mini-stat">
-                    <p class="mini-num">27/30</p>
-                    <p class="mini-label">Leaves remaining</p>
+                    <p class="mini-num">
+                        {{ mandatoryLeaveSummary ? `${mandatoryLeaveSummary.remainingDays}/5` : '--/5' }}
+                    </p>
+                    <p class="mini-label">Mandatory VL remaining</p>
                 </article>
 
                 <article class="ehris-card mini-stat">
-                    <p class="mini-num">03/30</p>
-                    <p class="mini-label">Leaves used</p>
+                    <p class="mini-num">
+                        {{ mandatoryLeaveSummary ? `${mandatoryLeaveSummary.usedDays}/5` : '--/5' }}
+                    </p>
+                    <p class="mini-label">Mandatory VL used</p>
                 </article>
             </section>
 
@@ -361,7 +828,7 @@ onBeforeUnmount(() => {
                 <article class="ehris-card request-card">
                     <div class="request-head">
                         <h3>Create Leave request</h3>
-                        <p class="date-range">{{ selectedRangeText }}</p>
+                        <p class="date-range">{{ today.toLocaleDateString('en-US', { month: 'long', day: '2-digit', year: 'numeric' }) }}</p>
                     </div>
 
                     <div class="request-grid">
@@ -369,22 +836,26 @@ onBeforeUnmount(() => {
                             <label>
                                 Leave Type
                                 <select v-model="selectedLeaveType" class="border-5 border-primary">
-                                    <option v-for="option in leaveTypeOptions" :key="option.value" :value="option.value">
+                                    <option
+                                        v-for="option in leaveTypeOptions"
+                                        :key="option.value"
+                                        :value="option.value"
+                                        :disabled="option.value === defaultLeaveTypeLabel"
+                                    >
                                         {{ option.label }}
                                     </option>
                                 </select>
                             </label>
-                            <label v-if="selectedLeaveType === 'Others'">
-                                <textarea placeholder="Specify..."></textarea>
-                            </label>
                             <label>
                                 Leave For
-                                <select>
-                                    <option>Full Day</option>
+                                <select v-model="leaveForMode">
+                                    <option value="- Select Leave For -" disabled selected>- Select Leave For -</option>
+                                    <option value="Specific dates">Specific dates</option>
+                                    <option value="Within selected date range">Within selected date range</option>
                                 </select>
                             </label>
 
-                            <div class="date-range-row">
+                            <div v-if="!isSpecificDaysMode" class="date-range-row">
                                 <label>
                                     Start date
                                     <div class="date-readonly">
@@ -407,65 +878,66 @@ onBeforeUnmount(() => {
                                 </label>
                             </div>
 
-                            <label v-if="selectedLeaveType === 'Sick Leave'">
-                                Reason for Sick Leave
-                                <div class="flex flex-wrap gap-12 mt-2">
-                                    <label class="radio-option inline-flex  gap-2 cursor-pointer">
+                            <div v-else class="date-range-row-specific">
+                                <label>
+                                    <div class="specific-dates-label">
+                                        <span>Specific dates</span>
+                                    </div>
+                                    <div class="date-readonly">
+                                        {{ selectedSpecificDatesText }}
+                                    </div>
+                                </label>
+
+                                <label>
+                                    No. of Days
+                                    <div class="date-readonly">
+                                        {{ noOfDays }}
+                                    </div>
+                                </label>
+                            </div>
+
+                            <label>
+                                Reason for {{ selectedLeaveType }}
+                                <div class="flex flex-wrap mt-2" :class="selectedLeaveType === 'Study Leave' || selectedLeaveType === 'Others' ? 'gap-3' : 'gap-12'">
+                                    <!-- Sick Leave -->
+                                    <label  v-if="selectedLeaveType === 'Sick Leave'" class="radio-option inline-flex  gap-2 cursor-pointer">
                                         <input type="radio" v-model="reason" name="choice" value="a" />
                                         In Hospital
                                     </label>
-                                    <label class="radio-option inline-flex  gap-2 cursor-pointer">
+                                    <label  v-if="selectedLeaveType === 'Sick Leave'" class="radio-option inline-flex  gap-2 cursor-pointer">
                                         <input type="radio" v-model="reason" name="choice" value="b" />
                                         Outpatient
                                     </label>
-                                </div>
-                                <textarea placeholder="Specify Illness..."></textarea>
-                            </label>
-                            <label v-else-if="selectedLeaveType === 'Vacation Leave' || selectedLeaveType === 'Special Privilege Leave'">
-                                Reason for {{ selectedLeaveType }}
-                                <div class="flex flex-wrap gap-12 mt-2">
-                                    <label class="radio-option inline-flex  gap-2 cursor-pointer">
+
+                                    <!-- Vacation Leave or Special Privilege Leave -->
+                                    <label v-if="selectedLeaveType === 'Vacation Leave' || selectedLeaveType === 'Special Privilege Leave'" class="radio-option inline-flex  gap-2 cursor-pointer">
                                         <input type="radio" v-model="reason" name="within" value="Within the Philippines" />
                                         Within the Philippines
                                     </label>
-                                    <label class="radio-option inline-flex  gap-2 cursor-pointer">
+                                    <label v-if="selectedLeaveType === 'Vacation Leave' || selectedLeaveType === 'Special Privilege Leave'" class="radio-option inline-flex  gap-2 cursor-pointer">
                                         <input type="radio" v-model="reason" name="abroad" value="Abroad" />
                                         Abroad
                                     </label>
-                                </div>
-                                <textarea placeholder="Specify..."></textarea>
-                            </label>
-                            <label v-else-if="selectedLeaveType === 'Special Leave Benefits for Women'">
-                                Reason for {{ selectedLeaveType }}
-                                <textarea placeholder="Specify..."></textarea>
-                            </label>
-                            <label v-else-if="selectedLeaveType === 'Study Leave'">
-                                Reason for {{ selectedLeaveType }}
-                                <div class="flex flex-wrap gap-2 mt-2">
-                                    <label class="radio-option inline-flex  gap-1 cursor-pointer">
+
+                                    <label v-if="selectedLeaveType === 'Study Leave'" class="radio-option inline-flex  gap-1 cursor-pointer">
                                         <input type="radio" v-model="reason" name="masters" value="Completion of Master's Degree" />
                                         Completion of Master's Degree
                                     </label>
-                                    <label class="radio-option inline-flex  gap-1 cursor-pointer">
+                                    <label v-if="selectedLeaveType === 'Study Leave'" class="radio-option inline-flex  gap-1 cursor-pointer">
                                         <input type="radio" v-model="reason" name="review" value="BAR/Board Examination Review" />
                                         BAR/Board Examination Review
                                     </label>
-                                </div>
-                                <textarea placeholder="Specify..."></textarea>
-                            </label>
-                            <label v-else-if="selectedLeaveType === 'Others'">
-                                Reason for {{ selectedLeaveType }}
-                                <div class="flex flex-wrap gap-2 mt-2">
-                                    <label class="radio-option inline-flex  gap-1 cursor-pointer">
+
+                                    <label v-if="selectedLeaveType === 'Others'" class="radio-option inline-flex  gap-1 cursor-pointer">
                                         <input type="radio" v-model="reason" name="monetization" value="Monetization of Leave Credits" />
                                         Monetization of Leave Credits
                                     </label>
-                                    <label class="radio-option inline-flex  gap-1 cursor-pointer">
+                                    <label v-if="selectedLeaveType === 'Others'" class="radio-option inline-flex  gap-1 cursor-pointer">
                                         <input type="radio" v-model="reason" name="terminal" value="Terminal Leave" />
                                         Terminal Leave
                                     </label>
                                 </div>
-                                <textarea placeholder="Specify..."></textarea>
+                                <textarea v-model="reasonSpecify" placeholder="Specify..." />
                             </label>
                             <label>
                                 Commutation
@@ -480,175 +952,80 @@ onBeforeUnmount(() => {
                                     </label>
                                 </div>
                             </label>
+
+                            <label>
+                                Supervisor/Reviewer Notes (Optional)
+                                <textarea v-model="supervisorNotes" placeholder="Optional notes for approving officers..." />
+                            </label>
                         </div>
 
                         <div class="calendar-box">
-                            <DatePicker
-                                v-model="leaveRange"
-                                is-range
-                                is-inline
-                                expanded
-                                :min-date="minSelectableDate ?? undefined"
-                                :masks="{ weekdays: 'WWW' }"
-                                class="calendar-inline"
-                            />
-                            <div
-<<<<<<< HEAD
-                                v-if="selectedLeaveType === 'Sick Leave' && noOfDays >= 6 || selectedLeaveType === 'Maternity Leave' || selectedLeaveType === 'Paternity Leave'"
-=======
-                                v-if="isSickLeave && requiresSupportingDoc"
-                                class="medical-cert-panel"
-                            >
-                                <p class="upload-title">Supporting Documents Required</p>
-                                <p class="dropzone-sub">
-                                    Required when filed in advance or exceeding 5 days. Provide a medical certificate or an affidavit.
-                                </p>
-
-                                <label class="radio-option inline-flex gap-2 cursor-pointer">
-                                    <input type="radio" v-model="consultationAvailed" name="consultation" value="yes" />
-                                    Medical consultation availed
-                                </label>
-                                <label class="radio-option inline-flex gap-2 cursor-pointer">
-                                    <input type="radio" v-model="consultationAvailed" name="consultation" value="no" />
-                                    No medical consultation (affidavit)
-                                </label>
-
-                                <div
-                                    v-if="!medicalCertification"
-                                    class="medical-dropzone"
-                                    :class="{ 'is-active': isMedicalDropActive }"
-                                    @click="openMedicalFilePicker"
-                                    @dragover.prevent="isMedicalDropActive = true"
-                                    @dragleave.prevent="isMedicalDropActive = false"
-                                    @drop="onMedicalDrop"
-                                >
-                                    <div class="dropzone-icon-wrap">
-                                        <ImagePlus :size="30" />
-                                    </div>
-                                    <p class="dropzone-main">
-                                        Drag &amp; drop
-                                        <span>medical certificate</span>
-                                    </p>
-                                    <p class="dropzone-sub">
-                                        or
-                                        <button type="button" class="browse-link" @click.stop="openMedicalFilePicker">
-                                            browse files
-                                        </button>
-                                        on your computer
-                                    </p>
-                                    <input
-                                        ref="medicalFileInput"
-                                        type="file"
-                                        accept=".pdf,.jpg,.jpeg,.png"
-                                        class="sr-only"
-                                        @change="onMedicalCertificationChange"
-                                    />
-                                </div>
-
-                                <div v-if="medicalCertification" class="medical-file-row">
-                                    <div class="file-meta">
-                                        <p class="file-name">{{ medicalCertification.name }}</p>
-                                        <p class="file-info">
-                                            {{ Math.max(1, Math.round(medicalCertification.size / 1024)) }} KB
-                                        </p>
-                                    </div>
-                                    <button type="button" class="remove-file-btn" @click="clearMedicalCertification">
-                                        <X :size="16" />
-                                    </button>
-                                </div>
-
-                                <div
-                                    v-if="!affidavitFile"
-                                    class="medical-dropzone"
-                                    :class="{ 'is-active': isAffidavitDropActive }"
-                                    @click="openAffidavitFilePicker"
-                                    @dragover.prevent="isAffidavitDropActive = true"
-                                    @dragleave.prevent="isAffidavitDropActive = false"
-                                    @drop="onAffidavitDrop"
-                                >
-                                    <div class="dropzone-icon-wrap">
-                                        <ImagePlus :size="30" />
-                                    </div>
-                                    <p class="dropzone-main">
-                                        Drag &amp; drop
-                                        <span>affidavit</span>
-                                    </p>
-                                    <p class="dropzone-sub">
-                                        or
-                                        <button type="button" class="browse-link" @click.stop="openAffidavitFilePicker">
-                                            browse files
-                                        </button>
-                                        on your computer
-                                    </p>
-                                    <input
-                                        ref="affidavitFileInput"
-                                        type="file"
-                                        accept=".pdf,.jpg,.jpeg,.png"
-                                        class="sr-only"
-                                        @change="onAffidavitChange"
-                                    />
-                                </div>
-
-                                <div v-if="affidavitFile" class="medical-file-row">
-                                    <div class="file-meta">
-                                        <p class="file-name">{{ affidavitFile.name }}</p>
-                                        <p class="file-info">
-                                            {{ Math.max(1, Math.round(affidavitFile.size / 1024)) }} KB
-                                        </p>
-                                    </div>
-                                    <button type="button" class="remove-file-btn" @click="clearAffidavit">
-                                        <X :size="16" />
-                                    </button>
-                                </div>
+                            <div class="calendar-picker-wrap" :class="{ 'is-disabled': isLeaveTypeUnselected || isLeaveForUnselected }">
+                                <DatePicker
+                                    v-if="!isSpecificDaysMode"
+                                    :key="calendarKey"
+                                    v-model="calendarLeaveRange"
+                                    is-range
+                                    is-inline
+                                    expanded
+                                    :disabled-dates="disabledDates"
+                                    :min-date="minSelectableDate ?? undefined"
+                                    :masks="{ weekdays: 'WWW' }"
+                                    class="calendar-inline"
+                                />
+                                <Calendar
+                                    v-else
+                                    :key="`specific-${calendarKey}`"
+                                    expanded
+                                    :attributes="specificDaysAttributes"
+                                    :disabled-dates="disabledDates"
+                                    :min-date="minSelectableDate ?? undefined"
+                                    :masks="{ weekdays: 'WWW' }"
+                                    class="calendar-inline"
+                                    @dayclick="onSpecificDayClick"
+                                />
+                                <div v-if="isLeaveTypeUnselected || isLeaveForUnselected" class="calendar-disabled-overlay" />
                             </div>
+                            
 
-                            <div
-                                v-else-if="selectedLeaveType === 'Maternity Leave' || selectedLeaveType === 'Paternity Leave'"
->>>>>>> 28cd2466f1c978f8628c442848035637ca473213
-                                class="medical-cert-panel"
-                            >
-                                <p class="upload-title">Medical Certification</p>
 
-                                <div
-                                    v-if="!medicalCertification"
-                                    class="medical-dropzone"
-                                    :class="{ 'is-active': isMedicalDropActive }"
-                                    @click="openMedicalFilePicker"
-                                    @dragover.prevent="isMedicalDropActive = true"
-                                    @dragleave.prevent="isMedicalDropActive = false"
-                                    @drop="onMedicalDrop"
-                                >
+                            <div class="medical-cert-panel">
+                                <p class="upload-title">Supporting Documents</p>
+                                <p class="dropzone-sub">
+                                    Upload required documentary support for the selected leave type.
+                                </p>
+                                <div v-if="supportingDocuments.length === 0" class="medical-dropzone" @click="openSupportingDocumentsPicker">
                                     <div class="dropzone-icon-wrap">
                                         <ImagePlus :size="30" />
                                     </div>
                                     <p class="dropzone-main">
                                         Drag &amp; drop
-                                        <span>images, videos, or any file</span>
+                                        <span>supporting documents</span>
                                     </p>
                                     <p class="dropzone-sub">
                                         or
-                                        <button type="button" class="browse-link" @click.stop="openMedicalFilePicker">
+                                        <button type="button" class="browse-link" @click.stop="openSupportingDocumentsPicker">
                                             browse files
                                         </button>
                                         on your computer
                                     </p>
                                     <input
-                                        ref="medicalFileInput"
+                                        ref="supportingDocumentsInput"
                                         type="file"
+                                        multiple
                                         accept=".pdf,.jpg,.jpeg,.png"
                                         class="sr-only"
-                                        @change="onMedicalCertificationChange"
+                                        @change="onSupportingDocumentsChange"
                                     />
                                 </div>
-
-                                <div v-if="medicalCertification" class="medical-file-row">
+                                <div v-else class="medical-file-row">
                                     <div class="file-meta">
-                                        <p class="file-name">{{ medicalCertification.name }}</p>
+                                        <p class="file-name">{{ supportingDocuments.length }} file(s) selected</p>
                                         <p class="file-info">
-                                            {{ Math.max(1, Math.round(medicalCertification.size / 1024)) }} KB
+                                            {{ supportingDocuments.map((file) => file.name).join(', ') }}
                                         </p>
                                     </div>
-                                    <button type="button" class="remove-file-btn" @click="clearMedicalCertification">
+                                    <button type="button" class="remove-file-btn" @click="clearSupportingDocuments">
                                         <X :size="16" />
                                     </button>
                                 </div>
@@ -657,14 +1034,9 @@ onBeforeUnmount(() => {
                     </div>
 
                     <div class="request-actions">
-                        <p v-if="submitError" class="text-sm text-destructive">{{ submitError }}</p>
-                        <p v-else-if="$page.props.errors?.medical_certificate" class="text-sm text-destructive">
-                            {{ $page.props.errors.medical_certificate }}
-                        </p>
-                        <p v-else-if="$page.props.errors?.affidavit" class="text-sm text-destructive">
-                            {{ $page.props.errors.affidavit }}
-                        </p>
-                        <button class="cancel-btn" type="button">Cancel</button>
+                        <button class="clear-btn" type="button" @click="clearLeaveRequestForm">
+                            Clear
+                        </button>
                         <button class="apply-btn" type="button" @click="submitLeaveApplication">
                             Apply Leave
                             <SendHorizontal :size="14" />
@@ -694,7 +1066,7 @@ onBeforeUnmount(() => {
                         <div class="info-readonly">{{ employeeDetails.position }}</div>
                     </label>
                     <label>
-                        Reporting
+                        Reporting Manager
                         <div class="info-readonly">{{ employeeDetails.reportingManager }}</div>
                     </label>
                 </aside>
@@ -705,7 +1077,32 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .leave-application-page {
+    position: relative;
     gap: 1rem;
+}
+
+.toast-banner {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 50;
+    max-width: min(420px, calc(100vw - 2rem));
+    padding: 0.7rem 0.9rem;
+    border-radius: 0.7rem;
+    border: 1px solid hsl(var(--border));
+    box-shadow: 0 12px 28px hsl(var(--foreground) / 0.15);
+    font-size: 0.84rem;
+    font-weight: 600;
+}
+
+.toast-banner.is-error {
+    background: hsl(var(--destructive));
+    color: hsl(var(--destructive-foreground));
+}
+
+.toast-banner.is-success {
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
 }
 
 .leave-top-row {
@@ -792,6 +1189,19 @@ onBeforeUnmount(() => {
     gap: 0.7rem;
 }
 
+.date-range-row-specific {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 0.7rem;
+}
+
+.specific-dates-label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
 .leave-type :deep(svg) {
     color: #2ea37f;
 }
@@ -863,6 +1273,7 @@ onBeforeUnmount(() => {
 }
 
 .left-form select,
+.left-form input,
 .left-form textarea,
 .date-readonly {
     border-radius: 0.7rem;
@@ -996,6 +1407,8 @@ onBeforeUnmount(() => {
     text-align: left;
     cursor: default;
     user-select: none;
+    white-space: normal;
+    word-break: break-word;
 }
 
 .left-form textarea {
@@ -1010,6 +1423,22 @@ onBeforeUnmount(() => {
     padding: 0.7rem;
     min-width: 0;
     overflow: hidden;
+}
+
+.calendar-picker-wrap {
+    position: relative;
+}
+
+.calendar-picker-wrap.is-disabled {
+    opacity: 0.6;
+}
+
+.calendar-disabled-overlay {
+    position: absolute;
+    inset: 0;
+    cursor: not-allowed;
+    background: transparent;
+    z-index: 10;
 }
 
 .calendar-inline :deep(.vc-container) {
@@ -1037,6 +1466,22 @@ onBeforeUnmount(() => {
     font-weight: 600;
 }
 
+/* Render weekdays-only layout (Mon-Fri) by removing Sun/Sat columns */
+.calendar-box :deep(.vc-weekdays),
+.calendar-box :deep(.vc-week) {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+}
+
+.calendar-box :deep(.vc-weekdays .vc-weekday-1),
+.calendar-box :deep(.vc-weekdays .vc-weekday-7),
+.calendar-box :deep(.vc-week .weekday-1),
+.calendar-box :deep(.vc-week .weekday-7),
+.calendar-box :deep(.vc-weekdays > *:nth-child(1)),
+.calendar-box :deep(.vc-weekdays > *:nth-child(7)),
+.calendar-box :deep(.vc-week > *:nth-child(1)),
+.calendar-box :deep(.vc-week > *:nth-child(7)) {
+    display: none !important;
+}
 .calendar-inline :deep(.vc-day-content:hover) {
     background: color-mix(in srgb, hsl(var(--primary)) 18%, white);
 }
@@ -1052,7 +1497,7 @@ onBeforeUnmount(() => {
     margin-top: 0.9rem;
 }
 
-.cancel-btn,
+.clear-btn,
 .apply-btn {
     border-radius: 0.6rem;
     border: 1px solid hsl(var(--primary));
@@ -1062,9 +1507,14 @@ onBeforeUnmount(() => {
     cursor: pointer;
 }
 
-.cancel-btn {
+.clear-btn {
     background: hsl(var(--card));
     color: hsl(var(--primary));
+}
+
+.clear-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
 }
 
 .apply-btn {

@@ -1,4 +1,6 @@
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
 # EHRIS
 
 Laravel 12 + Vue 3 (Inertia) application.
@@ -84,6 +86,7 @@ Open:
 - If DB tables are missing, run: `php artisan migrate`
 
 =======
+>>>>>>> 436fea27d3c41fd469695be2a0bbac57a8d251c9
 # EHRIS Leave - Setup
 
 ## Clone And Install
@@ -111,4 +114,7 @@ npm install
 
 ## Next
 Set the correct database credentials in `.env`, then run the app using your preferred local environment.
+<<<<<<< HEAD
+=======
 >>>>>>> 28cd2466f1c978f8628c442848035637ca473213
+>>>>>>> 436fea27d3c41fd469695be2a0bbac57a8d251c9

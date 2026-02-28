@@ -1,13 +1,14 @@
 <?php
 
+use App\Http\Controllers\Auth\PasswordResetOtpController;
 use App\Http\Controllers\MyDetails\FamilyController;
 use App\Http\Controllers\MyDetailsController;
 use App\Http\Controllers\SelfService\LeaveApplicationController;
 use App\Http\Controllers\Utilities\LeaveTypeController;
 use App\Http\Controllers\Utilities\UserListController;
-use App\Models\EmpFamilyInfo;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
@@ -19,6 +20,31 @@ Route::get('/', function () {
         'canRegister' => Features::enabled(Features::registration()),
     ]);
 })->name('home');
+
+Route::middleware('guest')->group(function () {
+    Route::post('forgot-password/otp/send', [PasswordResetOtpController::class, 'send'])
+        ->name('password.otp.send');
+    Route::get('forgot-password/otp/verify', [PasswordResetOtpController::class, 'showVerify'])
+        ->name('password.otp.verify.form');
+    Route::post('forgot-password/otp/verify', [PasswordResetOtpController::class, 'verify'])
+        ->name('password.otp.verify');
+    Route::get('forgot-password/otp/reset', [PasswordResetOtpController::class, 'showReset'])
+        ->name('password.otp.reset.form');
+    Route::post('forgot-password/otp/reset', [PasswordResetOtpController::class, 'reset'])
+        ->name('password.otp.reset');
+    Route::get('forgot-password/otp/success', [PasswordResetOtpController::class, 'success'])
+        ->name('password.otp.success');
+});
+
+Route::get('email/verified-success', function (Request $request) {
+    if ($request->user()) {
+        Auth::guard('web')->logout();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+    }
+
+    return Inertia::render('auth/EmailVerifiedSuccess');
+})->name('verification.success');
 
 Route::get('dashboard', function () {
     return Inertia::render('Dashboard');
@@ -155,7 +181,7 @@ Route::get('my-details', function (Request $request) {
             'tbl_emp_official_info' => fn () => DB::table('tbl_emp_official_info')->where('hrid', $hrid)->first(),
             'tbl_emp_personal_info' => fn () => DB::table('tbl_emp_personal_info')->where('hrid', $hrid)->first(),
             'tbl_emp_contact_info' => fn () => DB::table('tbl_emp_contact_info')->where('hrid', $hrid)->first(),
-            'tbl_emp_family_info' => fn () => EmpFamilyInfo::where('hrid', $hrid)->get(),
+            'tbl_emp_family_info' => fn () => DB::table('tbl_emp_family_info')->where('hrid', $hrid)->get(),
             'tbl_emp_education_info' => fn () => DB::table('tbl_emp_education_info')->where('hrid', $hrid)->get(),
             'tbl_emp_work_experience_info' => fn () => DB::table('tbl_emp_work_experience_info')->where('hrid', $hrid)->get(),
             'tbl_emp_civil_service_info' => fn () => DB::table('tbl_emp_civil_service_info')->where('hrid', $hrid)->get(),
@@ -177,6 +203,8 @@ Route::get('my-details', function (Request $request) {
                 $result = $query();
                 if ($result instanceof \Illuminate\Support\Collection) {
                     $result = $result->all();
+                } elseif (is_object($result)) {
+                    $result = json_decode(json_encode($result), true);
                 }
                 switch ($table) {
                     case 'tbl_emp_official_info': $officialInfo = $result;
@@ -218,8 +246,40 @@ Route::get('my-details', function (Request $request) {
         }
     }
 
+    // Fallback: when employee tables have no row, show at least profile (tbl_user) or auth user data so sections aren't empty
+    $profileArray = $dbProfile
+        ? json_decode(json_encode($dbProfile), true)
+        : ($authUser ? $authUser->only(['hrId', 'email', 'lastname', 'firstname', 'middlename', 'extname', 'avatar', 'job_title', 'role', 'fullname']) : null);
+    if ($profileArray !== null) {
+        if ($officialInfo === null) {
+            $officialInfo = [
+                'hrid' => $profileArray['hrId'] ?? $authUser?->hrId ?? null,
+                'employee_id' => null,
+                'firstname' => $profileArray['firstname'] ?? null,
+                'middlename' => $profileArray['middlename'] ?? null,
+                'lastname' => $profileArray['lastname'] ?? null,
+                'extension' => $profileArray['extname'] ?? null,
+                'email' => $profileArray['email'] ?? null,
+                'job_title' => $profileArray['job_title'] ?? null,
+                'role' => $profileArray['role'] ?? null,
+            ];
+        }
+        if ($personalInfo === null) {
+            $personalInfo = [
+                'firstname' => $profileArray['firstname'] ?? null,
+                'middlename' => $profileArray['middlename'] ?? null,
+                'lastname' => $profileArray['lastname'] ?? null,
+            ];
+        }
+        if ($contactInfo === null) {
+            $contactInfo = [
+                'email' => $profileArray['email'] ?? null,
+            ];
+        }
+    }
+
     return Inertia::render('MyDetails', [
-        'profile' => $dbProfile,
+        'profile' => $profileArray ?? ($dbProfile ? json_decode(json_encode($dbProfile), true) : null),
         'officialInfo' => $officialInfo,
         'personalInfo' => $personalInfo,
         'contactInfo' => $contactInfo,
@@ -236,13 +296,12 @@ Route::get('my-details', function (Request $request) {
         'researches' => $researches,
         'expertise' => $expertise,
         'affiliation' => $affiliation,
-        'familyUpdateUrl' => route('my-details.family.store'),
     ]);
 })->middleware(['auth', 'verified'])->name('my-details');
 
-Route::post('my-details/family', [FamilyController::class, 'store'])
+Route::get('my-details/pds-export', [MyDetailsController::class, 'exportPdsExcel'])
     ->middleware(['auth', 'verified'])
-    ->name('my-details.family.store');
+    ->name('my-details.export-pds');
 
 Route::get('utilities', function () {
     return Inertia::render('Utilities');
@@ -290,11 +349,42 @@ Route::delete('utilities/leave-types/{leaveType}', [LeaveTypeController::class, 
     ->middleware(['auth', 'verified'])
     ->name('utilities.leave-types.destroy');
 
+Route::get('reports', function () {
+    return Inertia::render('Reports');
+})->middleware(['auth', 'verified'])->name('reports');
+
 Route::get('survey', function () {
     return Inertia::render('Survey');
 })->middleware(['auth', 'verified'])->name('survey');
 Route::get('survey/gad', function () {
     return Inertia::render('Survey/Gad');
 })->middleware(['auth', 'verified'])->name('survey.gad');
+
+Route::get('api/reports/employee-listing', [App\Http\Controllers\Reports\EmployeeListingController::class, 'api'])
+    ->middleware(['auth', 'verified'])
+    ->name('api.reports.employee-listing');
+Route::get('api/reports/employee-listing/datatables', [App\Http\Controllers\Reports\EmployeeListingController::class, 'datatables'])
+    ->middleware(['auth', 'verified'])
+    ->name('api.reports.employee-listing.datatables');
+
+Route::get('reports/employee-listing', [App\Http\Controllers\Reports\EmployeeListingController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('reports.employee-listing');
+
+Route::get('reports/employee-listing/export/csv', [App\Http\Controllers\Reports\EmployeeListingController::class, 'exportCsv'])
+    ->middleware(['auth', 'verified'])
+    ->name('reports.employee-listing.export.csv');
+
+Route::get('reports/employee-listing/export/excel', [App\Http\Controllers\Reports\EmployeeListingController::class, 'exportExcel'])
+    ->middleware(['auth', 'verified'])
+    ->name('reports.employee-listing.export.excel');
+
+Route::get('reports/employee-listing/export/print', [App\Http\Controllers\Reports\EmployeeListingController::class, 'exportPrint'])
+    ->middleware(['auth', 'verified'])
+    ->name('reports.employee-listing.export.print');
+
+Route::get('api/reports/employee-listing/summary-stats', [App\Http\Controllers\Reports\EmployeeListingController::class, 'summaryStats'])
+    ->middleware(['auth', 'verified'])
+    ->name('reports.employee-listing.summary-stats');
 
 require __DIR__.'/settings.php';

@@ -3,7 +3,6 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-<<<<<<< HEAD
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class EmpFamilyInfo extends Model
@@ -69,14 +68,4 @@ class EmpFamilyInfo extends Model
     {
         return $this->belongsTo(User::class, 'hrid', 'hrId');
     }
-=======
-
-class EmpFamilyInfo extends Model
-{
-    protected $table = 'tbl_emp_family_info';
-
-    protected $primaryKey = 'id';
-
-    public $timestamps = false;
->>>>>>> 28cd2466f1c978f8628c442848035637ca473213
 }

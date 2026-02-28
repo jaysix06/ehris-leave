@@ -2,7 +2,8 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Illuminate\Auth\MustVerifyEmail as MustVerifyEmailTrait;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -10,10 +11,10 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 
-class User extends Authenticatable
+class User extends Authenticatable implements MustVerifyEmail
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable, TwoFactorAuthenticatable;
+    use HasFactory, MustVerifyEmailTrait, Notifiable, TwoFactorAuthenticatable;
 
     /**
      * The table associated with the model.
@@ -105,6 +106,14 @@ class User extends Authenticatable
      *
      * @return array<string, string>
      */
+    /**
+     * Family information records for this user (keyed by hrId).
+     */
+    public function familyInfo(): HasMany
+    {
+        return $this->hasMany(FamilyInfo::class, 'hrid', 'hrId');
+    }
+
     protected function casts(): array
     {
         return [
@@ -176,6 +185,19 @@ class User extends Authenticatable
                 $this->attributes['middlename'] = $middleName ?: $this->attributes['middlename'] ?? null;
             },
         );
+    }
+
+    /**
+     * Treat "active" accounts as email-verified so we rely on
+     * admin activation instead of the built-in email flow.
+     */
+    public function hasVerifiedEmail(): bool
+    {
+        if (array_key_exists('active', $this->attributes)) {
+            return (bool) $this->attributes['active'];
+        }
+
+        return ! is_null($this->email_verified_at ?? null);
     }
 
     /**
