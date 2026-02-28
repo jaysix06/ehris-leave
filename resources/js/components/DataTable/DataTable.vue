@@ -22,6 +22,8 @@ export type DataTableColumn = {
     data?: string;
     /** Custom render function for the column */
     render?: (data: unknown, type: string, row: any, meta: any) => string;
+    /** Hide column from display but keep in data for exports (default: true) */
+    visible?: boolean;
 };
 
 
@@ -92,16 +94,32 @@ function toggleRow(row: any, rowElement?: HTMLElement) {
     
     const wasExpanded = expandedRows.value.has(rowKey);
     if (wasExpanded) {
+        // Close the current row
         expandedRows.value.delete(rowKey);
         dataTableInstance.row(rowEl).child.hide();
+        rowEl.classList.remove('expanded');
         emit('row-collapse', row._raw);
         emit('row-toggle', row._raw, false);
     } else {
+        // Close all previously expanded rows first (only one open at a time)
+        expandedRows.value.forEach((expandedKey) => {
+            if (expandedKey !== rowKey) {
+                const expandedRowEl = tableRef.value?.querySelector(`tr[data-row-key="${expandedKey}"]`) as HTMLElement;
+                if (expandedRowEl) {
+                    expandedRows.value.delete(expandedKey);
+                    dataTableInstance.row(expandedRowEl).child.hide();
+                    expandedRowEl.classList.remove('expanded');
+                }
+            }
+        });
+        
+        // Open the new row
         expandedRows.value.add(rowKey);
         if (props.accordionRenderer) {
             const content = props.accordionRenderer(row._raw);
             dataTableInstance.row(rowEl).child(content).show();
         }
+        rowEl.classList.add('expanded');
         emit('row-expand', row._raw);
         emit('row-toggle', row._raw, true);
     }
@@ -127,6 +145,11 @@ onMounted(() => {
                 orderable: true, // Enable column sorting
                 searchable: true, // Enable column search
             };
+            
+            // Hide column if visible is false (but keep in data for exports)
+            if (col.visible === false) {
+                columnConfig.visible = false;
+            }
             
             // Custom render function
             if (col.render) {
@@ -159,7 +182,22 @@ onMounted(() => {
         const buttons: any[] = [];
         
         if (props.showExportButtons) {
-            buttons.push('csv', 'excel', 'print');
+            buttons.push(
+                {
+                    extend: 'csv',
+                    title: 'Employee Listing Reports',
+                    filename: 'Employee Listing Reports',
+                },
+                {
+                    extend: 'excel',
+                    title: 'Employee Listing Reports',
+                    filename: 'Employee Listing Reports',
+                },
+                {
+                    extend: 'print',
+                    title: 'Employee Listing Reports',
+                }
+            );
         }
         
         // DataTables configuration
@@ -552,6 +590,11 @@ onUnmounted(() => {
 /* Accordion row styles */
 :deep(tr.expanded) {
     background-color: hsl(var(--muted) / 0.3);
+}
+
+:deep(tr.expanded .accordion-arrow) {
+    transform: rotate(90deg);
+    color: hsl(var(--primary));
 }
 
 :deep(.child) {
