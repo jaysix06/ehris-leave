@@ -25,19 +25,20 @@ export default defineConfig({
         }),
     ],
     // server: {
-    //     host: '192.168.74.237',
+    //     host: 'localhost',
     //     port: 5173,
     //     strictPort: true,
 
     //     cors: {
     //         origin: [
-    //             'http://192.168.74.237:8000',
+    //             'http://localhost:8000',
+    //             'http://127.0.0.1:8000',
     //         ],
     //         credentials: true,
     //     },
 
     //     hmr: {
-    //         host: '192.168.74.237',
+    //         host: 'localhost',
     //         port: 5173,
     //     },
     // },

@@ -1,13 +1,14 @@
 <?php
 
-use App\Http\Controllers\Auth\PasswordResetOtpController;
+
+use App\Http\Controllers\MyDetails\FamilyController;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use App\Http\Controllers\MyDetailsController;
 use App\Http\Controllers\SelfService\LeaveApplicationController;
 use App\Http\Controllers\Utilities\LeaveTypeController;
 use App\Models\FamilyInfo;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
@@ -134,6 +135,7 @@ Route::get('request-status/my-leave', function () {
     return Inertia::render('RequestStatus/MyLeave');
 })->middleware(['auth', 'verified'])->name('request-status.my-leave');
 
+
 Route::get('my-details', function (Request $request) {
     $authUser = $request->user();
     $dbProfile = null;
@@ -156,8 +158,9 @@ Route::get('my-details', function (Request $request) {
     $affiliation = [];
 
     if ($authUser && Schema::hasTable('tbl_user')) {
-        $dbProfile = DB::table('tbl_user')
-            ->select([
+        $profileUser = User::where('email', $authUser->email)->first();
+        if ($profileUser) {
+            $dbProfile = $profileUser->only([
                 'hrId',
                 'email',
                 'lastname',
@@ -168,10 +171,9 @@ Route::get('my-details', function (Request $request) {
                 'job_title',
                 'role',
                 'fullname',
-            ])
-            ->where('email', $authUser->email)
-            ->first();
-        $hrid = $dbProfile->hrId ?? $authUser->hrId ?? null;
+            ]);
+            $hrid = $profileUser->hrId;
+        }
     }
 
     if ($hrid !== null) {
@@ -179,7 +181,7 @@ Route::get('my-details', function (Request $request) {
             'tbl_emp_official_info' => fn () => DB::table('tbl_emp_official_info')->where('hrid', $hrid)->first(),
             'tbl_emp_personal_info' => fn () => DB::table('tbl_emp_personal_info')->where('hrid', $hrid)->first(),
             'tbl_emp_contact_info' => fn () => DB::table('tbl_emp_contact_info')->where('hrid', $hrid)->first(),
-            'tbl_emp_family_info' => fn () => FamilyInfo::query()->where('hrid', $hrid)->get(),
+            'tbl_emp_family_info' => fn () => DB::table('tbl_emp_family_info')->where('hrid', $hrid)->get(),
             'tbl_emp_education_info' => fn () => DB::table('tbl_emp_education_info')->where('hrid', $hrid)->get(),
             'tbl_emp_work_experience_info' => fn () => DB::table('tbl_emp_work_experience_info')->where('hrid', $hrid)->get(),
             'tbl_emp_civil_service_info' => fn () => DB::table('tbl_emp_civil_service_info')->where('hrid', $hrid)->get(),
@@ -296,6 +298,11 @@ Route::get('my-details', function (Request $request) {
         'affiliation' => $affiliation,
     ]);
 })->middleware(['auth', 'verified'])->name('my-details');
+
+Route::get('my-details', [MyDetailsController::class, 'show'])
+    ->middleware(['auth', 'verified'])
+    ->name('my-details');
+
 
 Route::get('my-details/pds-export', [MyDetailsController::class, 'exportPdsExcel'])
     ->middleware(['auth', 'verified'])

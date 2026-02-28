@@ -186,4 +186,14 @@ class User extends Authenticatable implements MustVerifyEmail
             },
         );
     }
+
+    /**
+     * Get the family member records for this user (by hrId).
+     *
+     * @return HasMany<EmpFamilyInfo, $this>
+     */
+    public function familyMembers(): HasMany
+    {
+        return $this->hasMany(EmpFamilyInfo::class, 'hrid', 'hrId');
+    }
 }
