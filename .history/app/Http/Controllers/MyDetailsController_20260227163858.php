@@ -314,7 +314,7 @@ class MyDetailsController extends Controller
             'L27' => $contactInfo->permanent_barangay_name ?? null,                  // Barangay (name)
             'I29' => $contactInfo->city_municipality1 ?? null,                       // City/Municipality
             'L29' => $contactInfo->permanent_province_name ?? null,                  // Province (name)
-            'I31    ' => $contactInfo->zip_code1 ?? null,                                // ZIP Code
+            'I31' => $contactInfo->zip_code1 ?? null,                                // ZIP Code
 
             // Height and weight – ensure we include the proper units.
             'D22' => $this->formatHeight($personalInfo->height ?? null),

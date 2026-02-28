@@ -85,20 +85,7 @@ class MyDetailsController extends Controller
                 'tbl_emp_contact_info' => [
                     'key' => 'contactInfo',
                     'type' => 'single',
-                    'query' => fn () => DB::table('tbl_emp_contact_info as c')
-                        ->leftJoin('tbl_barangay as rb', 'rb.barangay_id', '=', 'c.barangay')
-                        ->leftJoin('tbl_province as rp', 'rp.province_id', '=', 'c.province')
-                        ->leftJoin('tbl_barangay as pb', 'pb.barangay_id', '=', 'c.barangay1')
-                        ->leftJoin('tbl_province as pp', 'pp.province_id', '=', 'c.province1')
-                        ->where('c.hrid', $hrid)
-                        ->select([
-                            'c.*',
-                            'rb.barangay_name as residential_barangay_name',
-                            'rp.province_name  as residential_province_name',
-                            'pb.barangay_name as permanent_barangay_name',
-                            'pp.province_name  as permanent_province_name',
-                        ])
-                        ->first(),
+                    'query' => fn () => EmpContactInfo::query()->where('hrid', $hrid)->first(),
                 ],
                 'tbl_emp_education_info' => [
                     'key' => 'education',
@@ -177,46 +164,6 @@ class MyDetailsController extends Controller
                     // skip if table missing or query fails
                 }
             }
-
-            // Enrich contact info with resolved barangay/province names so the
-            // UI (and exports) can show names instead of raw IDs.
-            if (isset($data['contactInfo']) && $data['contactInfo'] instanceof EmpContactInfo) {
-                $contact = $data['contactInfo'];
-
-                $residentialBarangayName = null;
-                $residentialProvinceName = null;
-                $permanentBarangayName = null;
-                $permanentProvinceName = null;
-
-                if (! empty($contact->barangay) && Schema::hasTable('tbl_barangay')) {
-                    $residentialBarangayName = DB::table('tbl_barangay')
-                        ->where('barangay_id', $contact->barangay)
-                        ->value('barangay_name');
-                }
-
-                if (! empty($contact->province) && Schema::hasTable('tbl_province')) {
-                    $residentialProvinceName = DB::table('tbl_province')
-                        ->where('province_id', $contact->province)
-                        ->value('province_name');
-                }
-
-                if (! empty($contact->barangay1) && Schema::hasTable('tbl_barangay')) {
-                    $permanentBarangayName = DB::table('tbl_barangay')
-                        ->where('barangay_id', $contact->barangay1)
-                        ->value('barangay_name');
-                }
-
-                if (! empty($contact->province1) && Schema::hasTable('tbl_province')) {
-                    $permanentProvinceName = DB::table('tbl_province')
-                        ->where('province_id', $contact->province1)
-                        ->value('province_name');
-                }
-
-                $contact->residential_barangay_name = $residentialBarangayName;
-                $contact->residential_province_name = $residentialProvinceName;
-                $contact->permanent_barangay_name = $permanentBarangayName;
-                $contact->permanent_province_name = $permanentProvinceName;
-            }
         }
 
         return Inertia::render('MyDetails', array_merge(
@@ -235,12 +182,9 @@ class MyDetailsController extends Controller
             ->where('email', $authUser?->email)
             ->first();
 
-        // Prefer the HRID from tbl_user, then from the auth user, finally fall back to auth user ID.
-        // If none exist, we still proceed (all fields will become "N/A"), we just use a generic label.
-        $hrid = $dbProfile->hrId
-            ?? $authUser?->hrId
-            ?? $authUser?->id
-            ?? null;
+        $hrid = $dbProfile->hrId ?? $authUser?->hrId;
+
+        abort_if(! $hrid, 404, 'Employee profile not found.');
 
         $templatePath = $this->resolvePdsTemplatePath();
         abort_if(! $templatePath, 404, 'DepEd PDS template file not found.');
@@ -252,20 +196,7 @@ class MyDetailsController extends Controller
             ? DB::table('tbl_emp_personal_info')->where('hrid', $hrid)->first()
             : null;
         $contactInfo = Schema::hasTable('tbl_emp_contact_info')
-            ? DB::table('tbl_emp_contact_info as c')
-                ->leftJoin('tbl_barangay as rb', 'rb.barangay_id', '=', 'c.barangay')
-                ->leftJoin('tbl_province as rp', 'rp.province_id', '=', 'c.province')
-                ->leftJoin('tbl_barangay as pb', 'pb.barangay_id', '=', 'c.barangay1')
-                ->leftJoin('tbl_province as pp', 'pp.province_id', '=', 'c.province1')
-                ->where('c.hrid', $hrid)
-                ->select([
-                    'c.*',
-                    'rb.barangay_name as residential_barangay_name',
-                    'rp.province_name  as residential_province_name',
-                    'pb.barangay_name as permanent_barangay_name',
-                    'pp.province_name  as permanent_province_name',
-                ])
-                ->first()
+            ? DB::table('tbl_emp_contact_info')->where('hrid', $hrid)->first()
             : null;
         $family = Schema::hasTable('tbl_emp_family_info')
             ? DB::table('tbl_emp_family_info')->where('hrid', $hrid)->get()
@@ -283,42 +214,14 @@ class MyDetailsController extends Controller
             'D10' => $officialInfo->lastname ?? $dbProfile->lastname ?? null,
             'D11' => $officialInfo->firstname ?? $dbProfile->firstname ?? null,
             'D12' => $officialInfo->middlename ?? $dbProfile->middlename ?? null,
-            // Name extension (JR, SR, III, etc.). Different tables sometimes
-            // use either "extension" or "extname", so we check both.
-            'L11' => $officialInfo->extension
-                ?? ($officialInfo->extname ?? null)
-                ?? ($dbProfile->extname ?? null),
+            'M11' => $officialInfo->extension ?? $dbProfile->extname ?? null,
             'D13' => $this->formatDate($personalInfo->dob ?? null),
             'D15' => $personalInfo->pob ?? null,
             'I13' => $personalInfo->citizenship ?? null,
             'I16' => $personalInfo->dual_citizenship ?? null,
-            // Country text shown beside the dropdown under "Pls. indicate country:".
-            // If no explicit country is stored, we try to derive it from the
-            // citizenship string (e.g. "Filipino – Philippines").
-            'M15' => $personalInfo->country
-                ?? $this->deriveCountryFromCitizenship($personalInfo->citizenship ?? null),
 
-            // 17. RESIDENTIAL ADDRESS
-            'I17' => $contactInfo->house_block_lotnum ?? null,                       // House/Block/Lot No.
-            'L17' => $contactInfo->street_add ?? null,                               // Street
-            'I19' => $contactInfo->subdivision_village ?? null,                      // Subdivision/Village
-            'L19' => $contactInfo->residential_barangay_name ?? null,                // Barangay (name)
-            'I22' => $contactInfo->city_municipality ?? null,                        // City/Municipality
-            'L22' => $contactInfo->residential_province_name ?? null,                // Province (name)
-            'I24' => $contactInfo->zip_code ?? null,                                 // ZIP Code
-
-            // 18. PERMANENT ADDRESS
-            'I25' => $contactInfo->house_block_lotnum1 ?? null,                      // House/Block/Lot No.
-            'L25' => $contactInfo->street_add1 ?? null,                              // Street
-            'I27' => $contactInfo->subdivision_village1 ?? null,                     // Subdivision/Village
-            'L27' => $contactInfo->permanent_barangay_name ?? null,                  // Barangay (name)
-            'I29' => $contactInfo->city_municipality1 ?? null,                       // City/Municipality
-            'L29' => $contactInfo->permanent_province_name ?? null,                  // Province (name)
-            'I31    ' => $contactInfo->zip_code1 ?? null,                                // ZIP Code
-
-            // Height and weight – ensure we include the proper units.
-            'D22' => $this->formatHeight($personalInfo->height ?? null),
-            'D24' => $this->formatWeight($personalInfo->weight ?? null),
+            'D22' => $personalInfo->height ?? null,
+            'D24' => $personalInfo->weight ?? null,
             'D25' => $personalInfo->blood_type ?? null,
             'D29' => $personalInfo->pag_ibig ?? $personalInfo->pagibig ?? null,
             'D31' => $personalInfo->philhealth ?? null,
@@ -329,9 +232,7 @@ class MyDetailsController extends Controller
 
             'D36' => $spouse?->lastname ?? null,
             'D37' => $spouse?->firstname ?? null,
-            // Spouse name extension (Jr., Sr.) in Family Background.
-            'G37' => $spouse?->extension
-                ?? ($spouse?->extname ?? null),
+            'H37' => $spouse?->extension ?? null,
             'D38' => $spouse?->middlename ?? null,
             'D39' => $spouse?->occupation ?? null,
             'D40' => $spouse?->employer_name ?? null,
@@ -340,9 +241,7 @@ class MyDetailsController extends Controller
 
             'D43' => $father?->lastname ?? null,
             'D44' => $father?->firstname ?? null,
-            // Father's name extension (Jr., Sr.) in Family Background.
-            'G44' => $father?->extension
-                ?? ($father?->extname ?? null),
+            'H44' => $father?->extension ?? null,
             'D45' => $father?->middlename ?? null,
 
             'D47' => $mother?->lastname ?? null,
@@ -350,27 +249,8 @@ class MyDetailsController extends Controller
             'D49' => $mother?->middlename ?? null,
         ];
 
-        // If employee is not marked as married, DepEd guidance says to put
-        // "N/A" in the first spouse cell (22. SPOUSE'S SURNAME).
-        $civilStatus = (string) ($personalInfo->civil_stat ?? '');
-        $civilKey = $this->normalizeCivilStatusToCheckbox($civilStatus) ?? '';
-        if ($civilKey !== 'married') {
-            $cellMap['D36'] = 'N/A';
-        }
-
         foreach ($cellMap as $cell => $value) {
             $cellMap[$cell] = $this->pdsValue($value);
-        }
-
-        // Prefix Name Extension fields with a short label so the meaning of
-        // "JR" or "N/A" is obvious when reading the sheet.
-        foreach (['L11', 'G37', 'G44'] as $extCell) {
-            if (! array_key_exists($extCell, $cellMap)) {
-                continue;
-            }
-
-            $value = (string) $cellMap[$extCell];
-            $cellMap[$extCell] = 'NAME EXTENSION (JR., SR)                                              '.$value;
         }
 
         // Children list (Annex H C1: names in column I, DOB in column M).
@@ -458,56 +338,6 @@ class MyDetailsController extends Controller
         } catch (\Throwable) {
             return (string) $value;
         }
-    }
-
-    private function formatHeight(mixed $value): ?string
-    {
-        if ($value === null || $value === '') {
-            return null;
-        }
-
-        $stringValue = trim((string) $value);
-        // If units already present, don't duplicate.
-        if (stripos($stringValue, 'm') !== false) {
-            return $stringValue;
-        }
-
-        return $stringValue.' m';
-    }
-
-    private function formatWeight(mixed $value): ?string
-    {
-        if ($value === null || $value === '') {
-            return null;
-        }
-
-        $stringValue = trim((string) $value);
-        // If units already present, don't duplicate.
-        if (stripos($stringValue, 'kg') !== false) {
-            return $stringValue;
-        }
-
-        return $stringValue.' kg';
-    }
-
-    private function deriveCountryFromCitizenship(mixed $value): ?string
-    {
-        if ($value === null || $value === '') {
-            return null;
-        }
-
-        $stringValue = trim((string) $value);
-
-        // Common pattern we use in the UI: "Filipino – Philippines"
-        if (str_contains($stringValue, '–')) {
-            $parts = array_map('trim', explode('–', $stringValue, 2));
-            if (isset($parts[1]) && $parts[1] !== '') {
-                return $parts[1];
-            }
-        }
-
-        // Fallback: if it already looks like a country, just return it.
-        return $stringValue;
     }
 
     private function pdsValue(mixed $value): string
