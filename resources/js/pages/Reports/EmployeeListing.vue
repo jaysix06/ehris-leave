@@ -1110,7 +1110,7 @@ const getAjaxParams = computed(() => () => ({
                 </div>
 
                 <!-- Data Table -->
-                <div class="rounded-md border overflow-x-auto w-full">
+                <div class="w-full overflow-x-auto rounded-md border p-4">
                     <DataTable
                         :columns="employeeColumns"
                         ajax-url="/api/reports/employee-listing/datatables"
