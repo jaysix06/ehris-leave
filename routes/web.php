@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\MyDetailsController;
 use App\Http\Controllers\Auth\PasswordResetOtpController;
+use App\Http\Controllers\EmployeeManagement\IdCardPrintingController;
+use App\Http\Controllers\SelfService\IdCardController;
 use App\Http\Controllers\SelfService\LeaveApplicationController;
 use App\Http\Controllers\Utilities\LeaveTypeController;
 use Illuminate\Http\Request;
@@ -95,9 +97,12 @@ Route::get('employee-management/employee-profile', function () {
 Route::get('employee-management/psipop-update', function () {
     return Inertia::render('EmployeeManagement/PsipopUpdate');
 })->middleware(['auth', 'verified'])->name('employee-management.psipop-update');
-Route::get('employee-management/id-card-printing', function () {
-    return Inertia::render('EmployeeManagement/IdCardPrinting');
-})->middleware(['auth', 'verified'])->name('employee-management.id-card-printing');
+Route::get('employee-management/id-card-printing', [IdCardPrintingController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('employee-management.id-card-printing');
+Route::get('employee-management/id-card-printing/{id}/eodb-id-bb', [IdCardPrintingController::class, 'eodbIdBb'])
+    ->middleware(['auth', 'verified'])
+    ->name('employee-management.id-card-printing.eodb-id-bb');
 Route::get('employee-management/deped-email-requests', function () {
     return Inertia::render('EmployeeManagement/DepedEmailRequests');
 })->middleware(['auth', 'verified'])->name('employee-management.deped-email-requests');
@@ -108,9 +113,15 @@ Route::get('self-service', function () {
 Route::get('self-service/wfh-time-in-out', function () {
     return Inertia::render('SelfService/WfhTimeInOut');
 })->middleware(['auth', 'verified'])->name('self-service.wfh-time-in-out');
-Route::get('self-service/id-card', function () {
-    return Inertia::render('SelfService/IdCard');
-})->middleware(['auth', 'verified'])->name('self-service.id-card');
+Route::get('self-service/id-card', [IdCardController::class, 'show'])
+    ->middleware(['auth', 'verified'])
+    ->name('self-service.id-card');
+Route::get('self-service/id-card/template/{filename}', [IdCardController::class, 'template'])
+    ->middleware(['auth', 'verified'])
+    ->name('self-service.id-card.template');
+Route::put('self-service/id-card/update', [IdCardController::class, 'update'])
+    ->middleware(['auth', 'verified'])
+    ->name('self-service.id-card.update');
 Route::get('self-service/service-record', function () {
     return Inertia::render('SelfService/ServiceRecord');
 })->middleware(['auth', 'verified'])->name('self-service.service-record');
