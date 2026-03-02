@@ -17,6 +17,7 @@ const props = defineProps<{
     stations?: { id: number | string; name: string; district_id?: number | string | null }[];
 }>();
 
+const currentStep = ref(1);
 const selectedDistrictId = ref<string>('');
 
 const filteredStations = computed(() => {
@@ -55,33 +56,26 @@ const handleDistrictChange = (event: Event) => {
     <AuthBase
         title=""
         description=""
-        content-class="max-w-4xl"
+        content-class="max-w-md"
     >
         <Head title="Register" />
 
-        <div class="rounded-lg border border-border bg-card p-6 shadow-sm">
-            <div class="mb-6 flex flex-col gap-4">
-                <Link
-                    :href="home()"
-                    class="inline-flex w-fit items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="m12 19-7-7 7-7"/>
-                        <path d="M19 12H5"/>
-                    </svg>
-                    Back to home
-                </Link>
-                <div class="flex flex-col items-center gap-1 text-center">
-                    <img
-                        src="/logo.png"
-                        alt="Logo"
-                        class="h-12 w-auto object-contain sm:h-14"
-                    />
-                    <h1 class="text-xl font-medium">Register</h1>
-                    <p class="text-sm text-muted-foreground">
-                        Enter your details below to create your account
-                    </p>
-                </div>
+        <div class="rounded-2xl border bg-card p-6 shadow-sm sm:p-8">
+            <div class="mb-6 overflow-hidden rounded-xl">
+                <img
+                    src="/ehris.png"
+                    alt="DepEd Ozamiz Unit School Division"
+                    class="h-36 w-full object-cover object-center"
+                />
+            </div>
+
+            <div class="mb-6 flex flex-col gap-2 text-center">
+                <h1 class="text-2xl font-semibold text-foreground">
+                    Create your account
+                </h1>
+                <p class="text-sm text-muted-foreground">
+                    Enter your information to register for eHRIS.
+                </p>
             </div>
 
             <Form
@@ -90,182 +84,228 @@ const handleDistrictChange = (event: Event) => {
                 v-slot="{ errors, processing }"
                 class="flex flex-col gap-6"
             >
-                <div class="grid gap-6 md:grid-cols-3">
-                <div class="grid gap-2">
-                    <Label for="firstname">First name</Label>
-                    <Input
-                        id="firstname"
-                        type="text"
-                        required
-                        autofocus
-                        :tabindex="1"
-                        autocomplete="given-name"
-                        name="firstname"
-                        placeholder="First name"
-                    />
-                    <InputError :message="errors.firstname" />
-                </div>
-                <div class="grid gap-2">
-                    <Label for="lastname">Last name</Label>
-                    <Input
-                        id="lastname"
-                        type="text"
-                        required
-                        :tabindex="2"
-                        autocomplete="family-name"
-                        name="lastname"
-                        placeholder="Last name"
-                    />
-                    <InputError :message="errors.lastname" />
-                </div>
-                <div class="grid gap-2">
-                    <Label for="middlename">Middle name</Label>
-                    <Input
-                        id="middlename"
-                        type="text"
-                        :tabindex="3"
-                        autocomplete="additional-name"
-                        name="middlename"
-                        placeholder="Middle name"
-                    />
-                    <InputError :message="errors.middlename" />
+                <div class="flex items-center justify-center gap-2 rounded-full bg-muted/60 px-1 py-0.5 text-xs sm:text-sm">
+                    <button
+                        type="button"
+                        class="flex-1 rounded-full px-3 py-1.5 font-medium transition"
+                        :class="currentStep === 1 ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'"
+                        @click="currentStep = 1"
+                    >
+                        Personal details
+                    </button>
+                    <button
+                        type="button"
+                        class="flex-1 rounded-full px-3 py-1.5 font-medium transition"
+                        :class="currentStep === 2 ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'"
+                        @click="currentStep = 2"
+                    >
+                        Employment & account
+                    </button>
                 </div>
 
-                <div class="grid gap-2">
-                    <Label for="extname">Name extension (Jr., Sr.)</Label>
-                    <Input
-                        id="extname"
-                        type="text"
-                        :tabindex="4"
-                        name="extname"
-                        placeholder="e.g. Jr., Sr."
-                    />
-                    <InputError :message="errors.extname" />
-                </div>
-                <div class="grid gap-2 md:col-span-2">
-                    <Label for="email">Email address</Label>
-                    <Input
-                        id="email"
-                        type="email"
-                        required
-                        :tabindex="5"
-                        autocomplete="email"
-                        name="email"
-                        placeholder="email@example.com"
-                    />
-                    <InputError :message="errors.email" />
-                </div>
+                <div class="grid gap-4 md:grid-cols-2">
+                    <template v-if="currentStep === 1">
+                        <div class="grid gap-2 md:col-span-1">
+                            <Label for="firstname">First name</Label>
+                            <Input
+                                id="firstname"
+                                type="text"
+                                required
+                                autofocus
+                                :tabindex="1"
+                                autocomplete="given-name"
+                                name="firstname"
+                                placeholder="First name"
+                            />
+                            <InputError :message="errors.firstname" />
+                        </div>
+                        <div class="grid gap-2 md:col-span-1">
+                            <Label for="lastname">Last name</Label>
+                            <Input
+                                id="lastname"
+                                type="text"
+                                required
+                                :tabindex="2"
+                                autocomplete="family-name"
+                                name="lastname"
+                                placeholder="Last name"
+                            />
+                            <InputError :message="errors.lastname" />
+                        </div>
+                        <div class="grid gap-2 md:col-span-1">
+                            <Label for="middlename">Middle name</Label>
+                            <Input
+                                id="middlename"
+                                type="text"
+                                :tabindex="3"
+                                autocomplete="additional-name"
+                                name="middlename"
+                                placeholder="Middle name"
+                            />
+                            <InputError :message="errors.middlename" />
+                        </div>
 
-                <div class="grid gap-2">
-                    <Label for="employment_status">Employment status</Label>
-                    <select
-                        id="employment_status"
-                        name="employment_status"
-                        required
-                        :tabindex="6"
-                        class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                    >
-                        <option value="">Select status</option>
-                        <option
-                            v-for="status in (props.employmentStatuses ?? [])"
-                            :key="status"
-                            :value="status"
-                        >
-                            {{ status }}
-                        </option>
-                    </select>
-                    <InputError :message="errors.employment_status" />
-                </div>
-                <div class="grid gap-2">
-                    <Label for="district">District</Label>
-                    <select
-                        id="district"
-                        name="district"
-                        required
-                        :tabindex="7"
-                        class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                        v-model="selectedDistrictId"
-                        @change="handleDistrictChange"
-                    >
-                        <option value="">Select district</option>
-                        <option
-                            v-for="d in (props.districts ?? [])"
-                            :key="String(d.id)"
-                            :value="String(d.id)"
-                        >
-                            {{ d.name }}
-                        </option>
-                    </select>
-                    <InputError :message="errors.district" />
-                </div>
-                <div class="grid gap-2">
-                    <Label for="station">Office / School</Label>
-                    <select
-                        id="station"
-                        name="station"
-                        required
-                        :tabindex="8"
-                        class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                    >
-                        <option value="">Select office/school</option>
-                        <option
-                            v-for="s in filteredStations"
-                            :key="String(s.id)"
-                            :value="String(s.id)"
-                        >
-                            {{ s.name }}
-                        </option>
-                    </select>
-                    <InputError :message="errors.station" />
-                </div>
+                        <div class="grid gap-2 md:col-span-1">
+                            <Label for="extname">Name extension (Jr., Sr.)</Label>
+                            <Input
+                                id="extname"
+                                type="text"
+                                :tabindex="4"
+                                name="extname"
+                                placeholder="e.g. Jr., Sr."
+                            />
+                            <InputError :message="errors.extname" />
+                        </div>
+                        <div class="grid gap-2 md:col-span-2">
+                            <Label for="email">Email address</Label>
+                            <Input
+                                id="email"
+                                type="email"
+                                required
+                                :tabindex="5"
+                                autocomplete="email"
+                                name="email"
+                                placeholder="email@example.com"
+                            />
+                            <InputError :message="errors.email" />
+                        </div>
 
-                <div class="grid gap-2">
-                    <Label for="password">Password</Label>
-                    <Input
-                        id="password"
-                        type="password"
-                        required
-                        :tabindex="9"
-                        autocomplete="new-password"
-                        name="password"
-                        placeholder="Password"
-                    />
-                    <InputError :message="errors.password" />
+                        <div class="md:col-span-2 flex justify-center">
+                            <Button
+                                type="button"
+                                size="lg"
+                                class="mt-4 w-full sm:w-auto px-8"
+                                :tabindex="6"
+                                @click="currentStep = 2"
+                            >
+                                Next
+                            </Button>
+                        </div>
+                    </template>
+
+                    <template v-else>
+                        <div class="grid gap-2 md:col-span-2">
+                            <Label for="employment_status">Employment status</Label>
+                            <select
+                                id="employment_status"
+                                name="employment_status"
+                                required
+                                :tabindex="6"
+                                class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                            >
+                                <option value="">Select status</option>
+                                <option
+                                    v-for="status in (props.employmentStatuses ?? [])"
+                                    :key="status"
+                                    :value="status"
+                                >
+                                    {{ status }}
+                                </option>
+                            </select>
+                            <InputError :message="errors.employment_status" />
+                        </div>
+                        <div class="grid gap-2 md:col-span-1">
+                            <Label for="district">District</Label>
+                            <select
+                                id="district"
+                                name="district"
+                                required
+                                :tabindex="7"
+                                class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                v-model="selectedDistrictId"
+                                @change="handleDistrictChange"
+                            >
+                                <option value="">Select district</option>
+                                <option
+                                    v-for="d in (props.districts ?? [])"
+                                    :key="String(d.id)"
+                                    :value="String(d.id)"
+                                >
+                                    {{ d.name }}
+                                </option>
+                            </select>
+                            <InputError :message="errors.district" />
+                        </div>
+                        <div class="grid gap-2 md:col-span-1">
+                            <Label for="station">Office / School</Label>
+                            <select
+                                id="station"
+                                name="station"
+                                required
+                                :tabindex="8"
+                                class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                            >
+                                <option value="">Select office/school</option>
+                                <option
+                                    v-for="s in filteredStations"
+                                    :key="String(s.id)"
+                                    :value="String(s.id)"
+                                >
+                                    {{ s.name }}
+                                </option>
+                            </select>
+                            <InputError :message="errors.station" />
+                        </div>
+
+                        <div class="grid gap-2 md:col-span-1">
+                            <Label for="password">Password</Label>
+                            <Input
+                                id="password"
+                                type="password"
+                                required
+                                :tabindex="9"
+                                autocomplete="new-password"
+                                name="password"
+                                placeholder="Password"
+                            />
+                            <InputError :message="errors.password" />
+                        </div>
+                        <div class="grid gap-2 md:col-span-1">
+                            <Label for="password_confirmation">Confirm password</Label>
+                            <Input
+                                id="password_confirmation"
+                                type="password"
+                                required
+                                :tabindex="10"
+                                autocomplete="new-password"
+                                name="password_confirmation"
+                                placeholder="Confirm password"
+                            />
+                            <InputError :message="errors.password_confirmation" />
+                        </div>
+
+                        <div class="flex justify-center gap-4 md:col-span-2">
+                            <Button
+                                type="button"
+                                size="sm"
+                                class="mt-2"
+                                :tabindex="11"
+                                variant="outline"
+                                @click="currentStep = 1"
+                            >
+                                Back
+                            </Button>
+                            <Button
+                                type="submit"
+                                size="sm"
+                                class="mt-2 w-fit"
+                                :tabindex="12"
+                                :disabled="processing"
+                                data-test="register-user-button"
+                            >
+                                <Spinner v-if="processing" />
+                                Register
+                            </Button>
+                        </div>
+                    </template>
                 </div>
-                <div class="grid gap-2">
-                    <Label for="password_confirmation">Confirm password</Label>
-                    <Input
-                        id="password_confirmation"
-                        type="password"
-                        required
-                        :tabindex="10"
-                        autocomplete="new-password"
-                        name="password_confirmation"
-                        placeholder="Confirm password"
-                    />
-                    <InputError :message="errors.password_confirmation" />
-                </div>
-                <div class="flex justify-center md:col-span-3">
-                    <Button
-                        type="submit"
-                        size="sm"
-                        class="mt-2 w-fit"
-                        tabindex="11"
-                        :disabled="processing"
-                        data-test="register-user-button"
-                    >
-                        <Spinner v-if="processing" />
-                        Register
-                    </Button>
-                </div>
-            </div>
 
                 <div class="text-center text-sm text-muted-foreground">
                     Already have an account?
                     <TextLink
                         :href="login()"
                         class="underline underline-offset-4"
-                        :tabindex="12"
+                        :tabindex="13"
                         >Log in</TextLink
                     >
                 </div>
