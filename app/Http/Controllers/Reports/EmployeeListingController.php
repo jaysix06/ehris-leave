@@ -38,6 +38,22 @@ class EmployeeListingController extends Controller
             ->sort()
             ->values();
 
+        // Schools/Offices grouped by District (Business Code + Business Name from tbl_business / tbl_department)
+        $schoolsGrouped = DB::table('tbl_department')
+            ->join('tbl_business', 'tbl_department.business_id', '=', 'tbl_business.BusinessUnitId')
+            ->select('tbl_business.BusinessUnitId as district_code', 'tbl_business.BusinessUnit as district_name', 'tbl_department.department_name')
+            ->orderBy('tbl_business.BusinessUnitId')
+            ->orderBy('tbl_department.department_name')
+            ->get()
+            ->groupBy('district_code')
+            ->map(fn ($rows) => [
+                'district' => $rows->first()->district_name,
+                'districtCode' => (int) $rows->first()->district_code,
+                'offices' => $rows->pluck('department_name')->unique()->sort()->values()->all(),
+            ])
+            ->values()
+            ->all();
+
         $jobTitles = DB::table('tbl_job_title')
             ->orderBy('job_title')
             ->pluck('job_title')
@@ -132,12 +148,13 @@ class EmployeeListingController extends Controller
             ],
             'filterOptions' => [
                 'schools' => $schools,
+                'schoolsGrouped' => $schoolsGrouped,
                 'jobTitles' => $jobTitles,
                 'subjects' => $subjects,
                 'gradeLevels' => $gradeLevels,
                 'employmentStatuses' => $employmentStatuses,
             ],
-            'filters' => $request->only(['school', 'job_title', 'subject', 'grade_level', 'employment_status', 'salary_grade', 'search']),
+            'filters' => $request->only(['school', 'district', 'job_title', 'subject', 'grade_level', 'employment_status', 'salary_grade', 'search']),
         ]);
     }
 
@@ -151,6 +168,11 @@ class EmployeeListingController extends Controller
         // Apply filters (same as index method)
         if ($request->filled('school')) {
             $query->where('office', $request->school);
+        } elseif ($request->filled('district')) {
+            // Filter by district: employees whose business_id matches the district code (e.g. 92001 = District 1)
+            // tbl_emp_official_info.business_id matches tbl_business.BusinessUnitId / tbl_department.business_id
+            $districtCode = $request->district;
+            $query->where('business_id', (string) $districtCode);
         }
 
         if ($request->filled('job_title')) {
@@ -529,7 +551,7 @@ class EmployeeListingController extends Controller
 
         return Inertia::render('Reports/EmployeeListingPrint', [
             'employees' => $employees,
-            'filters' => $request->only(['school', 'job_title', 'subject', 'grade_level', 'employment_status', 'salary_grade', 'search']),
+            'filters' => $request->only(['school', 'district', 'job_title', 'subject', 'grade_level', 'employment_status', 'salary_grade', 'search']),
         ]);
     }
 }

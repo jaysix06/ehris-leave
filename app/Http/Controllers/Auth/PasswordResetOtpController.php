@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Notifications\PasswordResetOtpNotification;
+use App\Services\ActivityLogService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -209,6 +210,9 @@ class PasswordResetOtpController extends Controller
             'password' => $validated['password'],
             'remember_token' => Str::random(60),
         ])->save();
+
+        // Log password reset activity - user resetting their own password via OTP
+        ActivityLogService::logPasswordReset($user->email);
 
         DB::table('password_reset_otps')->where('email', $email)->delete();
         $request->session()->forget([

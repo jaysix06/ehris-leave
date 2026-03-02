@@ -6,6 +6,8 @@ use App\Http\Controllers\MyDetailsController;
 use App\Http\Controllers\EmployeeManagement\IdCardPrintingController;
 use App\Http\Controllers\SelfService\IdCardController;
 use App\Http\Controllers\SelfService\LeaveApplicationController;
+use App\Http\Controllers\Utilities\ActivityLogController;
+use App\Http\Controllers\Utilities\JobTitleMonthlySalaryController;
 use App\Http\Controllers\Utilities\LeaveTypeController;
 use App\Http\Controllers\Utilities\UserListController;
 use App\Models\User;
@@ -313,6 +315,10 @@ Route::get('my-details', function (Request $request) {
     ]);
 })->middleware(['auth', 'verified'])->name('my-details');
 
+Route::get('my-details', [MyDetailsController::class, 'show'])
+    ->middleware(['auth', 'verified'])
+    ->name('my-details');
+
 Route::get('my-details/pds-export', [MyDetailsController::class, 'exportPdsExcel'])
     ->middleware(['auth', 'verified'])
     ->name('my-details.export-pds');
@@ -344,15 +350,53 @@ Route::delete('api/utilities/users/{user}', [UserListController::class, 'destroy
 Route::get('utilities/business-department-list', function () {
     return Inertia::render('Utilities/BusinessDepartmentList');
 })->middleware(['auth', 'verified'])->name('utilities.business-department-list');
-Route::get('utilities/job-title-monthly-salary', function () {
-    return Inertia::render('Utilities/JobTitleMonthlySalary');
-})->middleware(['auth', 'verified'])->name('utilities.job-title-monthly-salary');
+Route::get('utilities/job-title-monthly-salary', [JobTitleMonthlySalaryController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('utilities.job-title-monthly-salary');
+
+Route::get('api/utilities/job-title-monthly-salary/job-titles/datatables', [JobTitleMonthlySalaryController::class, 'jobTitlesDatatables'])
+    ->middleware(['auth', 'verified'])
+    ->name('api.utilities.job-titles.datatables');
+
+Route::get('api/utilities/job-title-monthly-salary/monthly-salaries/datatables', [JobTitleMonthlySalaryController::class, 'monthlySalariesDatatables'])
+    ->middleware(['auth', 'verified'])
+    ->name('api.utilities.monthly-salaries.datatables');
+
+Route::post('api/utilities/job-title-monthly-salary/job-titles', [JobTitleMonthlySalaryController::class, 'storeJobTitle'])
+    ->middleware(['auth', 'verified'])
+    ->name('api.utilities.job-titles.store');
+
+Route::put('api/utilities/job-title-monthly-salary/job-titles/{id}', [JobTitleMonthlySalaryController::class, 'updateJobTitle'])
+    ->middleware(['auth', 'verified'])
+    ->name('api.utilities.job-titles.update');
+
+Route::delete('api/utilities/job-title-monthly-salary/job-titles/{id}', [JobTitleMonthlySalaryController::class, 'destroyJobTitle'])
+    ->middleware(['auth', 'verified'])
+    ->name('api.utilities.job-titles.destroy');
+
+Route::post('api/utilities/job-title-monthly-salary/monthly-salaries', [JobTitleMonthlySalaryController::class, 'storeMonthlySalary'])
+    ->middleware(['auth', 'verified'])
+    ->name('api.utilities.monthly-salaries.store');
+
+Route::put('api/utilities/job-title-monthly-salary/monthly-salaries/{id}', [JobTitleMonthlySalaryController::class, 'updateMonthlySalary'])
+    ->middleware(['auth', 'verified'])
+    ->name('api.utilities.monthly-salaries.update');
+
+Route::delete('api/utilities/job-title-monthly-salary/monthly-salaries/{id}', [JobTitleMonthlySalaryController::class, 'destroyMonthlySalary'])
+    ->middleware(['auth', 'verified'])
+    ->name('api.utilities.monthly-salaries.destroy');
 Route::get('utilities/reporting-manager', function () {
     return Inertia::render('Utilities/ReportingManager');
 })->middleware(['auth', 'verified'])->name('utilities.reporting-manager');
-Route::get('utilities/activity-log', function () {
-    return Inertia::render('Utilities/ActivityLog');
-})->middleware(['auth', 'verified'])->name('utilities.activity-log');
+
+Route::get('utilities/activity-log', [ActivityLogController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('utilities.activity-log');
+
+// API route for Activity Log DataTables
+Route::get('api/utilities/activity-log/datatables', [ActivityLogController::class, 'datatables'])
+    ->middleware(['auth', 'verified'])
+    ->name('api.utilities.activity-log.datatables');
 Route::get('utilities/survey-management', function () {
     return Inertia::render('Utilities/SurveyManagement');
 })->middleware(['auth', 'verified'])->name('utilities.survey-management');

@@ -6,6 +6,7 @@ use App\Events\MyDetailsUpdated;
 use App\Http\Responses\CustomRegisterResponse;
 use App\Http\Responses\LoginResponse;
 use App\Http\Responses\VerifyEmailResponse;
+use App\Http\Responses\LogoutResponse;
 use App\Models\Affiliation;
 use App\Models\Awards;
 use App\Models\Document;
@@ -30,10 +31,12 @@ use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\URL;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
 use Laravel\Fortify\Contracts\LoginResponse as LoginResponseContract;
 use Laravel\Fortify\Contracts\RegisterResponse as RegisterResponseContract;
+use Laravel\Fortify\Contracts\LogoutResponse as LogoutResponseContract;
 use Laravel\Fortify\Contracts\VerifyEmailResponse as VerifyEmailResponseContract;
 
 class AppServiceProvider extends ServiceProvider
@@ -44,6 +47,7 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(LoginResponseContract::class, LoginResponse::class);
+        $this->app->singleton(LogoutResponseContract::class, LogoutResponse::class);
         $this->app->singleton(VerifyEmailResponseContract::class, VerifyEmailResponse::class);
     }
 
@@ -58,6 +62,7 @@ class AppServiceProvider extends ServiceProvider
         $this->registerMyDetailsRealtimeBroadcasts();
         $this->configureVerifyEmailNotification();
         $this->app->bind(RegisterResponseContract::class, CustomRegisterResponse::class);
+        $this->registerLogoutListener();
     }
 
     /**
@@ -138,6 +143,7 @@ class AppServiceProvider extends ServiceProvider
 
         return (int) $rawHrid;
     }
+
     protected function configureVerifyEmailNotification(): void
     {
         VerifyEmail::toMailUsing(function (object $notifiable, string $url) {
@@ -147,6 +153,17 @@ class AppServiceProvider extends ServiceProvider
                     'url' => $url,
                     'name' => $notifiable->name ?? 'there',
                 ]);
+        });
+    }
+
+    protected function registerLogoutListener(): void
+    {
+        Event::listen(Logout::class, function (Logout $event) {
+            // The Logout event has a 'user' property
+            $user = $event->user ?? null;
+            if ($user && isset($user->userId)) {
+                \App\Services\ActivityLogService::logLogout($user->userId);
+            }
         });
     }
 }

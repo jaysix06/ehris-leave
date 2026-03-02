@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Head, router } from '@inertiajs/vue3';
 import { computed, ref, onMounted, watch } from 'vue';
-import { useDebounceFn } from '@vueuse/core';
+import { useDebounceFn, onClickOutside } from '@vueuse/core';
 import {
     ChevronDown,
     ChevronLeft,
@@ -95,6 +95,7 @@ type Props = {
     };
     filterOptions: {
         schools: string[];
+        schoolsGrouped?: { district: string; districtCode: number; offices: string[] }[];
         jobTitles: string[];
         subjects: string[];
         gradeLevels: string[];
@@ -102,6 +103,7 @@ type Props = {
     };
     filters: {
         school?: string;
+        district?: string;
         job_title?: string;
         subject?: string;
         grade_level?: string;
@@ -185,12 +187,22 @@ const props = defineProps<Props>();
 
 // Filter states - initialize from props
 const selectedSchool = ref<string>(props.filters.school || '');
+const selectedDistrictCode = ref<number | null>(props.filters.district ? Number(props.filters.district) : null);
 const selectedJobTitle = ref<string>(props.filters.job_title || '');
 const selectedSubject = ref<string>(props.filters.subject || '');
 const selectedGradeLevel = ref<string>(props.filters.grade_level || '');
 const selectedEmploymentStatus = ref<string>(props.filters.employment_status || '');
 const selectedSalaryGrade = ref<string>(props.filters.salary_grade || '');
 const searchQuery = ref<string>(props.filters.search || '');
+
+// School/Office accordion selector (open state and ref for click-outside)
+const schoolSelectorOpen = ref(false);
+const schoolSelectorRef = ref<HTMLElement | null>(null);
+// Only one district expanded at a time (accordion behavior)
+const openDistrictCode = ref<number | null>(null);
+
+// Track focus state for dropdown icons animation
+const focusedSelect = ref<string | null>(null);
 
 // Note: Search is now handled by DataTables built-in search
 // Table data ref - holds current table payload (same shape as props.employees)
@@ -261,6 +273,11 @@ onMounted(() => {
     initializeHiddenItems();
 });
 
+onClickOutside(schoolSelectorRef, () => {
+    schoolSelectorOpen.value = false;
+    openDistrictCode.value = null;
+});
+
 // Watch for chartData changes
 watch(
     () => props.chartData,
@@ -278,6 +295,13 @@ const debouncedSearch = useDebounceFn(() => {
 // Watch searchQuery for dynamic search (filter section)
 watch(searchQuery, () => {
     debouncedSearch();
+});
+
+// When opening the school selector, expand the selected district if any
+watch(schoolSelectorOpen, (open) => {
+    if (open && selectedDistrictCode.value != null) {
+        openDistrictCode.value = selectedDistrictCode.value;
+    }
 });
 
 // Note: Search is now handled by DataTables built-in search functionality
@@ -430,6 +454,7 @@ const fetchSummaryStats = async () => {
         const params = new URLSearchParams();
         const filters = {
             school: selectedSchool.value,
+            district: selectedDistrictCode.value != null ? String(selectedDistrictCode.value) : undefined,
             job_title: selectedJobTitle.value,
             subject: selectedSubject.value,
             grade_level: selectedGradeLevel.value,
@@ -471,6 +496,7 @@ const applyFilters = () => {
 
 const clearFilters = () => {
     selectedSchool.value = '';
+    selectedDistrictCode.value = null;
     selectedJobTitle.value = '';
     selectedSubject.value = '';
     selectedGradeLevel.value = '';
@@ -479,6 +505,28 @@ const clearFilters = () => {
     searchQuery.value = '';
     applyFilters();
 };
+
+function selectSchool(office: string) {
+    selectedSchool.value = office;
+    selectedDistrictCode.value = null;
+    applyFilters();
+    schoolSelectorOpen.value = false;
+    openDistrictCode.value = null;
+}
+
+function selectDistrict(code: number) {
+    if (selectedDistrictCode.value === code) {
+        // Click same district again: collapse and clear filter (back to default / all)
+        selectedDistrictCode.value = null;
+        openDistrictCode.value = null;
+        applyFilters();
+    } else {
+        selectedDistrictCode.value = code;
+        selectedSchool.value = '';
+        openDistrictCode.value = code;
+        applyFilters();
+    }
+}
 
 const employeeColumns: DataTableColumn[] = [
     // Visible columns
@@ -497,30 +545,53 @@ const employeeColumns: DataTableColumn[] = [
     { key: 'salary_step', label: 'Step', data: 'salary_step', width: '5rem', visible: false },
 ];
 
+// Escape for HTML text/attributes so export and print stay clean and safe
+function escapeHtml(text: string): string {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 // Cell renderers for DataTables - must be functions, not computed
 const cellRenderers = {
-    name: (row: Employee, value: any) => {
+    name: (row: Employee, value: any, type?: string) => {
         const name = fullName(row);
-        // Add minimalistic arrow icon on the right side to indicate accordion is available
+        // For exports, return plain text without accordion icon
+        if (type === 'export' || type === 'csv' || type === 'excel' || type === 'print') {
+            return name;
+        }
+        // Same layout as before: flex container, name left, arrow right. Arrow via ::after so CSV/Excel/Print export stays clean.
         return `
             <div class="flex items-center justify-between gap-2">
-                <span title="${name}">${name}</span>
-                <span class="accordion-arrow text-muted-foreground transition-transform" style="display: inline-block; font-size: 1.25rem;">›</span>
+                <span title="${escapeHtml(name)}">${escapeHtml(name)}</span>
+                <span class="accordion-arrow-css text-muted-foreground transition-transform" style="display: inline-block; font-size: 1.25rem;"></span>
             </div>
         `;
     },
-    job_title: (row: Employee, value: any) => {
+    job_title: (row: Employee, value: any, type?: string) => {
         const jobTitle = value || '-';
+        // For exports, return plain text
+        if (type === 'export' || type === 'csv' || type === 'excel' || type === 'print') {
+            return jobTitle;
+        }
         return `<span class="inline-flex items-center rounded-md border border-input bg-background px-2 py-1 text-xs font-medium whitespace-nowrap max-w-full truncate">${jobTitle}</span>`;
     },
-    employ_status: (row: Employee, value: any) => {
+    employ_status: (row: Employee, value: any, type?: string) => {
         const status = value || '-';
+        // For exports, return plain text
+        if (type === 'export' || type === 'csv' || type === 'excel' || type === 'print') {
+            return status;
+        }
         const variant = status === 'Permanent' ? 'default' : 'secondary';
         const bgColor = variant === 'default' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground';
         return `<span class="inline-flex items-center rounded-md ${bgColor} px-2 py-1 text-xs font-medium">${status}</span>`;
     },
-    leave_balance: (row: Employee, value: any) => {
+    leave_balance: (row: Employee, value: any, type?: string) => {
         const balance = (value as number) ?? 0;
+        // For exports, return plain number
+        if (type === 'export' || type === 'csv' || type === 'excel' || type === 'print') {
+            return balance.toString();
+        }
         const variant = balance < 5 ? 'destructive' : 'outline';
         const bgColor = variant === 'destructive' ? 'bg-destructive text-destructive-foreground' : 'border-input bg-background';
         return `<span class="inline-flex items-center rounded-md border ${bgColor} px-2 py-1 text-xs font-medium">${balance} days</span>`;
@@ -681,10 +752,20 @@ const isNavigationLink = (label: string): boolean => {
     return cleaned === 'previous' || cleaned === 'next';
 };
 
+// Display label for School/Office selector (district name, school name, or "All")
+const schoolSelectorLabel = computed(() => {
+    if (selectedDistrictCode.value != null && props.filterOptions?.schoolsGrouped?.length) {
+        const group = props.filterOptions.schoolsGrouped.find((g) => g.districtCode === selectedDistrictCode.value);
+        return group?.district ?? String(selectedDistrictCode.value);
+    }
+    return selectedSchool.value || 'All Schools/Offices';
+});
+
 // Get AJAX params for DataTables (excludes DataTables search - handled separately by DataTables)
 // Uses local refs so DataTable auto-reloads when filters change, without affecting graphs
 const getAjaxParams = computed(() => () => ({
     school: selectedSchool.value || undefined,
+    district: selectedDistrictCode.value != null ? String(selectedDistrictCode.value) : undefined,
     job_title: selectedJobTitle.value || undefined,
     subject: selectedSubject.value || undefined,
     grade_level: selectedGradeLevel.value || undefined,
@@ -700,7 +781,7 @@ const getAjaxParams = computed(() => () => ({
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="p-6 flex flex-col gap-6">
             <!-- Page Header -->
-            <section class="border border-border rounded-lg bg-white p-6 shadow-sm">
+            <section class="border border-border rounded-lg bg-background p-6 shadow-sm">
                 <div class="mb-4">
                     <h1 class="text-3xl font-bold">{{ pageTitle }}</h1>
                     <p class="text-muted-foreground mt-1">
@@ -712,7 +793,7 @@ const getAjaxParams = computed(() => () => ({
             </section>
 
             <!-- Charts Section -->
-            <section class="border border-border rounded-lg bg-white p-6 shadow-sm">
+            <section class="border border-border rounded-lg bg-background p-6 shadow-sm">
                 <div class="mb-4">
                     <h2 class="text-xl font-semibold">Analytics & Reports</h2>
                     <p class="text-sm text-muted-foreground mt-1">
@@ -722,7 +803,7 @@ const getAjaxParams = computed(() => () => ({
 
                 <!-- Charts -->
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 items-start">
-                    <div class="rounded-lg border p-4 bg-white">
+                    <div class="rounded-lg border p-4 bg-background">
                         <h3 class="text-sm font-semibold text-muted-foreground mb-3">Employment Status</h3>
                         <div class="h-[240px]">
                             <Doughnut
@@ -779,11 +860,11 @@ const getAjaxParams = computed(() => () => ({
                             >
                                 <div
                                     v-if="showEmploymentStatusOthers && chartDataSafe.employmentStatus.chart.length > 0"
-                                    class="mt-2 max-h-48 overflow-y-auto overflow-x-hidden border rounded-md bg-white"
+                                    class="mt-2 max-h-48 overflow-y-auto overflow-x-hidden border rounded-md bg-background"
                                     style="max-height: 12rem;"
                                 >
                                 <table class="w-full text-sm" style="table-layout: fixed;">
-                                    <thead class="sticky top-0 z-20 bg-white border-b">
+                                    <thead class="sticky top-0 z-20 bg-background border-b">
                                         <tr>
                                             <th class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground whitespace-nowrap" style="width: 3rem; min-width: 3rem;">
                                                 Show
@@ -835,7 +916,7 @@ const getAjaxParams = computed(() => () => ({
                             </transition>
                         </div>
                     </div>
-                    <div class="rounded-lg border p-4 bg-white">
+                    <div class="rounded-lg border p-4 bg-background">
                         <h3 class="text-sm font-semibold text-muted-foreground mb-3">By School/Office</h3>
                         <div class="h-[240px]">
                             <Doughnut
@@ -892,11 +973,11 @@ const getAjaxParams = computed(() => () => ({
                             >
                                 <div
                                     v-if="showSchoolOthers && chartDataSafe.school.chart.length > 0"
-                                    class="mt-2 max-h-48 overflow-y-auto overflow-x-hidden border rounded-md bg-white"
+                                    class="mt-2 max-h-48 overflow-y-auto overflow-x-hidden border rounded-md bg-background"
                                     style="max-height: 12rem;"
                                 >
                                 <table class="w-full text-sm" style="table-layout: fixed;">
-                                    <thead class="sticky top-0 z-20 bg-white border-b">
+                                    <thead class="sticky top-0 z-20 bg-background border-b">
                                         <tr>
                                             <th class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground whitespace-nowrap" style="width: 3rem; min-width: 3rem;">
                                                 Show
@@ -950,7 +1031,7 @@ const getAjaxParams = computed(() => () => ({
                     </div>
                 </div>
                 <div class="grid grid-cols-1 gap-6 mb-6">
-                    <div class="rounded-lg border p-4 bg-white">
+                    <div class="rounded-lg border p-4 bg-background">
                         <h3 class="text-sm font-semibold text-muted-foreground mb-3">Count per Job Title (top 10)</h3>
                         <div class="h-[320px]">
                             <Bar
@@ -970,7 +1051,7 @@ const getAjaxParams = computed(() => () => ({
             </section>
 
             <!-- Filter Section -->
-            <section class="border border-border rounded-lg bg-white p-6 shadow-sm">
+            <section class="border border-border rounded-lg bg-background p-6 shadow-sm">
                 <div class="flex items-center justify-between mb-4">
                     <div>
                         <h2 class="text-xl font-semibold flex items-center gap-2">
@@ -988,13 +1069,72 @@ const getAjaxParams = computed(() => () => ({
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-                    <!-- School Filter -->
-                    <div class="space-y-2">
+                    <!-- School Filter: accordion by District (click district to expand schools) -->
+                    <div class="space-y-2 relative" ref="schoolSelectorRef">
                         <Label>School/Office</Label>
+                        <template v-if="filterOptions.schoolsGrouped?.length">
+                            <button
+                                type="button"
+                                class="ehris-school-select w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring flex items-center justify-between text-left"
+                                @click="schoolSelectorOpen = !schoolSelectorOpen"
+                            >
+                                <span class="truncate">{{ schoolSelectorLabel }}</span>
+                                <ChevronDown class="h-4 w-4 shrink-0 opacity-50" :class="{ 'rotate-180': schoolSelectorOpen }" />
+                            </button>
+                            <div
+                                v-show="schoolSelectorOpen"
+                                class="absolute z-50 mt-1 left-0 right-0 rounded-md border border-border bg-popover text-popover-foreground shadow-md max-h-80 overflow-auto"
+                            >
+                                <div class="p-1">
+                                    <button
+                                        type="button"
+                                        class="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-accent hover:text-accent-foreground"
+                                        :class="{ 'bg-accent': !selectedSchool && selectedDistrictCode == null }"
+                                        @click="selectedSchool = ''; selectedDistrictCode = null; applyFilters();"
+                                    >
+                                        All Schools/Offices
+                                    </button>
+                                    <div
+                                        v-for="group in filterOptions.schoolsGrouped"
+                                        :key="group.districtCode"
+                                        class="mt-0.5"
+                                    >
+                                        <button
+                                            type="button"
+                                            class="ehris-school-accordion-trigger flex w-full items-center justify-between px-3 py-2 text-sm font-semibold text-primary rounded-md hover:bg-accent hover:text-accent-foreground"
+                                            :class="{ 'bg-accent': selectedDistrictCode === group.districtCode }"
+                                            @click="selectDistrict(group.districtCode)"
+                                        >
+                                            {{ group.district }}
+                                            <ChevronDown
+                                                class="h-4 w-4 shrink-0 transition-transform duration-200 ehris-accordion-chevron"
+                                                :class="{ 'rotate-180': openDistrictCode === group.districtCode }"
+                                            />
+                                        </button>
+                                        <div
+                                            v-show="openDistrictCode === group.districtCode"
+                                            class="pl-2 pb-1"
+                                        >
+                                            <button
+                                                v-for="office in group.offices"
+                                                :key="office"
+                                                type="button"
+                                                class="w-full text-left px-3 py-1.5 text-sm rounded-md hover:bg-accent hover:text-accent-foreground"
+                                                :class="{ 'bg-accent': selectedSchool === office }"
+                                                @click="selectSchool(office)"
+                                            >
+                                                {{ office }}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
                         <select
+                            v-else
                             v-model="selectedSchool"
                             @change="applyFilters"
-                            class="w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            class="ehris-school-select w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
                             <option value="">All Schools/Offices</option>
                             <option v-for="school in filterOptions.schools" :key="school" :value="school">
@@ -1004,57 +1144,77 @@ const getAjaxParams = computed(() => () => ({
                     </div>
 
                     <!-- Job Title Filter -->
-                    <div class="space-y-2">
+                    <div class="space-y-2 relative">
                         <Label>Job Title</Label>
                         <select
                             v-model="selectedJobTitle"
                             @change="applyFilters"
-                            class="w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            @focus="focusedSelect = 'jobTitle'"
+                            @blur="focusedSelect = null"
+                            class="w-full rounded-md border border-input bg-background px-3 py-2 pr-10 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring appearance-none"
                         >
                             <option value="">All Job Titles</option>
                             <option v-for="title in filterOptions.jobTitles" :key="title" :value="title">
                                 {{ title }}
                             </option>
                         </select>
+                        <ChevronDown 
+                            class="absolute right-3 top-[calc(0.5rem+1.25rem+0.625rem)] h-4 w-4 shrink-0 opacity-50 pointer-events-none transition-transform duration-200" 
+                            :class="{ 'rotate-180': focusedSelect === 'jobTitle' }" 
+                        />
                     </div>
 
                     <!-- Subject Filter -->
-                    <div class="space-y-2">
+                    <div class="space-y-2 relative">
                         <Label>Subject Taught</Label>
                         <select
                             v-model="selectedSubject"
                             @change="applyFilters"
-                            class="w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            @focus="focusedSelect = 'subject'"
+                            @blur="focusedSelect = null"
+                            class="w-full rounded-md border border-input bg-background px-3 py-2 pr-10 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring appearance-none"
                         >
                             <option value="">All Subjects</option>
                             <option v-for="subject in filterOptions.subjects" :key="subject" :value="subject">
                                 {{ subject }}
                             </option>
                         </select>
+                        <ChevronDown 
+                            class="absolute right-3 top-[calc(0.5rem+1.25rem+0.625rem)] h-4 w-4 shrink-0 opacity-50 pointer-events-none transition-transform duration-200" 
+                            :class="{ 'rotate-180': focusedSelect === 'subject' }" 
+                        />
                     </div>
 
                     <!-- Grade Level Filter -->
-                    <div class="space-y-2">
+                    <div class="space-y-2 relative">
                         <Label>Grade Level</Label>
                         <select
                             v-model="selectedGradeLevel"
                             @change="applyFilters"
-                            class="w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            @focus="focusedSelect = 'gradeLevel'"
+                            @blur="focusedSelect = null"
+                            class="w-full rounded-md border border-input bg-background px-3 py-2 pr-10 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring appearance-none"
                         >
                             <option value="">All Grade Levels</option>
                             <option v-for="level in filterOptions.gradeLevels" :key="level" :value="level">
                                 {{ level }}
                             </option>
                         </select>
+                        <ChevronDown 
+                            class="absolute right-3 top-[calc(0.5rem+1.25rem+0.625rem)] h-4 w-4 shrink-0 opacity-50 pointer-events-none transition-transform duration-200" 
+                            :class="{ 'rotate-180': focusedSelect === 'gradeLevel' }" 
+                        />
                     </div>
 
                     <!-- Employment Status Filter -->
-                    <div class="space-y-2">
+                    <div class="space-y-2 relative">
                         <Label>Employment Status</Label>
                         <select
                             v-model="selectedEmploymentStatus"
                             @change="applyFilters"
-                            class="w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            @focus="focusedSelect = 'employmentStatus'"
+                            @blur="focusedSelect = null"
+                            class="w-full rounded-md border border-input bg-background px-3 py-2 pr-10 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring appearance-none"
                         >
                             <option value="">All Status</option>
                             <option
@@ -1065,27 +1225,37 @@ const getAjaxParams = computed(() => () => ({
                                 {{ status }}
                             </option>
                         </select>
+                        <ChevronDown 
+                            class="absolute right-3 top-[calc(0.5rem+1.25rem+0.625rem)] h-4 w-4 shrink-0 opacity-50 pointer-events-none transition-transform duration-200" 
+                            :class="{ 'rotate-180': focusedSelect === 'employmentStatus' }" 
+                        />
                     </div>
 
                     <!-- Salary Grade Filter -->
-                    <div class="space-y-2">
+                    <div class="space-y-2 relative">
                         <Label>Salary Grade</Label>
                         <select
                             v-model="selectedSalaryGrade"
                             @change="applyFilters"
-                            class="w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            @focus="focusedSelect = 'salaryGrade'"
+                            @blur="focusedSelect = null"
+                            class="w-full rounded-md border border-input bg-background px-3 py-2 pr-10 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring appearance-none"
                         >
                             <option value="">All Salary Grades</option>
                             <option v-for="grade in [11, 12, 13, 14, 15, 16, 17, 18, 19, 20]" :key="grade" :value="grade.toString()">
                                 SG {{ grade }}
                             </option>
                         </select>
+                        <ChevronDown 
+                            class="absolute right-3 top-[calc(0.5rem+1.25rem+0.625rem)] h-4 w-4 shrink-0 opacity-50 pointer-events-none transition-transform duration-200" 
+                            :class="{ 'rotate-180': focusedSelect === 'salaryGrade' }" 
+                        />
                     </div>
                 </div>
             </section>
 
             <!-- Report Results Section -->
-            <section class="border border-border rounded-lg bg-white p-6 shadow-sm">
+            <section class="border border-border rounded-lg bg-background p-6 shadow-sm">
                 <div class="mb-4">
                     <h2 class="text-xl font-semibold">Employee Listing Results</h2>
                     <p class="text-sm text-muted-foreground mt-1">
@@ -1095,15 +1265,15 @@ const getAjaxParams = computed(() => () => ({
 
                 <!-- Summary Statistics -->
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                    <div class="rounded-lg border p-4 bg-white">
+                    <div class="rounded-lg border p-4 bg-background">
                         <div class="text-sm text-muted-foreground">Total Employees</div>
                         <div class="text-2xl font-bold mt-1 text-primary">{{ summaryStatsData.total }}</div>
                     </div>
-                    <div class="rounded-lg border p-4 bg-white">
+                    <div class="rounded-lg border p-4 bg-background">
                         <div class="text-sm text-muted-foreground">Permanent</div>
                         <div class="text-2xl font-bold mt-1 text-primary">{{ summaryStatsData.permanent }}</div>
                     </div>
-                    <div class="rounded-lg border p-4 bg-white">
+                    <div class="rounded-lg border p-4 bg-background">
                         <div class="text-sm text-muted-foreground">Avg Leave Balance</div>
                         <div class="text-2xl font-bold mt-1 text-primary">{{ summaryStatsData.avgLeaveBalance }}</div>
                     </div>
@@ -1212,6 +1382,22 @@ const getAjaxParams = computed(() => () => ({
     to {
         opacity: 1;
         max-height: 500px;
+    }
+}
+
+/* Accordion arrow (›) on the right via ::after - same look as before, excluded from CSV/Excel/Print export */
+:deep(.accordion-arrow-css) {
+    transition: transform 0.2s ease, color 0.2s ease;
+}
+:deep(.accordion-arrow-css)::after {
+    content: ' ›';
+    font-size: 1.25rem;
+    color: hsl(var(--muted-foreground));
+    transition: color 0.2s ease;
+}
+@media print {
+    :deep(.accordion-arrow-css)::after {
+        content: none;
     }
 }
 </style>

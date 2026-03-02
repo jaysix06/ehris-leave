@@ -3,6 +3,7 @@
 namespace App\Http\Responses;
 
 use Illuminate\Support\Facades\Auth;
+use App\Services\ActivityLogService;
 use Laravel\Fortify\Contracts\LoginResponse as LoginResponseContract;
 
 class LoginResponse implements LoginResponseContract
@@ -31,6 +32,9 @@ class LoginResponse implements LoginResponseContract
 
             return redirect()->route('login')->with('status', $message);
         }
+
+        // Log login activity
+        ActivityLogService::logLogin();
 
         return redirect()->intended(config('fortify.home'));
     }

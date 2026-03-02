@@ -22,6 +22,7 @@ return Application::configure(basePath: dirname(__DIR__))
             HandleAppearance::class,
             HandleInertiaRequests::class,
             LogoutAuthenticatedOnLoginPage::class,
+            \App\Http\Middleware\LogLogoutActivity::class,
             AddLinkHeadersForPreloadedAssets::class,
         ]);
     })
