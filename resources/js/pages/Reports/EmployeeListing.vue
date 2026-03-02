@@ -201,6 +201,9 @@ const schoolSelectorRef = ref<HTMLElement | null>(null);
 // Only one district expanded at a time (accordion behavior)
 const openDistrictCode = ref<number | null>(null);
 
+// Track focus state for dropdown icons animation
+const focusedSelect = ref<string | null>(null);
+
 // Note: Search is now handled by DataTables built-in search
 // Table data ref - holds current table payload (same shape as props.employees)
 // Initialized from props.employees and kept in sync
@@ -778,7 +781,7 @@ const getAjaxParams = computed(() => () => ({
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="p-6 flex flex-col gap-6">
             <!-- Page Header -->
-            <section class="border border-border rounded-lg bg-white p-6 shadow-sm">
+            <section class="border border-border rounded-lg bg-background p-6 shadow-sm">
                 <div class="mb-4">
                     <h1 class="text-3xl font-bold">{{ pageTitle }}</h1>
                     <p class="text-muted-foreground mt-1">
@@ -790,7 +793,7 @@ const getAjaxParams = computed(() => () => ({
             </section>
 
             <!-- Charts Section -->
-            <section class="border border-border rounded-lg bg-white p-6 shadow-sm">
+            <section class="border border-border rounded-lg bg-background p-6 shadow-sm">
                 <div class="mb-4">
                     <h2 class="text-xl font-semibold">Analytics & Reports</h2>
                     <p class="text-sm text-muted-foreground mt-1">
@@ -800,7 +803,7 @@ const getAjaxParams = computed(() => () => ({
 
                 <!-- Charts -->
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 items-start">
-                    <div class="rounded-lg border p-4 bg-white">
+                    <div class="rounded-lg border p-4 bg-background">
                         <h3 class="text-sm font-semibold text-muted-foreground mb-3">Employment Status</h3>
                         <div class="h-[240px]">
                             <Doughnut
@@ -857,11 +860,11 @@ const getAjaxParams = computed(() => () => ({
                             >
                                 <div
                                     v-if="showEmploymentStatusOthers && chartDataSafe.employmentStatus.chart.length > 0"
-                                    class="mt-2 max-h-48 overflow-y-auto overflow-x-hidden border rounded-md bg-white"
+                                    class="mt-2 max-h-48 overflow-y-auto overflow-x-hidden border rounded-md bg-background"
                                     style="max-height: 12rem;"
                                 >
                                 <table class="w-full text-sm" style="table-layout: fixed;">
-                                    <thead class="sticky top-0 z-20 bg-white border-b">
+                                    <thead class="sticky top-0 z-20 bg-background border-b">
                                         <tr>
                                             <th class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground whitespace-nowrap" style="width: 3rem; min-width: 3rem;">
                                                 Show
@@ -913,7 +916,7 @@ const getAjaxParams = computed(() => () => ({
                             </transition>
                         </div>
                     </div>
-                    <div class="rounded-lg border p-4 bg-white">
+                    <div class="rounded-lg border p-4 bg-background">
                         <h3 class="text-sm font-semibold text-muted-foreground mb-3">By School/Office</h3>
                         <div class="h-[240px]">
                             <Doughnut
@@ -970,11 +973,11 @@ const getAjaxParams = computed(() => () => ({
                             >
                                 <div
                                     v-if="showSchoolOthers && chartDataSafe.school.chart.length > 0"
-                                    class="mt-2 max-h-48 overflow-y-auto overflow-x-hidden border rounded-md bg-white"
+                                    class="mt-2 max-h-48 overflow-y-auto overflow-x-hidden border rounded-md bg-background"
                                     style="max-height: 12rem;"
                                 >
                                 <table class="w-full text-sm" style="table-layout: fixed;">
-                                    <thead class="sticky top-0 z-20 bg-white border-b">
+                                    <thead class="sticky top-0 z-20 bg-background border-b">
                                         <tr>
                                             <th class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground whitespace-nowrap" style="width: 3rem; min-width: 3rem;">
                                                 Show
@@ -1028,7 +1031,7 @@ const getAjaxParams = computed(() => () => ({
                     </div>
                 </div>
                 <div class="grid grid-cols-1 gap-6 mb-6">
-                    <div class="rounded-lg border p-4 bg-white">
+                    <div class="rounded-lg border p-4 bg-background">
                         <h3 class="text-sm font-semibold text-muted-foreground mb-3">Count per Job Title (top 10)</h3>
                         <div class="h-[320px]">
                             <Bar
@@ -1048,7 +1051,7 @@ const getAjaxParams = computed(() => () => ({
             </section>
 
             <!-- Filter Section -->
-            <section class="border border-border rounded-lg bg-white p-6 shadow-sm">
+            <section class="border border-border rounded-lg bg-background p-6 shadow-sm">
                 <div class="flex items-center justify-between mb-4">
                     <div>
                         <h2 class="text-xl font-semibold flex items-center gap-2">
@@ -1072,7 +1075,7 @@ const getAjaxParams = computed(() => () => ({
                         <template v-if="filterOptions.schoolsGrouped?.length">
                             <button
                                 type="button"
-                                class="ehris-school-select w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring flex items-center justify-between text-left"
+                                class="ehris-school-select w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring flex items-center justify-between text-left"
                                 @click="schoolSelectorOpen = !schoolSelectorOpen"
                             >
                                 <span class="truncate">{{ schoolSelectorLabel }}</span>
@@ -1131,7 +1134,7 @@ const getAjaxParams = computed(() => () => ({
                             v-else
                             v-model="selectedSchool"
                             @change="applyFilters"
-                            class="ehris-school-select w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            class="ehris-school-select w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
                             <option value="">All Schools/Offices</option>
                             <option v-for="school in filterOptions.schools" :key="school" :value="school">
@@ -1141,57 +1144,77 @@ const getAjaxParams = computed(() => () => ({
                     </div>
 
                     <!-- Job Title Filter -->
-                    <div class="space-y-2">
+                    <div class="space-y-2 relative">
                         <Label>Job Title</Label>
                         <select
                             v-model="selectedJobTitle"
                             @change="applyFilters"
-                            class="w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            @focus="focusedSelect = 'jobTitle'"
+                            @blur="focusedSelect = null"
+                            class="w-full rounded-md border border-input bg-background px-3 py-2 pr-10 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring appearance-none"
                         >
                             <option value="">All Job Titles</option>
                             <option v-for="title in filterOptions.jobTitles" :key="title" :value="title">
                                 {{ title }}
                             </option>
                         </select>
+                        <ChevronDown 
+                            class="absolute right-3 top-[calc(0.5rem+1.25rem+0.625rem)] h-4 w-4 shrink-0 opacity-50 pointer-events-none transition-transform duration-200" 
+                            :class="{ 'rotate-180': focusedSelect === 'jobTitle' }" 
+                        />
                     </div>
 
                     <!-- Subject Filter -->
-                    <div class="space-y-2">
+                    <div class="space-y-2 relative">
                         <Label>Subject Taught</Label>
                         <select
                             v-model="selectedSubject"
                             @change="applyFilters"
-                            class="w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            @focus="focusedSelect = 'subject'"
+                            @blur="focusedSelect = null"
+                            class="w-full rounded-md border border-input bg-background px-3 py-2 pr-10 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring appearance-none"
                         >
                             <option value="">All Subjects</option>
                             <option v-for="subject in filterOptions.subjects" :key="subject" :value="subject">
                                 {{ subject }}
                             </option>
                         </select>
+                        <ChevronDown 
+                            class="absolute right-3 top-[calc(0.5rem+1.25rem+0.625rem)] h-4 w-4 shrink-0 opacity-50 pointer-events-none transition-transform duration-200" 
+                            :class="{ 'rotate-180': focusedSelect === 'subject' }" 
+                        />
                     </div>
 
                     <!-- Grade Level Filter -->
-                    <div class="space-y-2">
+                    <div class="space-y-2 relative">
                         <Label>Grade Level</Label>
                         <select
                             v-model="selectedGradeLevel"
                             @change="applyFilters"
-                            class="w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            @focus="focusedSelect = 'gradeLevel'"
+                            @blur="focusedSelect = null"
+                            class="w-full rounded-md border border-input bg-background px-3 py-2 pr-10 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring appearance-none"
                         >
                             <option value="">All Grade Levels</option>
                             <option v-for="level in filterOptions.gradeLevels" :key="level" :value="level">
                                 {{ level }}
                             </option>
                         </select>
+                        <ChevronDown 
+                            class="absolute right-3 top-[calc(0.5rem+1.25rem+0.625rem)] h-4 w-4 shrink-0 opacity-50 pointer-events-none transition-transform duration-200" 
+                            :class="{ 'rotate-180': focusedSelect === 'gradeLevel' }" 
+                        />
                     </div>
 
                     <!-- Employment Status Filter -->
-                    <div class="space-y-2">
+                    <div class="space-y-2 relative">
                         <Label>Employment Status</Label>
                         <select
                             v-model="selectedEmploymentStatus"
                             @change="applyFilters"
-                            class="w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            @focus="focusedSelect = 'employmentStatus'"
+                            @blur="focusedSelect = null"
+                            class="w-full rounded-md border border-input bg-background px-3 py-2 pr-10 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring appearance-none"
                         >
                             <option value="">All Status</option>
                             <option
@@ -1202,27 +1225,37 @@ const getAjaxParams = computed(() => () => ({
                                 {{ status }}
                             </option>
                         </select>
+                        <ChevronDown 
+                            class="absolute right-3 top-[calc(0.5rem+1.25rem+0.625rem)] h-4 w-4 shrink-0 opacity-50 pointer-events-none transition-transform duration-200" 
+                            :class="{ 'rotate-180': focusedSelect === 'employmentStatus' }" 
+                        />
                     </div>
 
                     <!-- Salary Grade Filter -->
-                    <div class="space-y-2">
+                    <div class="space-y-2 relative">
                         <Label>Salary Grade</Label>
                         <select
                             v-model="selectedSalaryGrade"
                             @change="applyFilters"
-                            class="w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            @focus="focusedSelect = 'salaryGrade'"
+                            @blur="focusedSelect = null"
+                            class="w-full rounded-md border border-input bg-background px-3 py-2 pr-10 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring appearance-none"
                         >
                             <option value="">All Salary Grades</option>
                             <option v-for="grade in [11, 12, 13, 14, 15, 16, 17, 18, 19, 20]" :key="grade" :value="grade.toString()">
                                 SG {{ grade }}
                             </option>
                         </select>
+                        <ChevronDown 
+                            class="absolute right-3 top-[calc(0.5rem+1.25rem+0.625rem)] h-4 w-4 shrink-0 opacity-50 pointer-events-none transition-transform duration-200" 
+                            :class="{ 'rotate-180': focusedSelect === 'salaryGrade' }" 
+                        />
                     </div>
                 </div>
             </section>
 
             <!-- Report Results Section -->
-            <section class="border border-border rounded-lg bg-white p-6 shadow-sm">
+            <section class="border border-border rounded-lg bg-background p-6 shadow-sm">
                 <div class="mb-4">
                     <h2 class="text-xl font-semibold">Employee Listing Results</h2>
                     <p class="text-sm text-muted-foreground mt-1">
@@ -1232,15 +1265,15 @@ const getAjaxParams = computed(() => () => ({
 
                 <!-- Summary Statistics -->
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                    <div class="rounded-lg border p-4 bg-white">
+                    <div class="rounded-lg border p-4 bg-background">
                         <div class="text-sm text-muted-foreground">Total Employees</div>
                         <div class="text-2xl font-bold mt-1 text-primary">{{ summaryStatsData.total }}</div>
                     </div>
-                    <div class="rounded-lg border p-4 bg-white">
+                    <div class="rounded-lg border p-4 bg-background">
                         <div class="text-sm text-muted-foreground">Permanent</div>
                         <div class="text-2xl font-bold mt-1 text-primary">{{ summaryStatsData.permanent }}</div>
                     </div>
-                    <div class="rounded-lg border p-4 bg-white">
+                    <div class="rounded-lg border p-4 bg-background">
                         <div class="text-sm text-muted-foreground">Avg Leave Balance</div>
                         <div class="text-2xl font-bold mt-1 text-primary">{{ summaryStatsData.avgLeaveBalance }}</div>
                     </div>
