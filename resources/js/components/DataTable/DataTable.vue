@@ -52,7 +52,7 @@ const props = withDefaults(
         /** Show built-in export buttons (CSV, Excel, Print) */
         showExportButtons?: boolean;
         /** Custom cell renderers - function that returns HTML string */
-        cellRenderers?: Record<string, (row: any, value: any) => string>;
+        cellRenderers?: Record<string, (row: any, value: any, type?: string) => string>;
         /** Accordion content renderer - function that returns HTML string */
         accordionRenderer?: (row: any) => string;
     }>(),
@@ -156,8 +156,16 @@ onMounted(() => {
                 columnConfig.render = col.render;
             } else if (col.slot && props.cellRenderers?.[col.slot]) {
                 columnConfig.render = (data: unknown, type: string, row: any) => {
-                    if (type === 'display' || type === 'type') {
-                        return props.cellRenderers![col.slot!](row._raw, data);
+                    // For exports (csv, excel, print, export), return plain data without HTML
+                    const isExport = type === 'export' || type === 'csv' || type === 'excel' || type === 'print' || 
+                                    type === 'xlsx' || type === 'xls';
+                    
+                    if (isExport) {
+                        // For exports, get plain text value directly from the data
+                        return data ?? '';
+                    }
+                    if (type === 'display' || type === 'type' || !type) {
+                        return props.cellRenderers![col.slot!](row._raw, data, type);
                     }
                     return data ?? '';
                 };
@@ -178,6 +186,13 @@ onMounted(() => {
             return columnConfig;
         });
         
+        // Helper function to strip HTML tags from text
+        const stripHtml = (html: string): string => {
+            const tmp = document.createElement('DIV');
+            tmp.innerHTML = html;
+            return tmp.textContent || tmp.innerText || '';
+        };
+
         // Built-in DataTables buttons configuration
         const buttons: any[] = [];
         
@@ -187,15 +202,48 @@ onMounted(() => {
                     extend: 'csv',
                     title: 'Employee Listing Reports',
                     filename: 'Employee Listing Reports',
+                    exportOptions: {
+                        format: {
+                            body: (data: any, row: number, column: number, node: any) => {
+                                // Strip HTML from cell content for CSV export
+                                if (typeof data === 'string' && data.includes('<')) {
+                                    return stripHtml(data);
+                                }
+                                return data ?? '';
+                            },
+                        },
+                    },
                 },
                 {
                     extend: 'excel',
                     title: 'Employee Listing Reports',
                     filename: 'Employee Listing Reports',
+                    exportOptions: {
+                        format: {
+                            body: (data: any, row: number, column: number, node: any) => {
+                                // Strip HTML from cell content for Excel export
+                                if (typeof data === 'string' && data.includes('<')) {
+                                    return stripHtml(data);
+                                }
+                                return data ?? '';
+                            },
+                        },
+                    },
                 },
                 {
                     extend: 'print',
                     title: 'Employee Listing Reports',
+                    exportOptions: {
+                        format: {
+                            body: (data: any, row: number, column: number, node: any) => {
+                                // Strip HTML from cell content for Print export
+                                if (typeof data === 'string' && data.includes('<')) {
+                                    return stripHtml(data);
+                                }
+                                return data ?? '';
+                            },
+                        },
+                    },
                 }
             );
         }

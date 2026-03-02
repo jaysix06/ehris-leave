@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Utilities;
 use App\Http\Controllers\Controller;
 use App\Mail\AccountActivatedMail;
 use App\Models\User;
+use App\Services\ActivityLogService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -90,6 +91,13 @@ class UserListController extends Controller
 
         $user->save();
 
+        // Log the status update
+        $status = $user->active ? 'activated' : 'deactivated';
+        ActivityLogService::logUpdate(
+            'User',
+            "Updated user: {$user->email}"
+        );
+
         // If account has just been activated, notify the user via email
         if (! $wasActive && $user->active && $user->email) {
             try {
@@ -135,4 +143,3 @@ class UserListController extends Controller
         }
     }
 }
-

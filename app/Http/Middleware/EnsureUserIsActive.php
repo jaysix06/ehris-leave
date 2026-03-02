@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\ActivityLogService;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -22,6 +23,9 @@ class EnsureUserIsActive
         $user = Auth::user();
 
         if ($user && ! $user->active) {
+            // Log logout activity before logging out
+            ActivityLogService::logLogout($user->userId);
+
             Auth::logout();
             $request->session()->invalidate();
             $request->session()->regenerateToken();
@@ -34,4 +38,3 @@ class EnsureUserIsActive
         return $next($request);
     }
 }
-

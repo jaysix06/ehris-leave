@@ -1,15 +1,15 @@
 <?php
 
-use App\Http\Controllers\MyDetailsController;
 use App\Http\Controllers\Auth\PasswordResetOtpController;
 use App\Http\Controllers\EmployeeManagement\IdCardPrintingController;
+use App\Http\Controllers\MyDetailsController;
 use App\Http\Controllers\SelfService\IdCardController;
 use App\Http\Controllers\SelfService\LeaveApplicationController;
+use App\Http\Controllers\Utilities\ActivityLogController;
 use App\Http\Controllers\Utilities\LeaveTypeController;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use App\Models\FamilyInfo;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
@@ -147,7 +147,6 @@ Route::get('request-status/my-requests', function () {
 Route::get('request-status/my-leave', function () {
     return Inertia::render('RequestStatus/MyLeave');
 })->middleware(['auth', 'verified'])->name('request-status.my-leave');
-
 
 Route::get('my-details', function (Request $request) {
     $authUser = $request->user();
@@ -316,7 +315,6 @@ Route::get('my-details', [MyDetailsController::class, 'show'])
     ->middleware(['auth', 'verified'])
     ->name('my-details');
 
-
 Route::get('my-details/pds-export', [MyDetailsController::class, 'exportPdsExcel'])
     ->middleware(['auth', 'verified'])
     ->name('my-details.export-pds');
@@ -339,9 +337,15 @@ Route::get('utilities/job-title-monthly-salary', function () {
 Route::get('utilities/reporting-manager', function () {
     return Inertia::render('Utilities/ReportingManager');
 })->middleware(['auth', 'verified'])->name('utilities.reporting-manager');
-Route::get('utilities/activity-log', function () {
-    return Inertia::render('Utilities/ActivityLog');
-})->middleware(['auth', 'verified'])->name('utilities.activity-log');
+
+Route::get('utilities/activity-log', [ActivityLogController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('utilities.activity-log');
+
+// API route for Activity Log DataTables
+Route::get('api/utilities/activity-log/datatables', [ActivityLogController::class, 'datatables'])
+    ->middleware(['auth', 'verified'])
+    ->name('api.utilities.activity-log.datatables');
 Route::get('utilities/survey-management', function () {
     return Inertia::render('Utilities/SurveyManagement');
 })->middleware(['auth', 'verified'])->name('utilities.survey-management');

@@ -499,8 +499,12 @@ const employeeColumns: DataTableColumn[] = [
 
 // Cell renderers for DataTables - must be functions, not computed
 const cellRenderers = {
-    name: (row: Employee, value: any) => {
+    name: (row: Employee, value: any, type?: string) => {
         const name = fullName(row);
+        // For exports, return plain text without accordion icon
+        if (type === 'export' || type === 'csv' || type === 'excel' || type === 'print') {
+            return name;
+        }
         // Add minimalistic arrow icon on the right side to indicate accordion is available
         return `
             <div class="flex items-center justify-between gap-2">
@@ -509,18 +513,30 @@ const cellRenderers = {
             </div>
         `;
     },
-    job_title: (row: Employee, value: any) => {
+    job_title: (row: Employee, value: any, type?: string) => {
         const jobTitle = value || '-';
+        // For exports, return plain text
+        if (type === 'export' || type === 'csv' || type === 'excel' || type === 'print') {
+            return jobTitle;
+        }
         return `<span class="inline-flex items-center rounded-md border border-input bg-background px-2 py-1 text-xs font-medium whitespace-nowrap max-w-full truncate">${jobTitle}</span>`;
     },
-    employ_status: (row: Employee, value: any) => {
+    employ_status: (row: Employee, value: any, type?: string) => {
         const status = value || '-';
+        // For exports, return plain text
+        if (type === 'export' || type === 'csv' || type === 'excel' || type === 'print') {
+            return status;
+        }
         const variant = status === 'Permanent' ? 'default' : 'secondary';
         const bgColor = variant === 'default' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground';
         return `<span class="inline-flex items-center rounded-md ${bgColor} px-2 py-1 text-xs font-medium">${status}</span>`;
     },
-    leave_balance: (row: Employee, value: any) => {
+    leave_balance: (row: Employee, value: any, type?: string) => {
         const balance = (value as number) ?? 0;
+        // For exports, return plain number
+        if (type === 'export' || type === 'csv' || type === 'excel' || type === 'print') {
+            return balance.toString();
+        }
         const variant = balance < 5 ? 'destructive' : 'outline';
         const bgColor = variant === 'destructive' ? 'bg-destructive text-destructive-foreground' : 'border-input bg-background';
         return `<span class="inline-flex items-center rounded-md border ${bgColor} px-2 py-1 text-xs font-medium">${balance} days</span>`;

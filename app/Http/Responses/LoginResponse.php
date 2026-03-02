@@ -2,6 +2,7 @@
 
 namespace App\Http\Responses;
 
+use App\Services\ActivityLogService;
 use Laravel\Fortify\Contracts\LoginResponse as LoginResponseContract;
 
 class LoginResponse implements LoginResponseContract
@@ -14,6 +15,9 @@ class LoginResponse implements LoginResponseContract
         if ($request->user() && ! $request->user()->hasVerifiedEmail()) {
             return redirect()->route('verification.notice');
         }
+
+        // Log login activity
+        ActivityLogService::logLogin();
 
         return redirect()->intended(config('fortify.home'));
     }

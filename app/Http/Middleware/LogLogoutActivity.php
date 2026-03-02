@@ -8,7 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\Response;
 
-class LogoutAuthenticatedOnLoginPage
+class LogLogoutActivity
 {
     /**
      * Handle an incoming request.
@@ -17,16 +17,14 @@ class LogoutAuthenticatedOnLoginPage
      */
     public function handle(Request $request, Closure $next): Response
     {
-        if ($request->routeIs('login', 'login.store') && Auth::check()) {
+        // Check if this is a logout request
+        if ($request->routeIs('logout') && $request->isMethod('post')) {
             $user = Auth::user();
-            // Log logout activity before logging out
+
+            // Log logout activity before the logout happens
             if ($user) {
                 ActivityLogService::logLogout($user->userId);
             }
-
-            Auth::guard('web')->logout();
-            $request->session()->invalidate();
-            $request->session()->regenerateToken();
         }
 
         return $next($request);
