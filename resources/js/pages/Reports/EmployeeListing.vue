@@ -26,7 +26,6 @@ import { DataTable, type DataTableColumn } from '@/components/DataTable';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { employeeListing } from '@/routes/reports';
 import type { BreadcrumbItem } from '@/types';
 
@@ -104,6 +103,7 @@ type Props = {
     };
     filters: {
         school?: string;
+        district?: string;
         job_title?: string;
         subject?: string;
         grade_level?: string;
@@ -187,6 +187,7 @@ const props = defineProps<Props>();
 
 // Filter states - initialize from props
 const selectedSchool = ref<string>(props.filters.school || '');
+const selectedDistrictCode = ref<number | null>(props.filters.district ? Number(props.filters.district) : null);
 const selectedJobTitle = ref<string>(props.filters.job_title || '');
 const selectedSubject = ref<string>(props.filters.subject || '');
 const selectedGradeLevel = ref<string>(props.filters.grade_level || '');
@@ -291,6 +292,13 @@ const debouncedSearch = useDebounceFn(() => {
 // Watch searchQuery for dynamic search (filter section)
 watch(searchQuery, () => {
     debouncedSearch();
+});
+
+// When opening the school selector, expand the selected district if any
+watch(schoolSelectorOpen, (open) => {
+    if (open && selectedDistrictCode.value != null) {
+        openDistrictCode.value = selectedDistrictCode.value;
+    }
 });
 
 // Note: Search is now handled by DataTables built-in search functionality
@@ -443,6 +451,7 @@ const fetchSummaryStats = async () => {
         const params = new URLSearchParams();
         const filters = {
             school: selectedSchool.value,
+            district: selectedDistrictCode.value != null ? String(selectedDistrictCode.value) : undefined,
             job_title: selectedJobTitle.value,
             subject: selectedSubject.value,
             grade_level: selectedGradeLevel.value,
@@ -484,6 +493,7 @@ const applyFilters = () => {
 
 const clearFilters = () => {
     selectedSchool.value = '';
+    selectedDistrictCode.value = null;
     selectedJobTitle.value = '';
     selectedSubject.value = '';
     selectedGradeLevel.value = '';
@@ -495,9 +505,24 @@ const clearFilters = () => {
 
 function selectSchool(office: string) {
     selectedSchool.value = office;
+    selectedDistrictCode.value = null;
     applyFilters();
     schoolSelectorOpen.value = false;
     openDistrictCode.value = null;
+}
+
+function selectDistrict(code: number) {
+    if (selectedDistrictCode.value === code) {
+        // Click same district again: collapse and clear filter (back to default / all)
+        selectedDistrictCode.value = null;
+        openDistrictCode.value = null;
+        applyFilters();
+    } else {
+        selectedDistrictCode.value = code;
+        selectedSchool.value = '';
+        openDistrictCode.value = code;
+        applyFilters();
+    }
 }
 
 const employeeColumns: DataTableColumn[] = [
@@ -708,10 +733,20 @@ const isNavigationLink = (label: string): boolean => {
     return cleaned === 'previous' || cleaned === 'next';
 };
 
+// Display label for School/Office selector (district name, school name, or "All")
+const schoolSelectorLabel = computed(() => {
+    if (selectedDistrictCode.value != null && props.filterOptions?.schoolsGrouped?.length) {
+        const group = props.filterOptions.schoolsGrouped.find((g) => g.districtCode === selectedDistrictCode.value);
+        return group?.district ?? String(selectedDistrictCode.value);
+    }
+    return selectedSchool.value || 'All Schools/Offices';
+});
+
 // Get AJAX params for DataTables (excludes DataTables search - handled separately by DataTables)
 // Uses local refs so DataTable auto-reloads when filters change, without affecting graphs
 const getAjaxParams = computed(() => () => ({
     school: selectedSchool.value || undefined,
+    district: selectedDistrictCode.value != null ? String(selectedDistrictCode.value) : undefined,
     job_title: selectedJobTitle.value || undefined,
     subject: selectedSubject.value || undefined,
     grade_level: selectedGradeLevel.value || undefined,
@@ -1024,7 +1059,7 @@ const getAjaxParams = computed(() => () => ({
                                 class="ehris-school-select w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring flex items-center justify-between text-left"
                                 @click="schoolSelectorOpen = !schoolSelectorOpen"
                             >
-                                <span class="truncate">{{ selectedSchool || 'All Schools/Offices' }}</span>
+                                <span class="truncate">{{ schoolSelectorLabel }}</span>
                                 <ChevronDown class="h-4 w-4 shrink-0 opacity-50" :class="{ 'rotate-180': schoolSelectorOpen }" />
                             </button>
                             <div
@@ -1035,39 +1070,44 @@ const getAjaxParams = computed(() => () => ({
                                     <button
                                         type="button"
                                         class="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-accent hover:text-accent-foreground"
-                                        :class="{ 'bg-accent': !selectedSchool }"
-                                        @click="selectSchool('')"
+                                        :class="{ 'bg-accent': !selectedSchool && selectedDistrictCode == null }"
+                                        @click="selectedSchool = ''; selectedDistrictCode = null; applyFilters();"
                                     >
                                         All Schools/Offices
                                     </button>
-                                    <Collapsible
+                                    <div
                                         v-for="group in filterOptions.schoolsGrouped"
                                         :key="group.districtCode"
                                         class="mt-0.5"
-                                        :open="openDistrictCode === group.districtCode"
-                                        @update:open="(isOpen: boolean) => { if (isOpen) openDistrictCode = group.districtCode; else if (openDistrictCode === group.districtCode) openDistrictCode = null; }"
                                     >
-                                        <CollapsibleTrigger
+                                        <button
+                                            type="button"
                                             class="ehris-school-accordion-trigger flex w-full items-center justify-between px-3 py-2 text-sm font-semibold text-primary rounded-md hover:bg-accent hover:text-accent-foreground"
+                                            :class="{ 'bg-accent': selectedDistrictCode === group.districtCode }"
+                                            @click="selectDistrict(group.districtCode)"
                                         >
                                             {{ group.district }}
-                                            <ChevronDown class="h-4 w-4 shrink-0 transition-transform duration-200 ehris-accordion-chevron" />
-                                        </CollapsibleTrigger>
-                                        <CollapsibleContent>
-                                            <div class="pl-2 pb-1">
-                                                <button
-                                                    v-for="office in group.offices"
-                                                    :key="office"
-                                                    type="button"
-                                                    class="w-full text-left px-3 py-1.5 text-sm rounded-md hover:bg-accent hover:text-accent-foreground"
-                                                    :class="{ 'bg-accent': selectedSchool === office }"
-                                                    @click="selectSchool(office)"
-                                                >
-                                                    {{ office }}
-                                                </button>
-                                            </div>
-                                        </CollapsibleContent>
-                                    </Collapsible>
+                                            <ChevronDown
+                                                class="h-4 w-4 shrink-0 transition-transform duration-200 ehris-accordion-chevron"
+                                                :class="{ 'rotate-180': openDistrictCode === group.districtCode }"
+                                            />
+                                        </button>
+                                        <div
+                                            v-show="openDistrictCode === group.districtCode"
+                                            class="pl-2 pb-1"
+                                        >
+                                            <button
+                                                v-for="office in group.offices"
+                                                :key="office"
+                                                type="button"
+                                                class="w-full text-left px-3 py-1.5 text-sm rounded-md hover:bg-accent hover:text-accent-foreground"
+                                                :class="{ 'bg-accent': selectedSchool === office }"
+                                                @click="selectSchool(office)"
+                                            >
+                                                {{ office }}
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </template>
@@ -1211,11 +1251,6 @@ const getAjaxParams = computed(() => () => ({
 </template>
 
 <style scoped>
-/* School/Office accordion: rotate chevron when district is expanded */
-.ehris-school-accordion-trigger[data-state='open'] .ehris-accordion-chevron {
-    transform: rotate(180deg);
-}
-
 .ehris-employee-table {
     table-layout: fixed;
     width: 100%;

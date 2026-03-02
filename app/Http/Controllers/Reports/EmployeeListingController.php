@@ -154,7 +154,7 @@ class EmployeeListingController extends Controller
                 'gradeLevels' => $gradeLevels,
                 'employmentStatuses' => $employmentStatuses,
             ],
-            'filters' => $request->only(['school', 'job_title', 'subject', 'grade_level', 'employment_status', 'salary_grade', 'search']),
+            'filters' => $request->only(['school', 'district', 'job_title', 'subject', 'grade_level', 'employment_status', 'salary_grade', 'search']),
         ]);
     }
 
@@ -168,6 +168,11 @@ class EmployeeListingController extends Controller
         // Apply filters (same as index method)
         if ($request->filled('school')) {
             $query->where('office', $request->school);
+        } elseif ($request->filled('district')) {
+            // Filter by district: employees whose business_id matches the district code (e.g. 92001 = District 1)
+            // tbl_emp_official_info.business_id matches tbl_business.BusinessUnitId / tbl_department.business_id
+            $districtCode = $request->district;
+            $query->where('business_id', (string) $districtCode);
         }
 
         if ($request->filled('job_title')) {
@@ -546,7 +551,7 @@ class EmployeeListingController extends Controller
 
         return Inertia::render('Reports/EmployeeListingPrint', [
             'employees' => $employees,
-            'filters' => $request->only(['school', 'job_title', 'subject', 'grade_level', 'employment_status', 'salary_grade', 'search']),
+            'filters' => $request->only(['school', 'district', 'job_title', 'subject', 'grade_level', 'employment_status', 'salary_grade', 'search']),
         ]);
     }
 }
