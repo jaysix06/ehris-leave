@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Head, router } from '@inertiajs/vue3';
 import { computed, ref, onMounted, watch } from 'vue';
-import { useDebounceFn } from '@vueuse/core';
+import { useDebounceFn, onClickOutside } from '@vueuse/core';
 import {
     ChevronDown,
     ChevronLeft,
@@ -26,6 +26,7 @@ import { DataTable, type DataTableColumn } from '@/components/DataTable';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { employeeListing } from '@/routes/reports';
 import type { BreadcrumbItem } from '@/types';
 
@@ -95,6 +96,7 @@ type Props = {
     };
     filterOptions: {
         schools: string[];
+        schoolsGrouped?: { district: string; districtCode: number; offices: string[] }[];
         jobTitles: string[];
         subjects: string[];
         gradeLevels: string[];
@@ -192,6 +194,12 @@ const selectedEmploymentStatus = ref<string>(props.filters.employment_status || 
 const selectedSalaryGrade = ref<string>(props.filters.salary_grade || '');
 const searchQuery = ref<string>(props.filters.search || '');
 
+// School/Office accordion selector (open state and ref for click-outside)
+const schoolSelectorOpen = ref(false);
+const schoolSelectorRef = ref<HTMLElement | null>(null);
+// Only one district expanded at a time (accordion behavior)
+const openDistrictCode = ref<number | null>(null);
+
 // Note: Search is now handled by DataTables built-in search
 // Table data ref - holds current table payload (same shape as props.employees)
 // Initialized from props.employees and kept in sync
@@ -259,6 +267,11 @@ const initializeHiddenItems = () => {
 // Initialize on mount
 onMounted(() => {
     initializeHiddenItems();
+});
+
+onClickOutside(schoolSelectorRef, () => {
+    schoolSelectorOpen.value = false;
+    openDistrictCode.value = null;
 });
 
 // Watch for chartData changes
@@ -479,6 +492,13 @@ const clearFilters = () => {
     searchQuery.value = '';
     applyFilters();
 };
+
+function selectSchool(office: string) {
+    selectedSchool.value = office;
+    applyFilters();
+    schoolSelectorOpen.value = false;
+    openDistrictCode.value = null;
+}
 
 const employeeColumns: DataTableColumn[] = [
     // Visible columns
@@ -995,13 +1015,67 @@ const getAjaxParams = computed(() => () => ({
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-                    <!-- School Filter -->
-                    <div class="space-y-2">
+                    <!-- School Filter: accordion by District (click district to expand schools) -->
+                    <div class="space-y-2 relative" ref="schoolSelectorRef">
                         <Label>School/Office</Label>
+                        <template v-if="filterOptions.schoolsGrouped?.length">
+                            <button
+                                type="button"
+                                class="ehris-school-select w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring flex items-center justify-between text-left"
+                                @click="schoolSelectorOpen = !schoolSelectorOpen"
+                            >
+                                <span class="truncate">{{ selectedSchool || 'All Schools/Offices' }}</span>
+                                <ChevronDown class="h-4 w-4 shrink-0 opacity-50" :class="{ 'rotate-180': schoolSelectorOpen }" />
+                            </button>
+                            <div
+                                v-show="schoolSelectorOpen"
+                                class="absolute z-50 mt-1 left-0 right-0 rounded-md border border-border bg-popover text-popover-foreground shadow-md max-h-80 overflow-auto"
+                            >
+                                <div class="p-1">
+                                    <button
+                                        type="button"
+                                        class="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-accent hover:text-accent-foreground"
+                                        :class="{ 'bg-accent': !selectedSchool }"
+                                        @click="selectSchool('')"
+                                    >
+                                        All Schools/Offices
+                                    </button>
+                                    <Collapsible
+                                        v-for="group in filterOptions.schoolsGrouped"
+                                        :key="group.districtCode"
+                                        class="mt-0.5"
+                                        :open="openDistrictCode === group.districtCode"
+                                        @update:open="(isOpen: boolean) => { if (isOpen) openDistrictCode = group.districtCode; else if (openDistrictCode === group.districtCode) openDistrictCode = null; }"
+                                    >
+                                        <CollapsibleTrigger
+                                            class="ehris-school-accordion-trigger flex w-full items-center justify-between px-3 py-2 text-sm font-semibold text-primary rounded-md hover:bg-accent hover:text-accent-foreground"
+                                        >
+                                            {{ group.district }}
+                                            <ChevronDown class="h-4 w-4 shrink-0 transition-transform duration-200 ehris-accordion-chevron" />
+                                        </CollapsibleTrigger>
+                                        <CollapsibleContent>
+                                            <div class="pl-2 pb-1">
+                                                <button
+                                                    v-for="office in group.offices"
+                                                    :key="office"
+                                                    type="button"
+                                                    class="w-full text-left px-3 py-1.5 text-sm rounded-md hover:bg-accent hover:text-accent-foreground"
+                                                    :class="{ 'bg-accent': selectedSchool === office }"
+                                                    @click="selectSchool(office)"
+                                                >
+                                                    {{ office }}
+                                                </button>
+                                            </div>
+                                        </CollapsibleContent>
+                                    </Collapsible>
+                                </div>
+                            </div>
+                        </template>
                         <select
+                            v-else
                             v-model="selectedSchool"
                             @change="applyFilters"
-                            class="w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            class="ehris-school-select w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
                             <option value="">All Schools/Offices</option>
                             <option v-for="school in filterOptions.schools" :key="school" :value="school">
@@ -1137,6 +1211,11 @@ const getAjaxParams = computed(() => () => ({
 </template>
 
 <style scoped>
+/* School/Office accordion: rotate chevron when district is expanded */
+.ehris-school-accordion-trigger[data-state='open'] .ehris-accordion-chevron {
+    transform: rotate(180deg);
+}
+
 .ehris-employee-table {
     table-layout: fixed;
     width: 100%;

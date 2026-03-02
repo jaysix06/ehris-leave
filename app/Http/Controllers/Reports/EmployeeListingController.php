@@ -38,6 +38,22 @@ class EmployeeListingController extends Controller
             ->sort()
             ->values();
 
+        // Schools/Offices grouped by District (Business Code + Business Name from tbl_business / tbl_department)
+        $schoolsGrouped = DB::table('tbl_department')
+            ->join('tbl_business', 'tbl_department.business_id', '=', 'tbl_business.BusinessUnitId')
+            ->select('tbl_business.BusinessUnitId as district_code', 'tbl_business.BusinessUnit as district_name', 'tbl_department.department_name')
+            ->orderBy('tbl_business.BusinessUnitId')
+            ->orderBy('tbl_department.department_name')
+            ->get()
+            ->groupBy('district_code')
+            ->map(fn ($rows) => [
+                'district' => $rows->first()->district_name,
+                'districtCode' => (int) $rows->first()->district_code,
+                'offices' => $rows->pluck('department_name')->unique()->sort()->values()->all(),
+            ])
+            ->values()
+            ->all();
+
         $jobTitles = DB::table('tbl_job_title')
             ->orderBy('job_title')
             ->pluck('job_title')
@@ -132,6 +148,7 @@ class EmployeeListingController extends Controller
             ],
             'filterOptions' => [
                 'schools' => $schools,
+                'schoolsGrouped' => $schoolsGrouped,
                 'jobTitles' => $jobTitles,
                 'subjects' => $subjects,
                 'gradeLevels' => $gradeLevels,
