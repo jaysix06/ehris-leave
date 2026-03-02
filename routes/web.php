@@ -6,6 +6,7 @@ use App\Http\Controllers\MyDetailsController;
 use App\Http\Controllers\SelfService\IdCardController;
 use App\Http\Controllers\SelfService\LeaveApplicationController;
 use App\Http\Controllers\Utilities\ActivityLogController;
+use App\Http\Controllers\Utilities\JobTitleMonthlySalaryController;
 use App\Http\Controllers\Utilities\LeaveTypeController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -331,9 +332,41 @@ Route::get('utilities/user-list', function () {
 Route::get('utilities/business-department-list', function () {
     return Inertia::render('Utilities/BusinessDepartmentList');
 })->middleware(['auth', 'verified'])->name('utilities.business-department-list');
-Route::get('utilities/job-title-monthly-salary', function () {
-    return Inertia::render('Utilities/JobTitleMonthlySalary');
-})->middleware(['auth', 'verified'])->name('utilities.job-title-monthly-salary');
+Route::get('utilities/job-title-monthly-salary', [JobTitleMonthlySalaryController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('utilities.job-title-monthly-salary');
+
+Route::get('api/utilities/job-title-monthly-salary/job-titles/datatables', [JobTitleMonthlySalaryController::class, 'jobTitlesDatatables'])
+    ->middleware(['auth', 'verified'])
+    ->name('api.utilities.job-titles.datatables');
+
+Route::get('api/utilities/job-title-monthly-salary/monthly-salaries/datatables', [JobTitleMonthlySalaryController::class, 'monthlySalariesDatatables'])
+    ->middleware(['auth', 'verified'])
+    ->name('api.utilities.monthly-salaries.datatables');
+
+Route::post('api/utilities/job-title-monthly-salary/job-titles', [JobTitleMonthlySalaryController::class, 'storeJobTitle'])
+    ->middleware(['auth', 'verified'])
+    ->name('api.utilities.job-titles.store');
+
+Route::put('api/utilities/job-title-monthly-salary/job-titles/{id}', [JobTitleMonthlySalaryController::class, 'updateJobTitle'])
+    ->middleware(['auth', 'verified'])
+    ->name('api.utilities.job-titles.update');
+
+Route::delete('api/utilities/job-title-monthly-salary/job-titles/{id}', [JobTitleMonthlySalaryController::class, 'destroyJobTitle'])
+    ->middleware(['auth', 'verified'])
+    ->name('api.utilities.job-titles.destroy');
+
+Route::post('api/utilities/job-title-monthly-salary/monthly-salaries', [JobTitleMonthlySalaryController::class, 'storeMonthlySalary'])
+    ->middleware(['auth', 'verified'])
+    ->name('api.utilities.monthly-salaries.store');
+
+Route::put('api/utilities/job-title-monthly-salary/monthly-salaries/{id}', [JobTitleMonthlySalaryController::class, 'updateMonthlySalary'])
+    ->middleware(['auth', 'verified'])
+    ->name('api.utilities.monthly-salaries.update');
+
+Route::delete('api/utilities/job-title-monthly-salary/monthly-salaries/{id}', [JobTitleMonthlySalaryController::class, 'destroyMonthlySalary'])
+    ->middleware(['auth', 'verified'])
+    ->name('api.utilities.monthly-salaries.destroy');
 Route::get('utilities/reporting-manager', function () {
     return Inertia::render('Utilities/ReportingManager');
 })->middleware(['auth', 'verified'])->name('utilities.reporting-manager');
