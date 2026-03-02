@@ -8,6 +8,7 @@ use App\Http\Controllers\SelfService\IdCardController;
 use App\Http\Controllers\SelfService\LeaveApplicationController;
 use App\Http\Controllers\Utilities\ActivityLogController;
 use App\Http\Controllers\Utilities\JobTitleMonthlySalaryController;
+use App\Http\Controllers\Utilities\BusinessDepartmentController;
 use App\Http\Controllers\Utilities\LeaveTypeController;
 use App\Http\Controllers\Utilities\UserListController;
 use App\Models\User;
@@ -385,6 +386,26 @@ Route::put('api/utilities/job-title-monthly-salary/monthly-salaries/{id}', [JobT
 Route::delete('api/utilities/job-title-monthly-salary/monthly-salaries/{id}', [JobTitleMonthlySalaryController::class, 'destroyMonthlySalary'])
     ->middleware(['auth', 'verified'])
     ->name('api.utilities.monthly-salaries.destroy');
+Route::get('utilities/user-list', function () {
+    return Inertia::render('Utilities/UserList');
+})->middleware(['auth', 'verified'])->name('utilities.user-list');
+Route::get('utilities/business-department-list', [BusinessDepartmentController::class, 'index'])
+    ->middleware(['auth', 'verified'])->name('utilities.business-department-list');
+Route::post('utilities/business-department-list/business-units', [BusinessDepartmentController::class, 'storeBusinessUnit'])
+    ->middleware(['auth', 'verified'])->name('utilities.business-department-list.business-units.store');
+Route::post('utilities/business-department-list/departments', [BusinessDepartmentController::class, 'storeDepartment'])
+    ->middleware(['auth', 'verified'])->name('utilities.business-department-list.departments.store');
+Route::delete('utilities/business-department-list/business-units/{id}', [BusinessDepartmentController::class, 'destroyBusinessUnit'])
+    ->middleware(['auth', 'verified'])->name('utilities.business-department-list.business-units.destroy');
+Route::delete('utilities/business-department-list/departments/{id}', [BusinessDepartmentController::class, 'destroyDepartment'])
+    ->middleware(['auth', 'verified'])->name('utilities.business-department-list.departments.destroy');
+Route::get('api/utilities/business-department-list/business-units/datatables', [BusinessDepartmentController::class, 'datatablesBusinessUnit'])
+    ->middleware(['auth', 'verified'])->name('api.utilities.business-department-list.business-units.datatables');
+Route::get('api/utilities/business-department-list/departments/datatables', [BusinessDepartmentController::class, 'datatablesDepartment'])
+    ->middleware(['auth', 'verified'])->name('api.utilities.business-department-list.departments.datatables');
+Route::get('utilities/job-title-monthly-salary', function () {
+    return Inertia::render('Utilities/JobTitleMonthlySalary');
+})->middleware(['auth', 'verified'])->name('utilities.job-title-monthly-salary');
 Route::get('utilities/reporting-manager', function () {
     return Inertia::render('Utilities/ReportingManager');
 })->middleware(['auth', 'verified'])->name('utilities.reporting-manager');
