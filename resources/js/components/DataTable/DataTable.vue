@@ -24,6 +24,8 @@ export type DataTableColumn = {
     render?: (data: unknown, type: string, row: any, meta: any) => string;
     /** Hide column from display but keep in data for exports (default: true) */
     visible?: boolean;
+    /** Whether column is sortable (default: true) */
+    orderable?: boolean;
 };
 
 
@@ -142,8 +144,8 @@ onMounted(() => {
                 data: col.data || col.key,
                 title: col.label,
                 className: col.class || col.tdClass || '',
-                orderable: true, // Enable column sorting
-                searchable: true, // Enable column search
+                orderable: col.orderable !== false,
+                searchable: col.orderable !== false,
             };
             
             // Hide column if visible is false (but keep in data for exports)

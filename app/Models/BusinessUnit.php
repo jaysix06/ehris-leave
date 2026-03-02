@@ -9,7 +9,7 @@ class BusinessUnit extends Model
     protected $table = 'tbl_business_unit';
     
     protected $fillable = [
-        'business_id',
+        'office_id',
         'BusinessUnitId',
         'BusinessUnit',
     ];
