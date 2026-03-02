@@ -592,8 +592,13 @@ onUnmounted(() => {
     background-color: hsl(var(--muted) / 0.3);
 }
 
-:deep(tr.expanded .accordion-arrow) {
+:deep(tr.expanded .accordion-arrow),
+:deep(tr.expanded .accordion-arrow-css) {
     transform: rotate(90deg);
+    color: hsl(var(--primary));
+}
+
+:deep(tr.expanded .accordion-arrow-css)::after {
     color: hsl(var(--primary));
 }
 

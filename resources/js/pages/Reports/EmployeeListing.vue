@@ -497,15 +497,22 @@ const employeeColumns: DataTableColumn[] = [
     { key: 'salary_step', label: 'Step', data: 'salary_step', width: '5rem', visible: false },
 ];
 
+// Escape for HTML text/attributes so export and print stay clean and safe
+function escapeHtml(text: string): string {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 // Cell renderers for DataTables - must be functions, not computed
 const cellRenderers = {
     name: (row: Employee, value: any) => {
         const name = fullName(row);
-        // Add minimalistic arrow icon on the right side to indicate accordion is available
+        // Same layout as before: flex container, name left, arrow right. Arrow via ::after so CSV/Excel/Print export stays clean.
         return `
             <div class="flex items-center justify-between gap-2">
-                <span title="${name}">${name}</span>
-                <span class="accordion-arrow text-muted-foreground transition-transform" style="display: inline-block; font-size: 1.25rem;">›</span>
+                <span title="${escapeHtml(name)}">${escapeHtml(name)}</span>
+                <span class="accordion-arrow-css text-muted-foreground transition-transform" style="display: inline-block; font-size: 1.25rem;"></span>
             </div>
         `;
     },
@@ -1212,6 +1219,22 @@ const getAjaxParams = computed(() => () => ({
     to {
         opacity: 1;
         max-height: 500px;
+    }
+}
+
+/* Accordion arrow (›) on the right via ::after - same look as before, excluded from CSV/Excel/Print export */
+:deep(.accordion-arrow-css) {
+    transition: transform 0.2s ease, color 0.2s ease;
+}
+:deep(.accordion-arrow-css)::after {
+    content: ' ›';
+    font-size: 1.25rem;
+    color: hsl(var(--muted-foreground));
+    transition: color 0.2s ease;
+}
+@media print {
+    :deep(.accordion-arrow-css)::after {
+        content: none;
     }
 }
 </style>
