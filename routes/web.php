@@ -315,9 +315,18 @@ Route::get('utilities/user-list', [UserListController::class, 'index'])
 Route::get('api/utilities/users', [UserListController::class, 'api'])
     ->middleware(['auth'])
     ->name('utilities.user-list.api');
+Route::get('api/utilities/departments', [UserListController::class, 'departments'])
+    ->middleware(['auth'])
+    ->name('utilities.departments');
 Route::patch('api/utilities/users/{user}/status', [UserListController::class, 'updateStatus'])
     ->middleware(['auth'])
     ->name('utilities.user-list.update-status');
+Route::patch('api/utilities/users/{user}', [UserListController::class, 'update'])
+    ->middleware(['auth'])
+    ->name('utilities.user-list.update');
+Route::delete('api/utilities/users/{user}', [UserListController::class, 'destroy'])
+    ->middleware(['auth'])
+    ->name('utilities.user-list.destroy');
 Route::get('utilities/business-department-list', function () {
     return Inertia::render('Utilities/BusinessDepartmentList');
 })->middleware(['auth', 'verified'])->name('utilities.business-department-list');

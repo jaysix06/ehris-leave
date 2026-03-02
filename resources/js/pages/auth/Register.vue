@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Form, Head, Link } from '@inertiajs/vue3';
+import { computed, nextTick, ref } from 'vue';
 import InputError from '@/components/InputError.vue';
 import TextLink from '@/components/TextLink.vue';
 import { Button } from '@/components/ui/button';
@@ -13,8 +14,41 @@ import { store } from '@/routes/register';
 const props = defineProps<{
     employmentStatuses?: string[];
     districts?: { id: number | string; name: string }[];
-    stations?: { id: number | string; name: string }[];
+    stations?: { id: number | string; name: string; district_id?: number | string | null }[];
 }>();
+
+const selectedDistrictId = ref<string>('');
+
+const filteredStations = computed(() => {
+    const all = props.stations ?? [];
+    if (!selectedDistrictId.value) return all;
+    return all.filter(
+        (s) => String(s.district_id ?? '') === selectedDistrictId.value,
+    );
+});
+
+const handleDistrictChange = (event: Event) => {
+    const target = event.target as HTMLSelectElement | null;
+    const value = target?.value ?? '';
+    selectedDistrictId.value = value;
+
+    // Reset station selection and, when only one match, auto-select it.
+    nextTick(() => {
+        const stationSelect = document.getElementById('station') as HTMLSelectElement | null;
+        if (!stationSelect) return;
+
+        if (!selectedDistrictId.value) {
+            stationSelect.value = '';
+            return;
+        }
+
+        const options = filteredStations.value;
+        stationSelect.value = '';
+        if (options.length === 1) {
+            stationSelect.value = String(options[0].id);
+        }
+    });
+};
 </script>
 
 <template>
@@ -150,6 +184,8 @@ const props = defineProps<{
                         required
                         :tabindex="7"
                         class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        v-model="selectedDistrictId"
+                        @change="handleDistrictChange"
                     >
                         <option value="">Select district</option>
                         <option
@@ -173,7 +209,7 @@ const props = defineProps<{
                     >
                         <option value="">Select office/school</option>
                         <option
-                            v-for="s in (props.stations ?? [])"
+                            v-for="s in filteredStations"
                             :key="String(s.id)"
                             :value="String(s.id)"
                         >

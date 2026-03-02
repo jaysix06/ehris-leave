@@ -82,9 +82,11 @@ class FortifyServiceProvider extends ServiceProvider
                 'id' => $row->BusinessUnitId,
                 'name' => $row->BusinessUnit,
             ])->values()->all(),
+            // Each station carries the district (BusinessUnitId) it belongs to via business_id.
             'stations' => Department::orderBy('id')->get()->map(fn ($row) => [
                 'id' => $row->department_id,
                 'name' => $row->department_name,
+                'district_id' => $row->business_id,
             ])->values()->all(),
         ]));
 

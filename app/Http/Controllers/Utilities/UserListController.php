@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
 class UserListController extends Controller
@@ -70,6 +71,24 @@ class UserListController extends Controller
     }
 
     /**
+     * API endpoint: departments list (for Office/School dropdown).
+     */
+    public function departments()
+    {
+        $this->authorizeAdmin();
+
+        $departments = DB::table('tbl_department')
+            ->select([
+                'department_id as id',
+                'department_name as name',
+            ])
+            ->orderBy('department_name')
+            ->get();
+
+        return response()->json($departments);
+    }
+
+    /**
      * API endpoint: toggle active status for a user.
      */
     public function updateStatus(Request $request, User $user)
@@ -114,6 +133,86 @@ class UserListController extends Controller
             'id' => $user->getKey(),
             'active' => (bool) $user->active,
             'hrid' => $user->hrId,
+        ]);
+    }
+
+    /**
+     * API endpoint: update basic user fields (role, job title, department).
+     */
+    public function update(Request $request, User $user)
+    {
+        $this->authorizeAdmin();
+
+        $data = $request->validate([
+            'hrId' => ['nullable', 'integer'],
+            'email' => [
+                'nullable',
+                'email',
+                'max:255',
+                Rule::unique('tbl_user', 'email')->ignore($user->getKey(), $user->getKeyName()),
+            ],
+            'lastname' => ['nullable', 'string', 'max:255'],
+            'firstname' => ['nullable', 'string', 'max:255'],
+            'middlename' => ['nullable', 'string', 'max:255'],
+            'extname' => ['nullable', 'string', 'max:50'],
+            'fullname' => ['nullable', 'string', 'max:255'],
+            'role' => ['nullable', 'string', 'max:255'],
+            'job_title' => ['nullable', 'string', 'max:255'],
+            'department_id' => ['nullable', 'integer', Rule::exists('tbl_department', 'department_id')],
+        ]);
+
+        // Backward-compatible input: accept `hrid` from older clients.
+        if ($request->has('hrid') && ! $request->has('hrId')) {
+            $data['hrId'] = $request->input('hrid');
+        }
+
+        $user->fill($data);
+        $user->save();
+
+        $office = null;
+        if ($user->department_id) {
+            $office = DB::table('tbl_department')
+                ->where('department_id', '=', $user->department_id)
+                ->value('department_name');
+        }
+
+        return response()->json([
+            'id' => $user->getKey(),
+            'hrid' => $user->hrId,
+            'email' => $user->email,
+            'lastname' => $user->lastname,
+            'firstname' => $user->firstname,
+            'middlename' => $user->middlename,
+            'extname' => $user->extname,
+            'fullname' => $user->fullname,
+            'job_title' => $user->job_title,
+            'role' => $user->role,
+            'active' => (bool) $user->active,
+            'department_id' => $user->department_id,
+            'office' => $office,
+        ]);
+    }
+
+    /**
+     * API endpoint: delete a user account.
+     */
+    public function destroy(User $user)
+    {
+        $this->authorizeAdmin();
+
+        // Prevent an administrator from deleting their own account.
+        if (Auth::id() === $user->getKey()) {
+            return response()->json([
+                'message' => 'You cannot delete your own account.',
+            ], 422);
+        }
+
+        $id = $user->getKey();
+        $user->delete();
+
+        return response()->json([
+            'id' => $id,
+            'deleted' => true,
         ]);
     }
 
