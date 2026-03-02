@@ -17,6 +17,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Two-card back-to-back detection
+    |--------------------------------------------------------------------------
+    |
+    | `two_card_ratio_threshold`: auto-detects if template likely contains
+    | front+back side by side. Keep at 1.4 if your sizing is calibrated.
+    | `force_two_cards`: set true to always duplicate overlays to 2nd card,
+    | false to always render only one card, or null for auto-detect.
+    |
+    */
+    'two_card_ratio_threshold' => (float) env('ID_CARD_TWO_CARD_RATIO_THRESHOLD', 1.4),
+    'force_two_cards' => env('ID_CARD_FORCE_TWO_CARDS', true),
+
+    /*
+    |--------------------------------------------------------------------------
     | EODB ID BB template by employment status (like legacy eodb_idBB.php)
     |--------------------------------------------------------------------------
     | Casual → contractualEODBIDBB.png, Permanent → regularEODBIDBB.png,
@@ -58,6 +72,10 @@ return [
     | Example: 'Trainee' => 'TRAINEE', 'Administrative Aide I' => 'AIDVI'
     */
     'job_title_to_template' => [
+        'Accounting III' => 'ACTIII',
+        'Administrative Assistant II' => 'ADASII',
+        'Administrative Assistant III' => 'ADASIII',
+        'Administrative Aide VI' => 'AIDVI',
         'Trainee' => 'TRAINEE',
         // Add more mappings as needed to match your TEMPLATE ID/TEMPLATE filenames.
     ],

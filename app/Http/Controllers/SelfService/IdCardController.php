@@ -28,6 +28,7 @@ class IdCardController extends Controller
             $resolved = str_starts_with($path, '/') || preg_match('#^[A-Za-z]:#', $path)
                 ? $path
                 : base_path($path);
+
             return is_dir($resolved) ? $resolved : null;
         }
         $public = public_path('id-card-templates');
@@ -35,6 +36,7 @@ class IdCardController extends Controller
             return $public;
         }
         $sibling = base_path('../TEMPLATE ID/TEMPLATE');
+
         return is_dir($sibling) ? $sibling : null;
     }
 
@@ -175,7 +177,7 @@ class IdCardController extends Controller
         if ($basename === '' || $basename !== $filename || str_contains($basename, '..')) {
             abort(404, 'Invalid template name.');
         }
-        $fullPath = $path . DIRECTORY_SEPARATOR . $basename;
+        $fullPath = $path.DIRECTORY_SEPARATOR.$basename;
         if (! is_file($fullPath) || ! str_ends_with(strtolower($basename), '.png')) {
             abort(404, 'Template not found.');
         }
@@ -381,7 +383,8 @@ class IdCardController extends Controller
                 $uploadedPhotoPath = $this->storePublicUpload(
                     $request->file('id_photo'),
                     'uploads/'.$hrid,
-                    (string) $hrid
+                    (string) $hrid,
+                    8 / 10
                 );
 
                 if ($uploadedPhotoPath !== null && $profile instanceof User && Schema::hasColumn('tbl_user', 'avatar')) {
@@ -393,7 +396,8 @@ class IdCardController extends Controller
                 $legacyImagePath = $this->storePublicUpload(
                     $request->file('id_photo'),
                     'asset/uploads/print_id/image',
-                    $fileKey
+                    $fileKey,
+                    8 / 10
                 );
                 if ($legacyImagePath !== null) {
                     $uploadedPhotoPath = $legacyImagePath;
@@ -484,7 +488,7 @@ class IdCardController extends Controller
         return redirect()->route('self-service.id-card')->with('status', 'Details updated.');
     }
 
-    private function storePublicUpload($file, string $relativeDir, string $baseName): ?string
+    private function storePublicUpload($file, string $relativeDir, string $baseName, ?float $targetAspectRatio = null): ?string
     {
         if (! $file) {
             return null;
@@ -492,6 +496,9 @@ class IdCardController extends Controller
 
         $ext = strtolower((string) $file->getClientOriginalExtension());
         if ($ext === '' || ! in_array($ext, ['jpg', 'jpeg', 'png', 'webp'], true)) {
+            $ext = 'jpg';
+        }
+        if ($ext === 'webp' && ! function_exists('imagewebp')) {
             $ext = 'jpg';
         }
 
@@ -510,6 +517,69 @@ class IdCardController extends Controller
         if (File::exists($targetPath)) {
             File::delete($targetPath);
         }
+
+        // For ID photo uploads, persist an actual center-cropped image (8:10),
+        // not just a CSS preview crop in the UI.
+        if ($targetAspectRatio !== null && $targetAspectRatio > 0 && function_exists('imagecreatefromstring')) {
+            $raw = @file_get_contents($sourcePath);
+            $src = is_string($raw) ? @imagecreatefromstring($raw) : false;
+            if ($src !== false) {
+                $srcW = imagesx($src);
+                $srcH = imagesy($src);
+                if ($srcW > 0 && $srcH > 0) {
+                    $srcRatio = $srcW / $srcH;
+                    if ($srcRatio > $targetAspectRatio) {
+                        $cropH = $srcH;
+                        $cropW = (int) round($cropH * $targetAspectRatio);
+                        $cropX = (int) floor(($srcW - $cropW) / 2);
+                        $cropY = 0;
+                    } else {
+                        $cropW = $srcW;
+                        $cropH = (int) round($cropW / $targetAspectRatio);
+                        $cropX = 0;
+                        $cropY = (int) floor(($srcH - $cropH) / 2);
+                    }
+
+                    $dst = imagecreatetruecolor($cropW, $cropH);
+                    if ($dst !== false) {
+                        // Keep transparency for PNG/WEBP outputs.
+                        imagealphablending($dst, false);
+                        imagesavealpha($dst, true);
+                        $transparent = imagecolorallocatealpha($dst, 0, 0, 0, 127);
+                        imagefilledrectangle($dst, 0, 0, $cropW, $cropH, $transparent);
+
+                        imagecopyresampled(
+                            $dst,
+                            $src,
+                            0,
+                            0,
+                            $cropX,
+                            $cropY,
+                            $cropW,
+                            $cropH,
+                            $cropW,
+                            $cropH
+                        );
+
+                        $saved = match ($ext) {
+                            'png' => imagepng($dst, $targetPath),
+                            'webp' => imagewebp($dst, $targetPath, 90),
+                            default => imagejpeg($dst, $targetPath, 90),
+                        };
+
+                        imagedestroy($dst);
+                        imagedestroy($src);
+
+                        if ($saved && is_file($targetPath)) {
+                            return trim($relativeDir, '/').'/'.$filename;
+                        }
+                    }
+                }
+
+                imagedestroy($src);
+            }
+        }
+
         File::copy($sourcePath, $targetPath);
 
         return trim($relativeDir, '/').'/'.$filename;
@@ -553,6 +623,7 @@ class IdCardController extends Controller
             ->first();
 
         $sign = isset($row?->sign) ? trim((string) $row->sign) : '';
+
         return $sign !== '' ? $sign : null;
     }
 }

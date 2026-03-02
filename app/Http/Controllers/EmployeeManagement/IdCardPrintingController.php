@@ -4,9 +4,11 @@ namespace App\Http\Controllers\EmployeeManagement;
 
 use App\Http\Controllers\Controller;
 use App\Models\EmpOfficialInfo;
+use App\Models\EmpPersonalInfo;
 use App\Models\RequestedId;
 use App\Models\User;
 use App\Services\IdCardImageService;
+use App\Services\PocketIdImageService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -69,25 +71,17 @@ class IdCardPrintingController extends Controller
     public function eodbId(Request $request, int $id): Response
     {
         $ctx = $this->resolvePrintContext($id);
+        $spreadPng = PocketIdImageService::buildPocketSpread($ctx);
+        if ($spreadPng === null) {
+            abort(404, 'Unable to generate pocket ID image. Check template files and GD extension.');
+        }
 
-        $photoDataUri = $this->toDataUri($ctx['photo_path']);
-        $signDataUri = $this->toDataUri($ctx['signature_path']);
-        $logoPath = public_path('uploads/logo.png');
-        $logoDataUri = is_file($logoPath) ? $this->toDataUri($logoPath) : null;
-
-        $pdf = Pdf::loadView('id-cards.eodb-id', [
-            'fullname' => $ctx['fullname'],
-            'employee_id' => $ctx['employee_id'],
-            'division' => $ctx['division'],
-            'emergency_name' => $ctx['emergency_name'],
-            'emergency_contact' => $ctx['emergency_contact'],
-            'photo_data_uri' => $photoDataUri,
-            'sign_data_uri' => $signDataUri,
-            'logo_data_uri' => $logoDataUri,
-            'id_text_color' => strcasecmp((string) ($ctx['employ_status'] ?? ''), 'Casual') === 0 ? '#111111' : '#ffffff',
-        ])->setPaper('a6', 'landscape');
+        $pdf = Pdf::loadView('id-cards.eodb-id-bb', [
+            'card_image_data_uri' => 'data:image/png;base64,'.base64_encode($spreadPng),
+        ])->setPaper('a4', 'portrait');
 
         $filename = 'eodb-id-'.preg_replace('/[^a-z0-9\-]/i', '-', $ctx['fullname']).'.pdf';
+
         return $pdf->stream($filename, ['Attachment' => false]);
     }
 
@@ -100,7 +94,12 @@ class IdCardPrintingController extends Controller
 
         $png = IdCardImageService::buildEodbCard([
             'fullname' => $ctx['fullname'],
+            'lastname' => $ctx['lastname'],
+            'firstname' => $ctx['firstname'],
+            'middlename' => $ctx['middlename'],
+            'extension' => $ctx['extension'],
             'employee_id' => $ctx['employee_id'],
+            'department_abbrev' => $ctx['department_abbrev'],
             'division' => $ctx['division'],
             'photo_path' => $ctx['photo_path'],
             'signature_path' => $ctx['signature_path'],
@@ -163,6 +162,10 @@ class IdCardPrintingController extends Controller
         if ($hrid !== null && Schema::hasTable('tbl_emp_official_info')) {
             $officialInfo = EmpOfficialInfo::query()->where('hrid', $hrid)->first();
         }
+        $personalInfo = null;
+        if ($hrid !== null && Schema::hasTable('tbl_emp_personal_info')) {
+            $personalInfo = EmpPersonalInfo::query()->where('hrid', $hrid)->first();
+        }
 
         $legacyPrintRow = $this->resolveLegacyPrintIdRow($hrid, $email) ?? $legacyById;
 
@@ -182,13 +185,57 @@ class IdCardPrintingController extends Controller
         $employeeId = (string) ($officialInfo?->employee_id ?? $legacyPrintRow?->emp_id ?? $profile?->hrId ?? $hrid ?? '');
         $division = $officialInfo?->division_code ?? $officialInfo?->office ?? $legacyPrintRow?->dep_id ?? $profile?->department_id ?? 'DIVISION OFFICE';
         $division = $division ? (string) $division : 'DIVISION OFFICE';
+        $departmentAbbrev = (string) ($officialInfo?->department_abbrev ?? '');
+        if ($departmentAbbrev === '') {
+            $departmentId = $officialInfo?->department_id ?? $profile?->department_id ?? $legacyPrintRow?->dep_id ?? null;
+            if (
+                $departmentId !== null
+                && Schema::hasTable('tbl_department')
+                && Schema::hasColumn('tbl_department', 'department_abbrev')
+            ) {
+                $deptQuery = DB::table('tbl_department')->select('department_abbrev');
+                if (Schema::hasColumn('tbl_department', 'department_id')) {
+                    $deptQuery->where('department_id', (string) $departmentId);
+                } else {
+                    $deptQuery->where('id', (string) $departmentId);
+                }
+                $departmentAbbrev = (string) ($deptQuery->value('department_abbrev') ?? '');
+            }
+        }
         $role = (string) ($profile?->role ?? $officialInfo?->role ?? $legacyPrintRow?->role ?? '');
 
         $employStatus = $officialInfo?->employ_status ?? null;
         $jobTitle = $officialInfo?->job_title ?? $profile?->job_title ?? $legacyPrintRow?->job_title ?? null;
         $jobShorten = $officialInfo?->job_shorten ?? null;
         if ($jobShorten === null && $jobTitle !== null) {
-            $jobShorten = config('id-card.job_title_to_template')[$jobTitle] ?? null;
+            if (
+                Schema::hasTable('tbl_job_title')
+                && Schema::hasColumn('tbl_job_title', 'job_title')
+                && Schema::hasColumn('tbl_job_title', 'job_shorten')
+            ) {
+                $jobShorten = DB::table('tbl_job_title')
+                    ->where('job_title', $jobTitle)
+                    ->value('job_shorten');
+
+                // Case-insensitive fallback if exact job_title match is missing.
+                if ($jobShorten === null || trim((string) $jobShorten) === '') {
+                    $rows = DB::table('tbl_job_title')
+                        ->select(['job_title', 'job_shorten'])
+                        ->whereNotNull('job_title')
+                        ->whereNotNull('job_shorten')
+                        ->get();
+                    foreach ($rows as $row) {
+                        if (strcasecmp((string) ($row->job_title ?? ''), (string) $jobTitle) === 0) {
+                            $jobShorten = $row->job_shorten ?? null;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if ($jobShorten === null || trim((string) $jobShorten) === '') {
+                $jobShorten = config('id-card.job_title_to_template')[$jobTitle] ?? null;
+            }
         }
 
         $photoPath = $this->resolveStoredAssetPath($profile?->avatar);
@@ -221,7 +268,12 @@ class IdCardPrintingController extends Controller
 
         return [
             'fullname' => $fullname,
+            'lastname' => (string) ($officialInfo?->lastname ?? $profile?->lastname ?? $legacyPrintRow?->lname ?? ''),
+            'firstname' => (string) ($officialInfo?->firstname ?? $profile?->firstname ?? $legacyPrintRow?->fname ?? ''),
+            'middlename' => (string) ($officialInfo?->middlename ?? $profile?->middlename ?? $legacyPrintRow?->mname ?? ''),
+            'extension' => (string) ($officialInfo?->extension ?? $profile?->extname ?? $legacyPrintRow?->ext_name ?? ''),
             'employee_id' => $employeeId,
+            'department_abbrev' => $departmentAbbrev,
             'division' => $division,
             'employ_status' => $employStatus ? (string) $employStatus : null,
             'job_shorten' => $jobShorten ? (string) $jobShorten : null,
@@ -231,6 +283,13 @@ class IdCardPrintingController extends Controller
             'signature_path' => $signaturePath,
             'emergency_name' => (string) ($officialInfo?->emergency_name ?? $legacyPrintRow?->emrgncy_name ?? ''),
             'emergency_contact' => (string) ($officialInfo?->emergency_num ?? $legacyPrintRow?->emrgncy_no ?? ''),
+            'station_no' => (string) ($officialInfo?->station_no ?? $officialInfo?->station_code ?? $legacyPrintRow?->station_no ?? $legacyPrintRow?->station_code ?? ''),
+            'tin' => (string) ($personalInfo?->tin ?? $legacyPrintRow?->tin_no ?? ''),
+            'gsis' => (string) ($personalInfo?->gsis ?? $legacyPrintRow?->gsis_no ?? ''),
+            'pag_ibig' => (string) ($personalInfo?->pag_ibig ?? $legacyPrintRow?->pagibig_no ?? ''),
+            'philhealth' => (string) ($personalInfo?->philhealth ?? $legacyPrintRow?->philhealth_no ?? ''),
+            'birth_date' => (string) ($personalInfo?->dob ?? $legacyPrintRow?->bday ?? ''),
+            'blood_type' => (string) ($personalInfo?->blood_type ?? $legacyPrintRow?->blood_type ?? ''),
         ];
     }
 
@@ -309,6 +368,7 @@ class IdCardPrintingController extends Controller
             'gif' => 'image/gif',
             default => 'image/png',
         };
+
         return 'data:'.$mime.';base64,'.base64_encode((string) file_get_contents($path));
     }
 }

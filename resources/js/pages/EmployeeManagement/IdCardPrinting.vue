@@ -119,7 +119,7 @@ const paginated = computed(() => {
                                             title="EODB ID (opens in new tab)"
                                         >
                                             <Printer class="size-3.5" />
-                                            EODB ID
+                                            Pocket ID
                                         </a>
                                         <a
                                             :href="`/employee-management/id-card-printing/${row.id}/eodb-id-bb`"
@@ -131,14 +131,6 @@ const paginated = computed(() => {
                                             <Printer class="size-3.5" />
                                             EODB ID BB
                                         </a>
-                                        <button
-                                            type="button"
-                                            class="inline-flex items-center gap-1 rounded border border-input bg-background px-2 py-1 text-xs font-medium hover:bg-muted/50"
-                                            title="Pocket ID"
-                                        >
-                                            <Printer class="size-3.5" />
-                                            Pocket ID
-                                        </button>
                                         <button
                                             type="button"
                                             class="inline-flex items-center gap-1 rounded border border-input bg-background px-2 py-1 text-xs font-medium hover:bg-muted/50"
