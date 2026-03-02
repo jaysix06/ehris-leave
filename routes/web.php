@@ -1,15 +1,17 @@
 <?php
 
-use App\Http\Controllers\MyDetailsController;
 use App\Http\Controllers\Auth\PasswordResetOtpController;
+use App\Http\Controllers\MyDetails\FamilyController;
+use App\Http\Controllers\MyDetailsController;
 use App\Http\Controllers\EmployeeManagement\IdCardPrintingController;
 use App\Http\Controllers\SelfService\IdCardController;
 use App\Http\Controllers\SelfService\LeaveApplicationController;
 use App\Http\Controllers\Utilities\LeaveTypeController;
+use App\Http\Controllers\Utilities\UserListController;
+use App\Models\User;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use App\Models\FamilyInfo;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
@@ -147,7 +149,6 @@ Route::get('request-status/my-requests', function () {
 Route::get('request-status/my-leave', function () {
     return Inertia::render('RequestStatus/MyLeave');
 })->middleware(['auth', 'verified'])->name('request-status.my-leave');
-
 
 Route::get('my-details', function (Request $request) {
     $authUser = $request->user();
@@ -312,11 +313,6 @@ Route::get('my-details', function (Request $request) {
     ]);
 })->middleware(['auth', 'verified'])->name('my-details');
 
-Route::get('my-details', [MyDetailsController::class, 'show'])
-    ->middleware(['auth', 'verified'])
-    ->name('my-details');
-
-
 Route::get('my-details/pds-export', [MyDetailsController::class, 'exportPdsExcel'])
     ->middleware(['auth', 'verified'])
     ->name('my-details.export-pds');
@@ -327,9 +323,24 @@ Route::get('utilities', function () {
 Route::get('utilities/employee-list', function () {
     return Inertia::render('Utilities/EmployeeList');
 })->middleware(['auth', 'verified'])->name('utilities.employee-list');
-Route::get('utilities/user-list', function () {
-    return Inertia::render('Utilities/UserList');
-})->middleware(['auth', 'verified'])->name('utilities.user-list');
+Route::get('utilities/user-list', [UserListController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('utilities.user-list');
+Route::get('api/utilities/users', [UserListController::class, 'api'])
+    ->middleware(['auth'])
+    ->name('utilities.user-list.api');
+Route::get('api/utilities/departments', [UserListController::class, 'departments'])
+    ->middleware(['auth'])
+    ->name('utilities.departments');
+Route::patch('api/utilities/users/{user}/status', [UserListController::class, 'updateStatus'])
+    ->middleware(['auth'])
+    ->name('utilities.user-list.update-status');
+Route::patch('api/utilities/users/{user}', [UserListController::class, 'update'])
+    ->middleware(['auth'])
+    ->name('utilities.user-list.update');
+Route::delete('api/utilities/users/{user}', [UserListController::class, 'destroy'])
+    ->middleware(['auth'])
+    ->name('utilities.user-list.destroy');
 Route::get('utilities/business-department-list', function () {
     return Inertia::render('Utilities/BusinessDepartmentList');
 })->middleware(['auth', 'verified'])->name('utilities.business-department-list');

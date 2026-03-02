@@ -443,3 +443,29 @@
         @apply rounded-md border border-border bg-muted/50 px-3 py-2 text-foreground;
     }
 }
+
+@layer base {
+    select,
+    select:focus {
+        background-color: var(--card);
+        color: var(--foreground);
+        border-color: var(--border);
+    }
+
+    select option {
+        background-color: var(--card);
+        color: var(--foreground);
+    }
+
+    .dark select,
+    .dark select:focus {
+        background-color: var(--card);
+        color: var(--foreground);
+        border-color: var(--border);
+    }
+
+    .dark select option {
+        background-color: var(--card);
+        color: var(--foreground);
+    }
+}

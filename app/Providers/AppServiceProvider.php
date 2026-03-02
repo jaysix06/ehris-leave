@@ -3,6 +3,9 @@
 namespace App\Providers;
 
 use App\Events\MyDetailsUpdated;
+use App\Http\Responses\CustomRegisterResponse;
+use App\Http\Responses\LoginResponse;
+use App\Http\Responses\VerifyEmailResponse;
 use App\Models\Affiliation;
 use App\Models\Awards;
 use App\Models\Document;
@@ -20,21 +23,18 @@ use App\Models\LeaveHistory;
 use App\Models\Performance;
 use App\Models\Researches;
 use App\Models\User;
-use App\Http\Responses\LoginResponse;
-use App\Http\Responses\VerifyEmailResponse;
-use Illuminate\Auth\Notifications\VerifyEmail;
 use Carbon\CarbonImmutable;
+use Illuminate\Auth\Notifications\VerifyEmail;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
-use Illuminate\Notifications\Messages\MailMessage;
 use Laravel\Fortify\Contracts\LoginResponse as LoginResponseContract;
+use Laravel\Fortify\Contracts\RegisterResponse as RegisterResponseContract;
 use Laravel\Fortify\Contracts\VerifyEmailResponse as VerifyEmailResponseContract;
-use Illuminate\Support\Facades\URL;
-
-
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -57,6 +57,7 @@ class AppServiceProvider extends ServiceProvider
         $this->configureDefaults();
         $this->registerMyDetailsRealtimeBroadcasts();
         $this->configureVerifyEmailNotification();
+        $this->app->bind(RegisterResponseContract::class, CustomRegisterResponse::class);
     }
 
     /**

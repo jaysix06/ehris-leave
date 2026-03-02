@@ -188,6 +188,19 @@ class User extends Authenticatable implements MustVerifyEmail
     }
 
     /**
+     * Treat "active" accounts as email-verified so we rely on
+     * admin activation instead of the built-in email flow.
+     */
+    public function hasVerifiedEmail(): bool
+    {
+        if (array_key_exists('active', $this->attributes)) {
+            return (bool) $this->attributes['active'];
+        }
+
+        return ! is_null($this->email_verified_at ?? null);
+    }
+
+    /**
      * Get the family member records for this user (by hrId).
      *
      * @return HasMany<EmpFamilyInfo, $this>
