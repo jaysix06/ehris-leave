@@ -514,6 +514,7 @@ const submitLeaveApplication = () => {
             leave_start_date: formatDateForSubmit(leaveStartDate),
             leave_end_date: formatDateForSubmit(leaveEndDate),
             reason: reason.value || null,
+            reason_specify: reasonSpecify.value || null,
             commutation: commutation.value || null,
             destination_scope: destinationScope.value || null,
             supervisor_notes: supervisorNotes.value || null,

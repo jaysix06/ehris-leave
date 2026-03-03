@@ -1,15 +1,15 @@
 <?php
 
 use App\Http\Controllers\Auth\PasswordResetOtpController;
-use App\Http\Controllers\MyDetails\FamilyController;
-use App\Http\Controllers\MyDetailsController;
 use App\Http\Controllers\EmployeeManagement\IdCardPrintingController;
+use App\Http\Controllers\MyDetailsController;
 use App\Http\Controllers\SelfService\IdCardController;
 use App\Http\Controllers\SelfService\LeaveApplicationController;
 use App\Http\Controllers\Utilities\ActivityLogController;
-use App\Http\Controllers\Utilities\JobTitleMonthlySalaryController;
 use App\Http\Controllers\Utilities\BusinessDepartmentController;
+use App\Http\Controllers\Utilities\JobTitleMonthlySalaryController;
 use App\Http\Controllers\Utilities\LeaveTypeController;
+use App\Http\Controllers\Utilities\ReportingManagerController;
 use App\Http\Controllers\Utilities\UserListController;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -139,6 +139,12 @@ Route::get('self-service/leave-application', [LeaveApplicationController::class,
 Route::post('self-service/leave-application', [LeaveApplicationController::class, 'store'])
     ->middleware(['auth', 'verified'])
     ->name('self-service.leave-application.store');
+Route::get('self-service/leave-application/approvals', [LeaveApplicationController::class, 'approvals'])
+    ->middleware(['auth', 'verified'])
+    ->name('self-service.leave-application.approvals');
+Route::patch('self-service/leave-application/{id}/decision', [LeaveApplicationController::class, 'decide'])
+    ->middleware(['auth', 'verified'])
+    ->name('self-service.leave-application.decision');
 Route::get('self-service/deped-email-requests', function () {
     return Inertia::render('SelfService/DepedEmailRequests');
 })->middleware(['auth', 'verified'])->name('self-service.deped-email-requests');
@@ -406,9 +412,24 @@ Route::get('api/utilities/business-department-list/departments/datatables', [Bus
 Route::get('utilities/job-title-monthly-salary', function () {
     return Inertia::render('Utilities/JobTitleMonthlySalary');
 })->middleware(['auth', 'verified'])->name('utilities.job-title-monthly-salary');
-Route::get('utilities/reporting-manager', function () {
-    return Inertia::render('Utilities/ReportingManager');
-})->middleware(['auth', 'verified'])->name('utilities.reporting-manager');
+Route::get('utilities/reporting-manager', [ReportingManagerController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('utilities.reporting-manager');
+Route::get('api/utilities/reporting-manager', [ReportingManagerController::class, 'api'])
+    ->middleware(['auth'])
+    ->name('utilities.reporting-manager.api');
+Route::get('api/utilities/reporting-manager/datatables', [ReportingManagerController::class, 'datatables'])
+    ->middleware(['auth'])
+    ->name('utilities.reporting-manager.datatables');
+Route::get('api/utilities/reporting-manager/managers', [ReportingManagerController::class, 'managers'])
+    ->middleware(['auth'])
+    ->name('utilities.reporting-manager.managers');
+Route::post('api/utilities/reporting-manager/assign', [ReportingManagerController::class, 'assign'])
+    ->middleware(['auth'])
+    ->name('utilities.reporting-manager.assign');
+Route::delete('api/utilities/reporting-manager/{hrid}', [ReportingManagerController::class, 'remove'])
+    ->middleware(['auth'])
+    ->name('utilities.reporting-manager.remove');
 
 Route::get('utilities/activity-log', [ActivityLogController::class, 'index'])
     ->middleware(['auth', 'verified'])
