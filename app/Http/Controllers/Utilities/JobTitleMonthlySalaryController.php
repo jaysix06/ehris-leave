@@ -26,8 +26,7 @@ class JobTitleMonthlySalaryController extends Controller
 
             $totalRecords = JobTitle::count();
 
-            $query = JobTitle::query()
-                ->orderBy('job_title', 'asc');
+            $query = JobTitle::query();
 
             $searchValue = $request->input('search.value');
             if ($searchValue && trim($searchValue) !== '') {
@@ -44,10 +43,17 @@ class JobTitleMonthlySalaryController extends Controller
                 $length = $length > 0 ? $length : 10;
             }
 
-            $orderColumnIndex = (int) ($request->input('order.0.column', 0));
+            // Handle ordering - default to alphabetical by job_title
+            $orderColumnIndex = (int) ($request->input('order.0.column', 1)); // Default to column 1 (job_title)
             $orderDir = $request->input('order.0.dir', 'asc');
             $columns = ['id', 'job_title'];
             $orderColumn = $columns[$orderColumnIndex] ?? 'job_title';
+
+            // If no order is specified in request, default to job_title ascending
+            if (!$request->has('order.0.column')) {
+                $orderColumn = 'job_title';
+                $orderDir = 'asc';
+            }
 
             $query->getQuery()->orders = [];
             $query->orderBy($orderColumn, $orderDir);
@@ -59,6 +65,7 @@ class JobTitleMonthlySalaryController extends Controller
                     'id' => $jobTitle->id,
                     'row_number' => $start + $index + 1,
                     'job_title' => $jobTitle->job_title ?? '',
+                    'job_shorten' => $jobTitle->job_shorten ?? null,
                     '_raw' => $jobTitle,
                 ];
             });
@@ -160,10 +167,28 @@ class JobTitleMonthlySalaryController extends Controller
         try {
             $validated = $request->validate([
                 'job_title' => 'required|string|max:50|unique:tbl_job_title,job_title',
+                'job_shorten' => 'required|string|max:50',
             ]);
+
+            // Check if combination of job_title and job_shorten already exists
+            $existing = JobTitle::where('job_title', $validated['job_title'])
+                ->where('job_shorten', $validated['job_shorten'])
+                ->first();
+
+            if ($existing) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'A job title with this name and shorten already exists.',
+                    'errors' => [
+                        'job_title' => ['A job title with this name and shorten already exists.'],
+                        'job_shorten' => ['A job title with this name and shorten already exists.'],
+                    ],
+                ], 422);
+            }
 
             $jobTitle = JobTitle::create([
                 'job_title' => $validated['job_title'],
+                'job_shorten' => $validated['job_shorten'],
             ]);
 
             ActivityLogService::logCreate('Job Title', $validated['job_title']);
@@ -194,12 +219,31 @@ class JobTitleMonthlySalaryController extends Controller
     {
         $request->validate([
             'job_title' => 'required|string|max:50|unique:tbl_job_title,job_title,'.$id.',id',
+            'job_shorten' => 'required|string|max:50',
         ]);
+
+        // Check if combination of job_title and job_shorten already exists (excluding current record)
+        $existing = JobTitle::where('job_title', $request->job_title)
+            ->where('job_shorten', $request->job_shorten)
+            ->where('id', '!=', $id)
+            ->first();
+
+        if ($existing) {
+            return response()->json([
+                'success' => false,
+                'message' => 'A job title with this name and shorten already exists.',
+                'errors' => [
+                    'job_title' => ['A job title with this name and shorten already exists.'],
+                    'job_shorten' => ['A job title with this name and shorten already exists.'],
+                ],
+            ], 422);
+        }
 
         $jobTitle = JobTitle::findOrFail($id);
         $oldTitle = $jobTitle->job_title;
         $jobTitle->update([
             'job_title' => $request->job_title,
+            'job_shorten' => $request->job_shorten,
         ]);
 
         ActivityLogService::logUpdate('Job Title', "Changed from '{$oldTitle}' to '{$request->job_title}'");
@@ -233,6 +277,24 @@ class JobTitleMonthlySalaryController extends Controller
             'salary_amount' => 'required|numeric|min:0',
         ]);
 
+        // Check if combination of salary_grade, salary_step, and salary_amount already exists
+        $existing = MonthlySalary::where('salary_grade', $request->salary_grade)
+            ->where('salary_step', $request->salary_step)
+            ->where('salary_amount', $request->salary_amount)
+            ->first();
+
+        if ($existing) {
+            return response()->json([
+                'success' => false,
+                'message' => 'A monthly salary with this grade, step, and amount already exists.',
+                'errors' => [
+                    'salary_grade' => ['A monthly salary with this grade, step, and amount already exists.'],
+                    'salary_step' => ['A monthly salary with this grade, step, and amount already exists.'],
+                    'salary_amount' => ['A monthly salary with this grade, step, and amount already exists.'],
+                ],
+            ], 422);
+        }
+
         $monthlySalary = MonthlySalary::create([
             'salary_grade' => $request->salary_grade,
             'salary_step' => $request->salary_step,
@@ -255,6 +317,25 @@ class JobTitleMonthlySalaryController extends Controller
             'salary_step' => 'required|integer|min:1|max:8',
             'salary_amount' => 'required|numeric|min:0',
         ]);
+
+        // Check if combination of salary_grade, salary_step, and salary_amount already exists (excluding current record)
+        $existing = MonthlySalary::where('salary_grade', $request->salary_grade)
+            ->where('salary_step', $request->salary_step)
+            ->where('salary_amount', $request->salary_amount)
+            ->where('id', '!=', $id)
+            ->first();
+
+        if ($existing) {
+            return response()->json([
+                'success' => false,
+                'message' => 'A monthly salary with this grade, step, and amount already exists.',
+                'errors' => [
+                    'salary_grade' => ['A monthly salary with this grade, step, and amount already exists.'],
+                    'salary_step' => ['A monthly salary with this grade, step, and amount already exists.'],
+                    'salary_amount' => ['A monthly salary with this grade, step, and amount already exists.'],
+                ],
+            ], 422);
+        }
 
         $monthlySalary = MonthlySalary::findOrFail($id);
         $oldData = "SG {$monthlySalary->salary_grade}, Step {$monthlySalary->salary_step}, P ".number_format($monthlySalary->salary_amount, 2);
