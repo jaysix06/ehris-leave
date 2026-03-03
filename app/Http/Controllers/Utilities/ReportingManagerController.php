@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Utilities;
 
 use App\Http\Controllers\Controller;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -23,40 +24,37 @@ class ReportingManagerController extends Controller
     {
         $this->authorizeAdmin();
 
-        if (! Schema::hasTable('tbl_emp_official_info')) {
+        if (! Schema::hasTable('tbl_reporting_manager')) {
             return response()->json(['data' => [], 'total' => 0]);
         }
 
-        $query = DB::table('tbl_emp_official_info as e')
-            ->leftJoin('tbl_department as d', 'e.department_id', '=', 'd.department_id')
+        $query = DB::table('tbl_reporting_manager as rm')
+            ->leftJoin('tbl_department as d', DB::raw('CAST(rm.department_id AS UNSIGNED)'), '=', 'd.department_id')
+            ->leftJoin('tbl_emp_official_info as e', DB::raw('CAST(rm.manager_name AS UNSIGNED)'), '=', 'e.hrid')
             ->select([
-                'e.hrid',
-                'e.employee_id',
-                'e.firstname',
-                'e.middlename',
-                'e.lastname',
-                'e.extension',
-                'e.job_title',
-                'e.role',
-                'e.office',
-                'e.reporting_manager',
+                'rm.id',
+                'rm.department_id',
+                'rm.manager_name',
+                DB::raw("TRIM(CONCAT_WS(' ', e.firstname, e.middlename, e.lastname, e.extension)) as manager_full_name"),
+                'e.job_title as position',
+                'e.office as school_name',
                 'd.department_name',
             ]);
 
         if ($search = trim((string) $request->get('search', ''))) {
             $query->where(function ($q) use ($search) {
-                $q->where('e.firstname', 'like', "%{$search}%")
-                    ->orWhere('e.lastname', 'like', "%{$search}%")
+                $q->where('rm.manager_name', 'like', "%{$search}%")
+                    ->orWhere('e.hrid', 'like', "%{$search}%")
+                    ->orWhere('e.firstname', 'like', "%{$search}%")
                     ->orWhere('e.middlename', 'like', "%{$search}%")
-                    ->orWhere('e.employee_id', 'like', "%{$search}%")
-                    ->orWhere('e.reporting_manager', 'like', "%{$search}%")
-                    ->orWhere('e.office', 'like', "%{$search}%")
+                    ->orWhere('e.lastname', 'like', "%{$search}%")
+                    ->orWhere('rm.department_id', 'like', "%{$search}%")
                     ->orWhere('d.department_name', 'like', "%{$search}%")
-                    ->orWhere('e.hrid', 'like', "%{$search}%");
+                    ->orWhere('rm.id', 'like', "%{$search}%");
             });
         }
 
-        $query->orderBy('e.lastname')->orderBy('e.firstname');
+        $query->orderBy('rm.manager_name');
 
         $perPage = max(1, (int) $request->get('per_page', 15));
 
@@ -70,7 +68,7 @@ class ReportingManagerController extends Controller
     {
         $this->authorizeAdmin();
 
-        if (! Schema::hasTable('tbl_emp_official_info')) {
+        if (! Schema::hasTable('tbl_reporting_manager')) {
             return response()->json([
                 'draw' => (int) $request->get('draw', 1),
                 'recordsTotal' => 0,
@@ -86,49 +84,42 @@ class ReportingManagerController extends Controller
         $orderColumnIndex = (int) $request->input('order.0.column', 0);
         $orderDir = strtolower((string) $request->input('order.0.dir', 'asc')) === 'desc' ? 'desc' : 'asc';
 
-        $baseQuery = DB::table('tbl_emp_official_info as e')
-            ->leftJoin('tbl_department as d', 'e.department_id', '=', 'd.department_id');
+        $baseQuery = DB::table('tbl_reporting_manager as rm')
+            ->leftJoin('tbl_department as d', DB::raw('CAST(rm.department_id AS UNSIGNED)'), '=', 'd.department_id')
+            ->leftJoin('tbl_emp_official_info as e', DB::raw('CAST(rm.manager_name AS UNSIGNED)'), '=', 'e.hrid');
 
         $totalRecords = (clone $baseQuery)->count();
 
         if ($searchValue !== '') {
             $baseQuery->where(function ($q) use ($searchValue) {
                 $term = "%{$searchValue}%";
-                $q->where('e.firstname', 'like', $term)
-                    ->orWhere('e.lastname', 'like', $term)
+                $q->where('rm.manager_name', 'like', $term)
+                    ->orWhere('e.hrid', 'like', $term)
+                    ->orWhere('e.firstname', 'like', $term)
                     ->orWhere('e.middlename', 'like', $term)
-                    ->orWhere('e.employee_id', 'like', $term)
-                    ->orWhere('e.reporting_manager', 'like', $term)
-                    ->orWhere('e.office', 'like', $term)
+                    ->orWhere('e.lastname', 'like', $term)
+                    ->orWhere('rm.department_id', 'like', $term)
                     ->orWhere('d.department_name', 'like', $term)
-                    ->orWhere('e.hrid', 'like', $term);
+                    ->orWhere('rm.id', 'like', $term);
             });
         }
 
         $filteredRecords = (clone $baseQuery)->count();
 
         $orderColumns = [
-            'e.hrid',
-            'e.employee_id',
             'e.lastname',
-            'e.job_title',
             'd.department_name',
-            'e.reporting_manager',
         ];
         $orderColumn = $orderColumns[max(0, min($orderColumnIndex, count($orderColumns) - 1))];
 
         $rows = $baseQuery
             ->select([
-                'e.hrid',
-                'e.employee_id',
-                'e.firstname',
-                'e.middlename',
-                'e.lastname',
-                'e.extension',
-                'e.job_title',
-                'e.role',
-                'e.office',
-                'e.reporting_manager',
+                'rm.id',
+                'rm.department_id',
+                'rm.manager_name',
+                DB::raw("TRIM(CONCAT_WS(' ', e.firstname, e.middlename, e.lastname, e.extension)) as manager_full_name"),
+                'e.job_title as position',
+                'e.office as school_name',
                 'd.department_name',
             ])
             ->orderBy($orderColumn, $orderDir)
@@ -141,17 +132,11 @@ class ReportingManagerController extends Controller
         $data = $rows->map(function ($row, $index) use ($start) {
             return [
                 'row_num' => $start + $index + 1,
-                'hrid' => (int) ($row->hrid ?? 0),
-                'employee_id' => $row->employee_id,
-                'firstname' => $row->firstname,
-                'middlename' => $row->middlename,
-                'lastname' => $row->lastname,
-                'extension' => $row->extension,
-                'job_title' => $row->job_title,
-                'role' => $row->role,
-                'office' => $row->office,
-                'reporting_manager' => $row->reporting_manager,
-                'department_name' => $row->department_name,
+                'id' => (int) ($row->id ?? 0),
+                'department_id' => $row->department_id,
+                'manager_name' => $row->manager_full_name ?: '',
+                'position' => $row->position,
+                'department_school_name' => $row->department_name,
                 '_raw' => $row,
             ];
         });
@@ -171,36 +156,22 @@ class ReportingManagerController extends Controller
     {
         $this->authorizeAdmin();
 
-        if (! Schema::hasTable('tbl_emp_official_info')) {
+        if (! Schema::hasTable('tbl_reporting_manager')) {
             return response()->json([]);
         }
 
-        $query = DB::table('tbl_emp_official_info')
-            ->select(['hrid', 'firstname', 'middlename', 'lastname', 'extension', 'office'])
-            ->orderBy('lastname')
-            ->orderBy('firstname');
-
-        if (Schema::hasColumn('tbl_emp_official_info', 'is_reporting_manager')) {
-            $query->where(function ($q) {
-                $q->where('is_reporting_manager', 1)
-                    ->orWhere('is_reporting_manager', '1')
-                    ->orWhere('is_reporting_manager', true)
-                    ->orWhereRaw('LOWER(TRIM(CAST(is_reporting_manager AS CHAR))) IN (?, ?, ?)', ['true', 'yes', 'y']);
-            });
-        } else {
-            $query->where('role', 'Reporting Manager');
-        }
-
-        $managers = $query->get()
+        $managers = DB::table('tbl_reporting_manager')
+            ->leftJoin('tbl_emp_official_info as e', 'e.hrid', '=', 'tbl_reporting_manager.manager_name')
+            ->selectRaw("tbl_reporting_manager.manager_name, TRIM(CONCAT_WS(' ', e.firstname, e.middlename, e.lastname, e.extension)) as manager_full_name")
+            ->whereNotNull('manager_name')
+            ->where('manager_name', '<>', '')
+            ->distinct()
+            ->orderBy('manager_name')
+            ->get()
             ->map(fn ($row) => [
-                'hrid' => (int) $row->hrid,
-                'name' => trim(implode(' ', array_filter([
-                    $row->firstname,
-                    $row->middlename,
-                    $row->lastname,
-                    $row->extension,
-                ]))),
-                'office' => $row->office,
+                'hrid' => (int) $row->manager_name,
+                'name' => (string) ($row->manager_full_name ?: ''),
+                'office' => null,
             ]);
 
         return response()->json($managers);
@@ -396,6 +367,21 @@ class ReportingManagerController extends Controller
         $normalized = strtolower(trim((string) $value));
 
         return in_array($normalized, ['1', 'true', 'yes', 'y'], true);
+    }
+
+    private function applyReportingManagerScope(Builder $query, string $alias = 'tbl_emp_official_info'): void
+    {
+        if (Schema::hasColumn('tbl_emp_official_info', 'is_reporting_manager')) {
+            $query->where(function ($q) use ($alias) {
+                $q->where("{$alias}.is_reporting_manager", 1)
+                    ->orWhere("{$alias}.is_reporting_manager", '1')
+                    ->orWhere("{$alias}.is_reporting_manager", true)
+                    ->orWhereRaw("LOWER(TRIM(CAST({$alias}.is_reporting_manager AS CHAR))) IN (?, ?, ?)", ['true', 'yes', 'y']);
+            });
+            return;
+        }
+
+        $query->whereRaw("LOWER(TRIM({$alias}.role)) = ?", ['reporting manager']);
     }
 
     private function authorizeAdmin(): void
