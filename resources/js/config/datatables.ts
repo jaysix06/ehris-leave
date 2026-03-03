@@ -1,5 +1,6 @@
 // DataTables configuration and setup
 // This file initializes DataTables.net-vue3 and its dependencies
+/// <reference path="../types/pdfmake.d.ts" />
 import JSZip from 'jszip';
 import pdfMake from 'pdfmake';
 import * as pdfFonts from 'pdfmake/build/vfs_fonts';

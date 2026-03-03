@@ -403,6 +403,8 @@ Route::put('utilities/business-department-list/business-units/{id}', [BusinessDe
     ->middleware(['auth', 'verified'])->name('utilities.business-department-list.business-units.update');
 Route::post('utilities/business-department-list/departments', [BusinessDepartmentController::class, 'storeDepartment'])
     ->middleware(['auth', 'verified'])->name('utilities.business-department-list.departments.store');
+Route::put('utilities/business-department-list/business-units/{id}', [BusinessDepartmentController::class, 'updateBusinessUnit'])
+    ->middleware(['auth', 'verified'])->name('utilities.business-department-list.business-units.update');
 Route::put('utilities/business-department-list/departments/{id}', [BusinessDepartmentController::class, 'updateDepartment'])
     ->middleware(['auth', 'verified'])->name('utilities.business-department-list.departments.update');
 Route::delete('utilities/business-department-list/business-units/{id}', [BusinessDepartmentController::class, 'destroyBusinessUnit'])

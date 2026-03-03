@@ -8,6 +8,7 @@ use App\Models\Department;
 use App\Services\ActivityLogService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
@@ -194,6 +195,7 @@ class BusinessDepartmentController extends Controller
         return back()->with('success', 'Department deleted successfully.');
     }
 
+
     /**
      * DataTables server-side processing for List of Business Unit.
      */
@@ -247,7 +249,7 @@ class BusinessDepartmentController extends Controller
                 'data' => $data,
             ]);
         } catch (\Exception $e) {
-            \Log::error('BusinessUnit DataTables Error: '.$e->getMessage(), [
+            Log::error('BusinessUnit DataTables Error: '.$e->getMessage(), [
                 'trace' => $e->getTraceAsString(),
                 'request' => $request->all(),
             ]);
@@ -318,7 +320,7 @@ class BusinessDepartmentController extends Controller
                 'data' => $data,
             ]);
         } catch (\Exception $e) {
-            \Log::error('Department DataTables Error: '.$e->getMessage(), [
+            Log::error('Department DataTables Error: '.$e->getMessage(), [
                 'trace' => $e->getTraceAsString(),
                 'request' => $request->all(),
             ]);
