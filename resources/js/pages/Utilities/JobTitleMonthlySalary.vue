@@ -821,7 +821,7 @@ if (typeof window !== 'undefined') {
             <!-- Two Column Layout -->
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <!-- Job Titles Table -->
-                <section class="border border-border rounded-lg bg-background p-6 shadow-sm">
+                <section class="border border-border rounded-lg bg-card p-6 shadow-sm">
                     <div class="mb-4 flex items-center justify-between">
                         <h2 class="text-xl font-semibold">List of Job Title</h2>
                         <Button @click="openAddJobTitleModal" variant="default" size="sm" class="bg-blue-600 hover:bg-blue-700 text-white">
@@ -848,7 +848,7 @@ if (typeof window !== 'undefined') {
                 </section>
 
                 <!-- Monthly Salaries Table -->
-                <section class="border border-border rounded-lg bg-background p-6 shadow-sm">
+                <section class="border border-border rounded-lg bg-card p-6 shadow-sm">
                     <div class="mb-4 flex items-center justify-between">
                         <h2 class="text-xl font-semibold">List of Monthly Salary</h2>
                         <Button @click="openAddMonthlySalaryModal" variant="default" size="sm" class="bg-blue-600 hover:bg-blue-700 text-white">
