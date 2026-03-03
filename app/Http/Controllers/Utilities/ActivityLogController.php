@@ -70,6 +70,7 @@ class ActivityLogController extends Controller
             }
 
             // Handle DataTables ordering
+            // Default to created_at descending (newest first) when no order is specified
             $orderColumnIndex = (int) ($request->input('order.0.column', 0));
             $orderDir = $request->input('order.0.dir', 'desc'); // Default to desc for newest first
 
@@ -82,6 +83,12 @@ class ActivityLogController extends Controller
                 'module',
             ];
             $orderColumn = $columns[$orderColumnIndex] ?? 'created_at';
+
+            // If no order is specified in request, default to created_at descending
+            if (!$request->has('order.0.column')) {
+                $orderColumn = 'created_at';
+                $orderDir = 'desc';
+            }
 
             // Remove default ordering before applying custom ordering
             $query->getQuery()->orders = [];
