@@ -38,6 +38,9 @@ const showDepartmentDialog = ref(false);
 // Table refresh keys so DataTables refetch after add
 const businessTableKey = ref(0);
 const departmentTableKey = ref(0);
+// Edit mode: when set, dialog submits as update instead of create
+const editingBusinessUnitId = ref<number | null>(null);
+const editingDepartmentId = ref<number | null>(null);
 
 // Business Unit form
 const businessUnitForm = reactive({
@@ -58,6 +61,7 @@ const departmentErrors = ref<Record<string, string>>({});
 const departmentSubmitting = ref(false);
 
 function openBusinessUnitDialog() {
+    editingBusinessUnitId.value = null;
     businessUnitForm.BusinessUnitId = '';
     businessUnitForm.BusinessUnit = '';
     businessUnitErrors.value = {};
@@ -65,6 +69,7 @@ function openBusinessUnitDialog() {
 }
 
 function openDepartmentDialog() {
+    editingDepartmentId.value = null;
     departmentForm.business_id = '';
     departmentForm.department_id = '';
     departmentForm.department_name = '';
@@ -76,45 +81,61 @@ function openDepartmentDialog() {
 function submitBusinessUnit() {
     businessUnitErrors.value = {};
     businessUnitSubmitting.value = true;
-    router.post('/utilities/business-department-list/business-units', {
+    const id = editingBusinessUnitId.value;
+    const payload = {
         BusinessUnitId: Number(businessUnitForm.BusinessUnitId) || 0,
         BusinessUnit: businessUnitForm.BusinessUnit,
-    }, {
+    };
+    const options = {
         preserveScroll: true,
         onSuccess: () => {
+            editingBusinessUnitId.value = null;
             showBusinessUnitDialog.value = false;
             businessTableKey.value += 1;
         },
-        onError: (errors) => {
-            businessUnitErrors.value = errors as Record<string, string>;
+        onError: (errors: Record<string, string>) => {
+            businessUnitErrors.value = errors;
         },
         onFinish: () => {
             businessUnitSubmitting.value = false;
         },
-    });
+    };
+    if (id != null) {
+        router.put(`/utilities/business-department-list/business-units/${id}`, payload, options);
+    } else {
+        router.post('/utilities/business-department-list/business-units', payload, options);
+    }
 }
 
 function submitDepartment() {
     departmentErrors.value = {};
     departmentSubmitting.value = true;
-    router.post('/utilities/business-department-list/departments', {
+    const id = editingDepartmentId.value;
+    const payload = {
         business_id: Number(departmentForm.business_id) || 0,
         department_id: Number(departmentForm.department_id) || 0,
         department_name: departmentForm.department_name,
         department_abbrev: departmentForm.department_abbrev || undefined,
-    }, {
+    };
+    const options = {
         preserveScroll: true,
         onSuccess: () => {
+            editingDepartmentId.value = null;
             showDepartmentDialog.value = false;
             departmentTableKey.value += 1;
         },
-        onError: (errors) => {
-            departmentErrors.value = errors as Record<string, string>;
+        onError: (errors: Record<string, string>) => {
+            departmentErrors.value = errors;
         },
         onFinish: () => {
             departmentSubmitting.value = false;
         },
-    });
+    };
+    if (id != null) {
+        router.put(`/utilities/business-department-list/departments/${id}`, payload, options);
+    } else {
+        router.post('/utilities/business-department-list/departments', payload, options);
+    }
 }
 
 // Business Unit columns: Business Code, Business Name, Update, Delete (percentages so table fits container)
@@ -140,13 +161,20 @@ function escapeHtml(text: string | number): string {
     return div.innerHTML;
 }
 
+function escapeAttr(text: string | number | null | undefined): string {
+    if (text == null) return '';
+    return String(text).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+}
+
 // Cell renderers for action buttons (single slot per row for both Update and Delete)
 const businessUnitCellRenderers: Record<string, (row: any) => string> = {
     actions_bu: (row) => {
         const id = row?.id ?? '';
+        const code = escapeAttr(row?.BusinessUnitId ?? '');
+        const name = escapeAttr(row?.BusinessUnit ?? '');
         return `
             <span class="inline-flex items-center gap-1">
-                <button type="button" class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium text-primary hover:bg-primary/10" data-action="update" data-id="${escapeHtml(id)}">
+                <button type="button" class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium text-primary hover:bg-primary/10" data-action="update" data-id="${escapeHtml(id)}" data-business-code="${code}" data-business-name="${name}">
                     <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
                     Update
                 </button>
@@ -167,9 +195,13 @@ const businessUnitCellRenderers: Record<string, (row: any) => string> = {
 const departmentCellRenderers: Record<string, (row: any) => string> = {
     actions_dept: (row) => {
         const id = row?.id ?? '';
+        const businessId = escapeAttr(row?.business_id ?? '');
+        const deptId = escapeAttr(row?.department_id ?? '');
+        const deptName = escapeAttr(row?.department_name ?? '');
+        const deptAbbrev = escapeAttr(row?.department_abbrev ?? '');
         return `
             <span class="inline-flex items-center gap-1">
-                <button type="button" class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium text-primary hover:bg-primary/10" data-action="update" data-id="${escapeHtml(id)}">
+                <button type="button" class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium text-primary hover:bg-primary/10" data-action="update" data-id="${escapeHtml(id)}" data-business-id="${businessId}" data-department-id="${deptId}" data-department-name="${deptName}" data-department-abbrev="${deptAbbrev}">
                     <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
                     Update
                 </button>
@@ -191,9 +223,26 @@ const getBusinessUnitAjaxParams = () => ({});
 const getDepartmentAjaxParams = () => ({});
 
 function onBusinessUnitTableClick(e: MouseEvent) {
-    const btn = (e.target as HTMLElement).closest('button[data-action="delete"]');
-    if (!btn) return;
-    const id = btn.getAttribute('data-id');
+    const target = e.target as HTMLElement;
+    const updateBtn = target.closest('button[data-action="update"]');
+    if (updateBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const id = updateBtn.getAttribute('data-id');
+        const code = updateBtn.getAttribute('data-business-code') ?? '';
+        const name = updateBtn.getAttribute('data-business-name') ?? '';
+        if (id) {
+            editingBusinessUnitId.value = Number(id);
+            businessUnitForm.BusinessUnitId = code;
+            businessUnitForm.BusinessUnit = name;
+            businessUnitErrors.value = {};
+            showBusinessUnitDialog.value = true;
+        }
+        return;
+    }
+    const deleteBtn = target.closest('button[data-action="delete"]');
+    if (!deleteBtn) return;
+    const id = deleteBtn.getAttribute('data-id');
     if (!id) return;
     e.preventDefault();
     e.stopPropagation();
@@ -211,16 +260,46 @@ function onBusinessUnitTableClick(e: MouseEvent) {
         if (result.isConfirmed) {
             router.delete(`/utilities/business-department-list/business-units/${id}`, {
                 preserveScroll: true,
-                onSuccess: () => { businessTableKey.value += 1; },
+                onSuccess: () => {
+                    businessTableKey.value += 1;
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Deleted!',
+                        text: 'Business unit has been deleted successfully.',
+                        timer: 2000,
+                        showConfirmButton: false,
+                    });
+                },
             });
         }
     });
 }
 
 function onDepartmentTableClick(e: MouseEvent) {
-    const btn = (e.target as HTMLElement).closest('button[data-action="delete"]');
-    if (!btn) return;
-    const id = btn.getAttribute('data-id');
+    const target = e.target as HTMLElement;
+    const updateBtn = target.closest('button[data-action="update"]');
+    if (updateBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const id = updateBtn.getAttribute('data-id');
+        const businessId = updateBtn.getAttribute('data-business-id') ?? '';
+        const deptId = updateBtn.getAttribute('data-department-id') ?? '';
+        const deptName = updateBtn.getAttribute('data-department-name') ?? '';
+        const deptAbbrev = updateBtn.getAttribute('data-department-abbrev') ?? '';
+        if (id) {
+            editingDepartmentId.value = Number(id);
+            departmentForm.business_id = businessId;
+            departmentForm.department_id = deptId;
+            departmentForm.department_name = deptName;
+            departmentForm.department_abbrev = deptAbbrev;
+            departmentErrors.value = {};
+            showDepartmentDialog.value = true;
+        }
+        return;
+    }
+    const deleteBtn = target.closest('button[data-action="delete"]');
+    if (!deleteBtn) return;
+    const id = deleteBtn.getAttribute('data-id');
     if (!id) return;
     e.preventDefault();
     e.stopPropagation();
@@ -238,7 +317,16 @@ function onDepartmentTableClick(e: MouseEvent) {
         if (result.isConfirmed) {
             router.delete(`/utilities/business-department-list/departments/${id}`, {
                 preserveScroll: true,
-                onSuccess: () => { departmentTableKey.value += 1; },
+                onSuccess: () => {
+                    departmentTableKey.value += 1;
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Deleted!',
+                        text: 'Department has been deleted successfully.',
+                        timer: 2000,
+                        showConfirmButton: false,
+                    });
+                },
             });
         }
     });
@@ -304,11 +392,11 @@ function onDepartmentTableClick(e: MouseEvent) {
                 </section>
             </div>
 
-            <!-- Add New Business Unit Dialog (light design: centered title, grey-bordered inputs, Cancel left / Save blue right) -->
+            <!-- Add/Edit Business Unit Dialog (light design: centered title, grey-bordered inputs, Cancel left / Save blue right) -->
             <Dialog v-model:open="showBusinessUnitDialog">
                 <DialogContent class="ehris-add-bu-dialog sm:max-w-md bg-card border border-border shadow-lg rounded-lg">
                     <DialogHeader class="text-center">
-                        <DialogTitle class="text-base font-semibold">Add New Business Unit</DialogTitle>
+                        <DialogTitle class="text-base font-semibold">{{ editingBusinessUnitId != null ? 'Edit Business Unit' : 'Add New Business Unit' }}</DialogTitle>
                     </DialogHeader>
                     <form @submit.prevent="submitBusinessUnit" class="ehris-add-bu-form space-y-4">
                         <div class="space-y-2">
@@ -341,11 +429,11 @@ function onDepartmentTableClick(e: MouseEvent) {
                 </DialogContent>
             </Dialog>
 
-            <!-- Add Department Dialog (red header, labels and buttons per design) -->
+            <!-- Add/Edit Department Dialog (blue header, labels and buttons per design) -->
             <Dialog v-model:open="showDepartmentDialog">
                 <DialogContent class="ehris-add-dept-dialog sm:max-w-md p-0 gap-0">
                     <div class="ehris-add-dept-header bg-primary text-primary-foreground px-6 py-4 rounded-t-lg flex items-center">
-                        <DialogTitle class="text-base font-semibold m-0">Add Department</DialogTitle>
+                        <DialogTitle class="text-base font-semibold m-0">{{ editingDepartmentId != null ? 'Edit Department' : 'Add Department' }}</DialogTitle>
                     </div>
                     <form @submit.prevent="submitDepartment" class="ehris-add-dept-form space-y-4 p-6">
                         <div class="space-y-2">

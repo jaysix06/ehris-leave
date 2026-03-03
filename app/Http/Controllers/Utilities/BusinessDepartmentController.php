@@ -107,6 +107,67 @@ class BusinessDepartmentController extends Controller
     }
 
     /**
+     * Update a Business Unit by id.
+     */
+    public function updateBusinessUnit(Request $request, int $id): RedirectResponse
+    {
+        $validated = $request->validate([
+            'BusinessUnitId' => ['required', 'integer', 'min:1'],
+            'BusinessUnit'   => ['required', 'string', 'max:255'],
+        ]);
+
+        $unit = BusinessUnit::findOrFail($id);
+        $exists = BusinessUnit::where('BusinessUnitId', $validated['BusinessUnitId'])
+            ->where('id', '!=', $id)
+            ->exists();
+        if ($exists) {
+            throw ValidationException::withMessages([
+                'BusinessUnitId' => ['This Business Code already exists.'],
+            ]);
+        }
+
+        $unit->update([
+            'BusinessUnitId' => $validated['BusinessUnitId'],
+            'BusinessUnit'   => $validated['BusinessUnit'],
+        ]);
+
+        return back()->with('success', 'Business unit updated successfully.');
+    }
+
+    /**
+     * Update a Department by id.
+     */
+    public function updateDepartment(Request $request, int $id): RedirectResponse
+    {
+        $validated = $request->validate([
+            'business_id'       => ['required', 'integer', 'min:1'],
+            'department_id'     => ['required', 'integer', 'min:1'],
+            'department_name'   => ['required', 'string', 'max:255'],
+            'department_abbrev' => ['nullable', 'string', 'max:250'],
+        ]);
+
+        $dept = Department::findOrFail($id);
+        $exists = Department::where('business_id', $validated['business_id'])
+            ->where('department_id', $validated['department_id'])
+            ->where('id', '!=', $id)
+            ->exists();
+        if ($exists) {
+            throw ValidationException::withMessages([
+                'department_id' => ['A department with this ID already exists for this Business Code.'],
+            ]);
+        }
+
+        $dept->update([
+            'business_id'       => $validated['business_id'],
+            'department_id'     => $validated['department_id'],
+            'department_name'   => $validated['department_name'],
+            'department_abbrev' => $validated['department_abbrev'] ?? null,
+        ]);
+
+        return back()->with('success', 'Department updated successfully.');
+    }
+
+    /**
      * DataTables server-side processing for List of Business Unit.
      */
     public function datatablesBusinessUnit(Request $request)
