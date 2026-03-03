@@ -144,9 +144,11 @@ function escapeHtml(text: string | number): string {
 const businessUnitCellRenderers: Record<string, (row: any) => string> = {
     actions_bu: (row) => {
         const id = row?.id ?? '';
+        const businessUnitId = row?.BusinessUnitId ?? '';
+        const businessUnit = row?.BusinessUnit ?? '';
         return `
             <span class="inline-flex items-center gap-1">
-                <button type="button" class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium text-primary hover:bg-primary/10" data-action="update" data-id="${escapeHtml(id)}">
+                <button type="button" class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium text-primary hover:bg-primary/10" data-action="update" data-id="${escapeHtml(id)}" data-business-unit-id="${escapeHtml(String(businessUnitId))}" data-business-unit="${escapeHtml(businessUnit)}">
                     <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
                     Update
                 </button>
@@ -167,9 +169,13 @@ const businessUnitCellRenderers: Record<string, (row: any) => string> = {
 const departmentCellRenderers: Record<string, (row: any) => string> = {
     actions_dept: (row) => {
         const id = row?.id ?? '';
+        const businessId = row?.business_id ?? '';
+        const departmentId = row?.department_id ?? '';
+        const departmentName = row?.department_name ?? '';
+        const departmentAbbrev = row?.department_abbrev ?? '';
         return `
             <span class="inline-flex items-center gap-1">
-                <button type="button" class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium text-primary hover:bg-primary/10" data-action="update" data-id="${escapeHtml(id)}">
+                <button type="button" class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium text-primary hover:bg-primary/10" data-action="update" data-id="${escapeHtml(id)}" data-business-id="${escapeHtml(String(businessId))}" data-department-id="${escapeHtml(String(departmentId))}" data-department-name="${escapeHtml(departmentName)}" data-department-abbrev="${escapeHtml(departmentAbbrev || '')}">
                     <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
                     Update
                 </button>
@@ -191,57 +197,352 @@ const getBusinessUnitAjaxParams = () => ({});
 const getDepartmentAjaxParams = () => ({});
 
 function onBusinessUnitTableClick(e: MouseEvent) {
-    const btn = (e.target as HTMLElement).closest('button[data-action="delete"]');
+    const btn = (e.target as HTMLElement).closest('button[data-action]');
     if (!btn) return;
+    const action = btn.getAttribute('data-action');
     const id = btn.getAttribute('data-id');
     if (!id) return;
     e.preventDefault();
     e.stopPropagation();
-    Swal.fire({
-        title: 'Delete Business Unit?',
-        text: 'This action cannot be undone.',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#dc2626',
-        cancelButtonColor: '#6b7280',
-        confirmButtonText: 'Yes, delete it',
-        cancelButtonText: 'Cancel',
-        customClass: { popup: 'ehris-swal-delete-popup', actions: 'ehris-swal-actions', confirmButton: 'ehris-swal-confirm', cancelButton: 'ehris-swal-cancel' },
-    }).then((result) => {
-        if (result.isConfirmed) {
-            router.delete(`/utilities/business-department-list/business-units/${id}`, {
-                preserveScroll: true,
-                onSuccess: () => { businessTableKey.value += 1; },
-            });
-        }
-    });
+
+    if (action === 'delete') {
+        Swal.fire({
+            title: 'Delete Business Unit?',
+            text: 'This action cannot be undone.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc2626',
+            cancelButtonColor: '#6b7280',
+            confirmButtonText: 'Yes, delete it',
+            cancelButtonText: 'Cancel',
+            customClass: { popup: 'ehris-swal-delete-popup', actions: 'ehris-swal-actions', confirmButton: 'ehris-swal-confirm', cancelButton: 'ehris-swal-cancel' },
+        }).then((result) => {
+            if (result.isConfirmed) {
+                router.delete(`/utilities/business-department-list/business-units/${id}`, {
+                    preserveScroll: true,
+                    onSuccess: () => { businessTableKey.value += 1; },
+                });
+            }
+        });
+    } else if (action === 'update') {
+        // Get data from button data attributes
+        const businessUnitId = btn.getAttribute('data-business-unit-id') || '';
+        const businessUnit = btn.getAttribute('data-business-unit') || '';
+        
+        // Escape HTML for safe insertion
+        const escapeHtmlForInput = (str: string) => {
+            return str
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        };
+        
+        Swal.fire({
+            title: 'Update Business Unit',
+            html: `
+                <div style="text-align: left; padding: 0.5rem 0;">
+                    <div style="margin-bottom: 1rem;">
+                        <label style="display: block; font-size: 0.875rem; font-weight: 500; margin-bottom: 0.5rem; color: #374151;">Business Code *</label>
+                        <input 
+                            id="swal-business-unit-id" 
+                            class="swal2-input" 
+                            type="number"
+                            placeholder="Enter business code" 
+                            value="${escapeHtmlForInput(businessUnitId)}"
+                            min="1"
+                            style="width: 100%; margin: 0; padding: 0.5rem 0.75rem; text-transform: none; font-size: 0.875rem; box-sizing: border-box;"
+                        />
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 0.875rem; font-weight: 500; margin-bottom: 0.5rem; color: #374151;">Business Unit *</label>
+                        <input 
+                            id="swal-business-unit-name" 
+                            class="swal2-input" 
+                            type="text"
+                            placeholder="Enter business unit name" 
+                            value="${escapeHtmlForInput(businessUnit)}"
+                            maxlength="255"
+                            style="width: 100%; margin: 0; padding: 0.5rem 0.75rem; text-transform: none; font-size: 0.875rem; box-sizing: border-box;"
+                        />
+                    </div>
+                </div>
+            `,
+            width: '500px',
+            focusConfirm: false,
+            showCancelButton: true,
+            confirmButtonText: 'Update',
+            cancelButtonText: 'Cancel',
+            confirmButtonColor: '#2563eb',
+            cancelButtonColor: '#6b7280',
+            preConfirm: () => {
+                const unitIdInput = document.getElementById('swal-business-unit-id') as HTMLInputElement;
+                const unitNameInput = document.getElementById('swal-business-unit-name') as HTMLInputElement;
+                const unitId = unitIdInput?.value.trim() || '';
+                const unitName = unitNameInput?.value.trim() || '';
+                
+                if (!unitId) {
+                    Swal.showValidationMessage('Business code is required');
+                    return false;
+                }
+                
+                const unitIdNum = parseInt(unitId);
+                if (isNaN(unitIdNum) || unitIdNum < 1) {
+                    Swal.showValidationMessage('Business code must be a valid positive number');
+                    return false;
+                }
+                
+                if (!unitName) {
+                    Swal.showValidationMessage('Business unit name is required');
+                    return false;
+                }
+                
+                if (unitName.length > 255) {
+                    Swal.showValidationMessage('Business unit name must not exceed 255 characters');
+                    return false;
+                }
+                
+                return {
+                    BusinessUnitId: unitIdNum,
+                    BusinessUnit: unitName,
+                };
+            },
+        }).then(async (result) => {
+            if (result.isConfirmed && result.value) {
+                try {
+                    await router.put(`/utilities/business-department-list/business-units/${id}`, result.value, {
+                        preserveScroll: true,
+                        onSuccess: () => {
+                            businessTableKey.value += 1;
+                            void Swal.fire({
+                                icon: 'success',
+                                title: 'Success!',
+                                text: 'Business unit updated successfully.',
+                                confirmButtonColor: '#2563eb',
+                            });
+                        },
+                        onError: (errors) => {
+                            const errorMessage = errors?.BusinessUnitId?.[0] || errors?.BusinessUnit?.[0] || 'Failed to update business unit.';
+                            void Swal.fire({
+                                icon: 'error',
+                                title: 'Update Failed',
+                                text: errorMessage,
+                                confirmButtonColor: '#dc2626',
+                            });
+                        },
+                    });
+                } catch (error) {
+                    console.error('Error updating business unit:', error);
+                    void Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'An error occurred while updating the business unit.',
+                        confirmButtonColor: '#dc2626',
+                    });
+                }
+            }
+        });
+    }
 }
 
 function onDepartmentTableClick(e: MouseEvent) {
-    const btn = (e.target as HTMLElement).closest('button[data-action="delete"]');
+    const btn = (e.target as HTMLElement).closest('button[data-action]');
     if (!btn) return;
+    const action = btn.getAttribute('data-action');
     const id = btn.getAttribute('data-id');
     if (!id) return;
     e.preventDefault();
     e.stopPropagation();
-    Swal.fire({
-        title: 'Delete Department?',
-        text: 'This action cannot be undone.',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#dc2626',
-        cancelButtonColor: '#6b7280',
-        confirmButtonText: 'Yes, delete it',
-        cancelButtonText: 'Cancel',
-        customClass: { popup: 'ehris-swal-delete-popup', actions: 'ehris-swal-actions', confirmButton: 'ehris-swal-confirm', cancelButton: 'ehris-swal-cancel' },
-    }).then((result) => {
-        if (result.isConfirmed) {
-            router.delete(`/utilities/business-department-list/departments/${id}`, {
-                preserveScroll: true,
-                onSuccess: () => { departmentTableKey.value += 1; },
-            });
-        }
-    });
+
+    if (action === 'delete') {
+        Swal.fire({
+            title: 'Delete Department?',
+            text: 'This action cannot be undone.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc2626',
+            cancelButtonColor: '#6b7280',
+            confirmButtonText: 'Yes, delete it',
+            cancelButtonText: 'Cancel',
+            customClass: { popup: 'ehris-swal-delete-popup', actions: 'ehris-swal-actions', confirmButton: 'ehris-swal-confirm', cancelButton: 'ehris-swal-cancel' },
+        }).then((result) => {
+            if (result.isConfirmed) {
+                router.delete(`/utilities/business-department-list/departments/${id}`, {
+                    preserveScroll: true,
+                    onSuccess: () => { departmentTableKey.value += 1; },
+                });
+            }
+        });
+    } else if (action === 'update') {
+        // Get data from button data attributes
+        const businessId = btn.getAttribute('data-business-id') || '';
+        const departmentId = btn.getAttribute('data-department-id') || '';
+        const departmentName = btn.getAttribute('data-department-name') || '';
+        const departmentAbbrev = btn.getAttribute('data-department-abbrev') || '';
+        
+        // Escape HTML for safe insertion
+        const escapeHtmlForInput = (str: string) => {
+            return str
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        };
+        
+        Swal.fire({
+            title: 'Update Department',
+            html: `
+                <div style="text-align: left; padding: 0.5rem 0;">
+                    <div style="margin-bottom: 1rem;">
+                        <label style="display: block; font-size: 0.875rem; font-weight: 500; margin-bottom: 0.5rem; color: #374151;">Business ID *</label>
+                        <input 
+                            id="swal-dept-business-id" 
+                            class="swal2-input" 
+                            type="number"
+                            placeholder="Enter business ID" 
+                            value="${escapeHtmlForInput(businessId)}"
+                            min="1"
+                            style="width: 100%; margin: 0; padding: 0.5rem 0.75rem; text-transform: none; font-size: 0.875rem; box-sizing: border-box;"
+                        />
+                    </div>
+                    <div style="margin-bottom: 1rem;">
+                        <label style="display: block; font-size: 0.875rem; font-weight: 500; margin-bottom: 0.5rem; color: #374151;">Department ID *</label>
+                        <input 
+                            id="swal-dept-id" 
+                            class="swal2-input" 
+                            type="number"
+                            placeholder="Enter department ID" 
+                            value="${escapeHtmlForInput(departmentId)}"
+                            min="1"
+                            style="width: 100%; margin: 0; padding: 0.5rem 0.75rem; text-transform: none; font-size: 0.875rem; box-sizing: border-box;"
+                        />
+                    </div>
+                    <div style="margin-bottom: 1rem;">
+                        <label style="display: block; font-size: 0.875rem; font-weight: 500; margin-bottom: 0.5rem; color: #374151;">Department Name *</label>
+                        <input 
+                            id="swal-dept-name" 
+                            class="swal2-input" 
+                            type="text"
+                            placeholder="Enter department name" 
+                            value="${escapeHtmlForInput(departmentName)}"
+                            maxlength="255"
+                            style="width: 100%; margin: 0; padding: 0.5rem 0.75rem; text-transform: none; font-size: 0.875rem; box-sizing: border-box;"
+                        />
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 0.875rem; font-weight: 500; margin-bottom: 0.5rem; color: #374151;">Department Abbreviation <span style="color: #6b7280; font-size: 0.75rem; font-weight: normal;">(Optional)</span></label>
+                        <input 
+                            id="swal-dept-abbrev" 
+                            class="swal2-input" 
+                            type="text"
+                            placeholder="Enter department abbreviation" 
+                            value="${escapeHtmlForInput(departmentAbbrev)}"
+                            maxlength="250"
+                            style="width: 100%; margin: 0; padding: 0.5rem 0.75rem; text-transform: none; font-size: 0.875rem; box-sizing: border-box;"
+                        />
+                    </div>
+                </div>
+            `,
+            width: '500px',
+            focusConfirm: false,
+            showCancelButton: true,
+            confirmButtonText: 'Update',
+            cancelButtonText: 'Cancel',
+            confirmButtonColor: '#2563eb',
+            cancelButtonColor: '#6b7280',
+            preConfirm: () => {
+                const businessIdInput = document.getElementById('swal-dept-business-id') as HTMLInputElement;
+                const deptIdInput = document.getElementById('swal-dept-id') as HTMLInputElement;
+                const deptNameInput = document.getElementById('swal-dept-name') as HTMLInputElement;
+                const deptAbbrevInput = document.getElementById('swal-dept-abbrev') as HTMLInputElement;
+                
+                const businessId = businessIdInput?.value.trim() || '';
+                const deptId = deptIdInput?.value.trim() || '';
+                const deptName = deptNameInput?.value.trim() || '';
+                const deptAbbrev = deptAbbrevInput?.value.trim() || '';
+                
+                if (!businessId) {
+                    Swal.showValidationMessage('Business ID is required');
+                    return false;
+                }
+                
+                const businessIdNum = parseInt(businessId);
+                if (isNaN(businessIdNum) || businessIdNum < 1) {
+                    Swal.showValidationMessage('Business ID must be a valid positive number');
+                    return false;
+                }
+                
+                if (!deptId) {
+                    Swal.showValidationMessage('Department ID is required');
+                    return false;
+                }
+                
+                const deptIdNum = parseInt(deptId);
+                if (isNaN(deptIdNum) || deptIdNum < 1) {
+                    Swal.showValidationMessage('Department ID must be a valid positive number');
+                    return false;
+                }
+                
+                if (!deptName) {
+                    Swal.showValidationMessage('Department name is required');
+                    return false;
+                }
+                
+                if (deptName.length > 255) {
+                    Swal.showValidationMessage('Department name must not exceed 255 characters');
+                    return false;
+                }
+                
+                if (deptAbbrev.length > 250) {
+                    Swal.showValidationMessage('Department abbreviation must not exceed 250 characters');
+                    return false;
+                }
+                
+                return {
+                    business_id: businessIdNum,
+                    department_id: deptIdNum,
+                    department_name: deptName,
+                    department_abbrev: deptAbbrev || null,
+                };
+            },
+        }).then(async (result) => {
+            if (result.isConfirmed && result.value) {
+                try {
+                    await router.put(`/utilities/business-department-list/departments/${id}`, result.value, {
+                        preserveScroll: true,
+                        onSuccess: () => {
+                            departmentTableKey.value += 1;
+                            void Swal.fire({
+                                icon: 'success',
+                                title: 'Success!',
+                                text: 'Department updated successfully.',
+                                confirmButtonColor: '#2563eb',
+                            });
+                        },
+                        onError: (errors) => {
+                            const errorMessage = errors?.business_id?.[0] || errors?.department_id?.[0] || errors?.department_name?.[0] || 'Failed to update department.';
+                            void Swal.fire({
+                                icon: 'error',
+                                title: 'Update Failed',
+                                text: errorMessage,
+                                confirmButtonColor: '#dc2626',
+                            });
+                        },
+                    });
+                } catch (error) {
+                    console.error('Error updating department:', error);
+                    void Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'An error occurred while updating the department.',
+                        confirmButtonColor: '#dc2626',
+                    });
+                }
+            }
+        });
+    }
 }
 </script>
 
