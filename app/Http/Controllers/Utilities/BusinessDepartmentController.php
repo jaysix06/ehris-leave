@@ -8,6 +8,7 @@ use App\Models\Department;
 use App\Services\ActivityLogService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
@@ -90,6 +91,42 @@ class BusinessDepartmentController extends Controller
     }
 
     /**
+     * Update a Business Unit.
+     */
+    public function updateBusinessUnit(Request $request, int $id): RedirectResponse
+    {
+        $validated = $request->validate([
+            'BusinessUnitId' => ['required', 'integer', 'min:1'],
+            'BusinessUnit' => ['required', 'string', 'max:255'],
+        ]);
+
+        $unit = BusinessUnit::findOrFail($id);
+        $oldName = "{$unit->BusinessUnit} (Code: {$unit->BusinessUnitId})";
+
+        // Check if BusinessUnitId is being changed and if the new one already exists
+        if ($unit->BusinessUnitId != $validated['BusinessUnitId']) {
+            $exists = BusinessUnit::where('BusinessUnitId', $validated['BusinessUnitId'])
+                ->where('id', '!=', $id)
+                ->exists();
+            if ($exists) {
+                throw ValidationException::withMessages([
+                    'BusinessUnitId' => ['This Business Code already exists.'],
+                ]);
+            }
+        }
+
+        $unit->update([
+            'BusinessUnitId' => $validated['BusinessUnitId'],
+            'BusinessUnit' => $validated['BusinessUnit'],
+        ]);
+
+        $newName = "{$validated['BusinessUnit']} (Code: {$validated['BusinessUnitId']})";
+        ActivityLogService::logUpdate('Business Unit', "Changed from {$oldName} to {$newName}");
+
+        return back()->with('success', 'Business unit updated successfully.');
+    }
+
+    /**
      * Delete a Business Unit by id.
      */
     public function destroyBusinessUnit(int $id): RedirectResponse
@@ -101,6 +138,47 @@ class BusinessDepartmentController extends Controller
         ActivityLogService::logDelete('Business Unit', $unitName);
 
         return back()->with('success', 'Business unit deleted successfully.');
+    }
+
+    /**
+     * Update a Department.
+     */
+    public function updateDepartment(Request $request, int $id): RedirectResponse
+    {
+        $validated = $request->validate([
+            'business_id' => ['required', 'integer', 'min:1'],
+            'department_id' => ['required', 'integer', 'min:1'],
+            'department_name' => ['required', 'string', 'max:255'],
+            'department_abbrev' => ['nullable', 'string', 'max:250'],
+        ]);
+
+        $dept = Department::findOrFail($id);
+        $oldName = "{$dept->department_name} (ID: {$dept->department_id}, Business ID: {$dept->business_id})";
+
+        // Check if department_id or business_id is being changed and if the new combination already exists
+        if ($dept->department_id != $validated['department_id'] || $dept->business_id != $validated['business_id']) {
+            $exists = Department::where('business_id', $validated['business_id'])
+                ->where('department_id', $validated['department_id'])
+                ->where('id', '!=', $id)
+                ->exists();
+            if ($exists) {
+                throw ValidationException::withMessages([
+                    'department_id' => ['A department with this ID already exists for this Business Code.'],
+                ]);
+            }
+        }
+
+        $dept->update([
+            'business_id' => $validated['business_id'],
+            'department_id' => $validated['department_id'],
+            'department_name' => $validated['department_name'],
+            'department_abbrev' => $validated['department_abbrev'] ?? null,
+        ]);
+
+        $newName = "{$validated['department_name']} (ID: {$validated['department_id']}, Business ID: {$validated['business_id']})";
+        ActivityLogService::logUpdate('Department', "Changed from {$oldName} to {$newName}");
+
+        return back()->with('success', 'Department updated successfully.');
     }
 
     /**
@@ -117,66 +195,6 @@ class BusinessDepartmentController extends Controller
         return back()->with('success', 'Department deleted successfully.');
     }
 
-    /**
-     * Update a Business Unit by id.
-     */
-    public function updateBusinessUnit(Request $request, int $id): RedirectResponse
-    {
-        $validated = $request->validate([
-            'BusinessUnitId' => ['required', 'integer', 'min:1'],
-            'BusinessUnit'   => ['required', 'string', 'max:255'],
-        ]);
-
-        $unit = BusinessUnit::findOrFail($id);
-        $exists = BusinessUnit::where('BusinessUnitId', $validated['BusinessUnitId'])
-            ->where('id', '!=', $id)
-            ->exists();
-        if ($exists) {
-            throw ValidationException::withMessages([
-                'BusinessUnitId' => ['This Business Code already exists.'],
-            ]);
-        }
-
-        $unit->update([
-            'BusinessUnitId' => $validated['BusinessUnitId'],
-            'BusinessUnit'   => $validated['BusinessUnit'],
-        ]);
-
-        return back()->with('success', 'Business unit updated successfully.');
-    }
-
-    /**
-     * Update a Department by id.
-     */
-    public function updateDepartment(Request $request, int $id): RedirectResponse
-    {
-        $validated = $request->validate([
-            'business_id'       => ['required', 'integer', 'min:1'],
-            'department_id'     => ['required', 'integer', 'min:1'],
-            'department_name'   => ['required', 'string', 'max:255'],
-            'department_abbrev' => ['nullable', 'string', 'max:250'],
-        ]);
-
-        $dept = Department::findOrFail($id);
-        $exists = Department::where('business_id', $validated['business_id'])
-            ->where('department_id', $validated['department_id'])
-            ->where('id', '!=', $id)
-            ->exists();
-        if ($exists) {
-            throw ValidationException::withMessages([
-                'department_id' => ['A department with this ID already exists for this Business Code.'],
-            ]);
-        }
-
-        $dept->update([
-            'business_id'       => $validated['business_id'],
-            'department_id'     => $validated['department_id'],
-            'department_name'   => $validated['department_name'],
-            'department_abbrev' => $validated['department_abbrev'] ?? null,
-        ]);
-
-        return back()->with('success', 'Department updated successfully.');
-    }
 
     /**
      * DataTables server-side processing for List of Business Unit.
@@ -231,7 +249,7 @@ class BusinessDepartmentController extends Controller
                 'data' => $data,
             ]);
         } catch (\Exception $e) {
-            \Log::error('BusinessUnit DataTables Error: '.$e->getMessage(), [
+            Log::error('BusinessUnit DataTables Error: '.$e->getMessage(), [
                 'trace' => $e->getTraceAsString(),
                 'request' => $request->all(),
             ]);
@@ -290,6 +308,7 @@ class BusinessDepartmentController extends Controller
                     'business_id' => $row->business_id ?? '',
                     'department_id' => $row->department_id ?? '',
                     'department_name' => $row->department_name ?? '',
+                    'department_abbrev' => $row->department_abbrev ?? '',
                     '_raw' => $row,
                 ];
             });
@@ -301,7 +320,7 @@ class BusinessDepartmentController extends Controller
                 'data' => $data,
             ]);
         } catch (\Exception $e) {
-            \Log::error('Department DataTables Error: '.$e->getMessage(), [
+            Log::error('Department DataTables Error: '.$e->getMessage(), [
                 'trace' => $e->getTraceAsString(),
                 'request' => $request->all(),
             ]);

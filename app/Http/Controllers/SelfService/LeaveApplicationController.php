@@ -9,6 +9,7 @@ use App\Models\LeaveType;
 use App\Models\Office;
 use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -17,6 +18,18 @@ use Inertia\Inertia;
 
 class LeaveApplicationController extends Controller
 {
+    private const LEAVE_TABLE = 'tbl_leave_applications';
+
+    private const WORKFLOW_PENDING_RM = 'pending_rm';
+
+    private const WORKFLOW_PENDING_HR = 'pending_hr';
+
+    private const WORKFLOW_PENDING_SDS = 'pending_sds';
+
+    private const WORKFLOW_APPROVED = 'approved';
+
+    private const WORKFLOW_DISAPPROVED = 'disapproved';
+
     public function show(Request $request)
     {
         $authUser = $request->user();
@@ -170,16 +183,16 @@ class LeaveApplicationController extends Controller
         }
 
         $mandatoryLeaveSummary = null;
-        if ($authUser !== null && Schema::hasTable('tbl_request_leave')) {
+        if ($authUser !== null && Schema::hasTable(self::LEAVE_TABLE)) {
             $currentYear = (int) now()->format('Y');
             $hrid = (int) ($authUser->hrId ?? 0);
 
             if ($hrid > 0) {
-                $usedMandatoryDays = (int) DB::table('tbl_request_leave')
-                    ->where('hrid', $hrid)
-                    ->whereYear('fdate', $currentYear)
+                $usedMandatoryDays = (int) DB::table(self::LEAVE_TABLE)
+                    ->where('employee_hrid', $hrid)
+                    ->whereYear('leave_start_date', $currentYear)
                     ->whereIn('leave_type', ['Vacation Leave', 'Mandatory/Force Leave', 'Mandatory Leave', 'Forced Leave'])
-                    ->sum('leave_count');
+                    ->sum('leave_days');
 
                 $forfeitedDays = 0;
                 if (Schema::hasTable('tbl_leave_history')) {
@@ -213,7 +226,9 @@ class LeaveApplicationController extends Controller
             'leave_start_date' => ['required', 'date'],
             'leave_end_date' => ['required', 'date', 'after_or_equal:leave_start_date'],
             'reason' => ['nullable', 'string', 'max:2000'],
+            'reason_specify' => ['nullable', 'string', 'max:2000'],
             'commutation' => ['nullable', 'string', 'max:255'],
+            'leave_for_mode' => ['nullable', 'string', 'max:100'],
             'consultation_availed' => ['nullable', 'in:yes,no'],
             'destination_scope' => ['nullable', 'in:within_ph,abroad'],
             'destination_details' => ['nullable', 'string', 'max:255'],
@@ -282,21 +297,22 @@ class LeaveApplicationController extends Controller
             if ($requiresSupportingDoc) {
                 $hasMedical = $request->hasFile('medical_certificate');
                 $hasAffidavit = $request->hasFile('affidavit');
+                $hasSickLeaveSupport = $hasMedical || $hasAffidavit || $hasGenericSupportingDocs;
                 $consultation = $data['consultation_availed'] ?? null;
 
-                if ($consultation === 'yes' && ! $hasMedical) {
+                if ($consultation === 'yes' && ! ($hasMedical || $hasGenericSupportingDocs)) {
                     throw ValidationException::withMessages([
                         'medical_certificate' => 'Medical certificate is required when medical consultation was availed.',
                     ]);
                 }
 
-                if ($consultation === 'no' && ! $hasAffidavit) {
+                if ($consultation === 'no' && ! ($hasAffidavit || $hasGenericSupportingDocs)) {
                     throw ValidationException::withMessages([
                         'affidavit' => 'Affidavit is required when medical consultation was not availed.',
                     ]);
                 }
 
-                if ($consultation === null && ! ($hasMedical || $hasAffidavit)) {
+                if ($consultation === null && ! $hasSickLeaveSupport) {
                     throw ValidationException::withMessages([
                         'medical_certificate' => 'Please upload a medical certificate or an affidavit.',
                     ]);
@@ -532,17 +548,17 @@ class LeaveApplicationController extends Controller
                 ]);
             }
 
-            if (! Schema::hasTable('tbl_request_leave')) {
+            if (! Schema::hasTable(self::LEAVE_TABLE)) {
                 throw ValidationException::withMessages([
-                    'leave_type' => 'Calamity leave cannot be checked because tbl_request_leave is unavailable.',
+                    'leave_type' => 'Calamity leave cannot be checked because leave application table is unavailable.',
                 ]);
             }
 
-            $existingCalamityDays = (int) DB::table('tbl_request_leave')
-                ->where('hrid', $request->user()?->hrId)
+            $existingCalamityDays = (int) DB::table(self::LEAVE_TABLE)
+                ->where('employee_hrid', $request->user()?->hrId)
                 ->where('leave_type', 'Special Emergency (Calamity) Leave')
-                ->whereYear('fdate', $start->year)
-                ->sum('leave_count');
+                ->whereYear('leave_start_date', $start->year)
+                ->sum('leave_days');
 
             if ($existingCalamityDays + $days > 5) {
                 throw ValidationException::withMessages([
@@ -550,11 +566,11 @@ class LeaveApplicationController extends Controller
                 ]);
             }
 
-            if (Schema::hasColumn('tbl_request_leave', 'calamity_date')) {
-                $hasDifferentEvent = DB::table('tbl_request_leave')
-                    ->where('hrid', $request->user()?->hrId)
+            if (Schema::hasColumn(self::LEAVE_TABLE, 'calamity_date')) {
+                $hasDifferentEvent = DB::table(self::LEAVE_TABLE)
+                    ->where('employee_hrid', $request->user()?->hrId)
                     ->where('leave_type', 'Special Emergency (Calamity) Leave')
-                    ->whereYear('fdate', $start->year)
+                    ->whereYear('leave_start_date', $start->year)
                     ->whereNotNull('calamity_date')
                     ->whereDate('calamity_date', '!=', $calamityDate->toDateString())
                     ->exists();
@@ -636,9 +652,9 @@ class LeaveApplicationController extends Controller
             }
         }
 
-        if (! Schema::hasTable('tbl_request_leave')) {
+        if (! Schema::hasTable(self::LEAVE_TABLE)) {
             throw ValidationException::withMessages([
-                'leave_type' => 'Cannot submit leave application because tbl_request_leave is missing.',
+                'leave_type' => 'Cannot submit leave application because leave application table is missing.',
             ]);
         }
 
@@ -738,121 +754,172 @@ class LeaveApplicationController extends Controller
             $unifiedReason = mb_substr(trim((string) $data['reason']), 0, 255);
         }
 
+        $destinationScope = $data['destination_scope'] ?? null;
+        $reasonForLeave = $destinationScope === 'within_ph' ? 'within' : ($destinationScope === 'abroad' ? 'abroad' : null);
+
+        $rmAssigneeHrid = $this->resolveReportingManagerHrid($officialInfo);
+
         $payload = [
-            'hrid' => $hrid > 0 ? $hrid : null,
-            'empId' => $officialInfo?->employee_id ?? null,
-            'firstname' => $firstname !== '' ? $firstname : null,
-            'middlename' => $middlename !== '' ? $middlename : null,
-            'lastname' => $lastname !== '' ? $lastname : null,
-            'extension' => $extension !== '' ? $extension : null,
+            'employee_hrid' => $hrid > 0 ? $hrid : null,
+            'employee_id' => $officialInfo?->employee_id ?? null,
+            'rm_assignee_hrid' => $rmAssigneeHrid,
             'leave_type' => $leaveType,
-            'fdate' => $start->toDateString(),
-            'tdate' => $end->toDateString(),
-            'leave_count' => $days,
-            'applied_on' => now(),
-            'leave_for' => 'Full Day',
-            'reporting_manager' => $officialInfo?->reporting_manager ?? null,
-            // Unified reason storage for all leave types.
-            'reasons' => $unifiedReason,
-            'job_title' => $officialInfo?->job_title ?? $profile?->job_title ?? null,
-            'monthly_salary' => is_numeric($salaryAmount) ? (float) $salaryAmount : null,
-            'case_in_vacation' => null,
-            'case_vacation_specify' => null,
-            'case_sick_leave' => null,
-            'case_sick_specify' => null,
-            'commutation' => ! empty($data['commutation']) ? (string) $data['commutation'] : null,
-            'remarks' => 'PENDING',
-            'department' => isset($officialInfo?->department_id) && is_numeric($officialInfo->department_id)
-                ? (int) $officialInfo->department_id
-                : null,
-            'approved_by_reporting_manager' => 'For approval',
-            'attachment' => $primaryAttachment,
-            'running_year' => (string) $start->year,
-        ];
-
-        $policyMeta = [
-            'no_of_days' => $days,
-            'filed_at' => now()->toDateTimeString(),
-            'application_date' => $applicationDate->toDateString(),
-            'destination_scope' => $data['destination_scope'] ?? null,
-            'destination_details' => $data['destination_details'] ?? null,
-            'travel_authority_no' => $data['travel_authority_no'] ?? null,
-            'is_mandatory_leave' => (bool) ($data['is_mandatory_leave'] ?? false),
-            'is_emergency_spl' => $isEmergencySpl,
-            'emergency_reason' => $emergencyReason !== '' ? $emergencyReason : null,
-            'is_timing_override' => $isTimingOverride,
-            'timing_override_reason' => $timingOverrideReason !== '' ? $timingOverrideReason : null,
-            'accident_date' => $data['accident_date'] ?? null,
-            'surgery_date' => $data['surgery_date'] ?? null,
+            'leave_for' => (string) ($request->input('leave_for_mode', 'Within selected date range')),
+            'leave_start_date' => $start->toDateString(),
+            'leave_end_date' => $end->toDateString(),
+            'leave_days' => $days,
+            'reason_for_leave' => $reasonForLeave,
+            'reason_text' => $request->filled('reason_specify')
+                ? mb_substr(trim((string) $request->input('reason_specify')), 0, 2000)
+                : $unifiedReason,
+            'commutation' => ! empty($data['commutation']) ? strtolower((string) $data['commutation']) : null,
+            'supervisor_reviewer_notes' => $data['supervisor_notes'] ?? null,
+            'supporting_documents' => $attachmentMeta !== [] ? json_encode($attachmentMeta) : null,
+            'date_applied' => now(),
+            'workflow_status' => self::WORKFLOW_PENDING_RM,
+            'rm_status' => 'pending',
+            'hr_status' => 'pending',
+            'sds_status' => 'pending',
+            // Keep this for calamity policy checks.
             'calamity_date' => $data['calamity_date'] ?? null,
-            'calamity_type' => $data['calamity_type'] ?? null,
-            'calamity_area' => $data['calamity_area'] ?? null,
-            'residence_address_snapshot' => $data['residence_address_snapshot'] ?? null,
-            'solo_parent_id_no' => $data['solo_parent_id_no'] ?? null,
-            'solo_parent_id_valid_until' => $data['solo_parent_id_valid_until'] ?? null,
-            'study_contract_id' => $data['study_contract_id'] ?? null,
-            'is_private_physician' => (bool) ($data['is_private_physician'] ?? false),
-            'supervisor_notes' => $data['supervisor_notes'] ?? null,
-            'separation_type' => $data['separation_type'] ?? null,
-            'separation_effective_date' => $data['separation_effective_date'] ?? null,
-            'credits_monetized' => $data['credits_monetized'] ?? null,
         ];
 
-        $optionalPayload = [
-            'leave_status' => 'PENDING',
-            'destination_scope' => $data['destination_scope'] ?? null,
-            'destination_details' => $data['destination_details'] ?? null,
-            'travel_authority_no' => $data['travel_authority_no'] ?? null,
-            'is_mandatory_leave' => (bool) ($data['is_mandatory_leave'] ?? false),
-            'is_emergency_spl' => $isEmergencySpl,
-            'emergency_reason' => $emergencyReason !== '' ? $emergencyReason : null,
-            'is_timing_override' => $isTimingOverride,
-            'timing_override_reason' => $timingOverrideReason !== '' ? $timingOverrideReason : null,
-            'accident_date' => $data['accident_date'] ?? null,
-            'surgery_date' => $data['surgery_date'] ?? null,
-            'calamity_date' => $data['calamity_date'] ?? null,
-            'calamity_type' => $data['calamity_type'] ?? null,
-            'calamity_area' => $data['calamity_area'] ?? null,
-            'residence_address_snapshot' => $data['residence_address_snapshot'] ?? null,
-            'solo_parent_id_no' => $data['solo_parent_id_no'] ?? null,
-            'solo_parent_id_valid_until' => $data['solo_parent_id_valid_until'] ?? null,
-            'study_contract_id' => $data['study_contract_id'] ?? null,
-            'is_private_physician' => (bool) ($data['is_private_physician'] ?? false),
-            'supervisor_notes' => $data['supervisor_notes'] ?? null,
-            'separation_type' => $data['separation_type'] ?? null,
-            'separation_effective_date' => $data['separation_effective_date'] ?? null,
-            'credits_monetized' => $data['credits_monetized'] ?? null,
-            'attachment_meta' => $attachmentMeta !== [] ? json_encode($attachmentMeta) : null,
-            'policy_meta' => json_encode($policyMeta),
-        ];
-
-        $hasLeaveStatusColumn = Schema::hasColumn('tbl_request_leave', 'leave_status');
-        $hasAttachmentMetaColumn = Schema::hasColumn('tbl_request_leave', 'attachment_meta');
-        $hasPolicyMetaColumn = Schema::hasColumn('tbl_request_leave', 'policy_meta');
-
-        foreach ($optionalPayload as $column => $value) {
-            if (Schema::hasColumn('tbl_request_leave', $column)) {
-                $payload[$column] = $value;
-            }
-        }
-
-        $leaveRequestId = (int) DB::table('tbl_request_leave')->insertGetId($payload, 'leaved_id');
-
-        if (
-            $leaveRequestId > 0
-            && Schema::hasTable('tbl_request_leave_meta')
-            && (! $hasLeaveStatusColumn || ! $hasAttachmentMetaColumn || ! $hasPolicyMetaColumn)
-        ) {
-            DB::table('tbl_request_leave_meta')->insert([
-                'leaved_id' => $leaveRequestId,
-                'leave_status' => 'PENDING',
-                'attachment_meta' => $attachmentMeta !== [] ? json_encode($attachmentMeta) : null,
-                'policy_meta' => json_encode($policyMeta),
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-        }
+        DB::table(self::LEAVE_TABLE)->insert($payload);
 
         return back()->with('status', 'Leave application submitted.');
+    }
+
+    public function approvals(Request $request): JsonResponse
+    {
+        if (! Schema::hasTable(self::LEAVE_TABLE)) {
+            return response()->json(['data' => []]);
+        }
+
+        $authRole = strtolower((string) ($request->user()?->role ?? ''));
+        $authHrid = (int) ($request->user()?->hrId ?? 0);
+        $limit = max(1, min((int) $request->integer('limit', 100), 500));
+
+        $query = DB::table(self::LEAVE_TABLE)
+            ->orderByDesc('date_applied')
+            ->limit($limit);
+
+        if (str_contains($authRole, 'reporting manager')) {
+            $query->where('workflow_status', self::WORKFLOW_PENDING_RM);
+            if (Schema::hasColumn(self::LEAVE_TABLE, 'rm_assignee_hrid') && $authHrid > 0) {
+                $query->where('rm_assignee_hrid', $authHrid);
+            }
+        } elseif (str_contains($authRole, 'hr')) {
+            $query->where('workflow_status', self::WORKFLOW_PENDING_HR);
+        } elseif (str_contains($authRole, 'sds')) {
+            $query->where('workflow_status', self::WORKFLOW_PENDING_SDS);
+        } else {
+            // Non-approver roles cannot see approver queues.
+            return response()->json(['data' => []]);
+        }
+
+        return response()->json([
+            'data' => $query->get(),
+        ]);
+    }
+
+    public function decide(Request $request, int $id): JsonResponse
+    {
+        if (! Schema::hasTable(self::LEAVE_TABLE)) {
+            return response()->json(['message' => 'Leave application table not found.'], 422);
+        }
+
+        $payload = $request->validate([
+            'decision' => ['required', 'in:approve,disapprove'],
+            'remarks' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $leave = DB::table(self::LEAVE_TABLE)
+            ->where('leave_application_id', $id)
+            ->first();
+
+        if (! $leave) {
+            return response()->json(['message' => 'Leave application not found.'], 404);
+        }
+
+        $authRole = strtolower((string) ($request->user()?->role ?? ''));
+        $authHrid = (int) ($request->user()?->hrId ?? 0);
+        $decision = $payload['decision'];
+        $remarks = $payload['remarks'] ?? null;
+        $now = now();
+        $updates = [];
+
+        if (str_contains($authRole, 'reporting manager')) {
+            if ($leave->workflow_status !== self::WORKFLOW_PENDING_RM) {
+                return response()->json(['message' => 'This request is not pending RM approval.'], 422);
+            }
+            if (isset($leave->rm_assignee_hrid) && (int) $leave->rm_assignee_hrid > 0 && (int) $leave->rm_assignee_hrid !== $authHrid) {
+                return response()->json(['message' => 'You are not assigned to this leave request.'], 403);
+            }
+
+            $updates['rm_status'] = $decision === 'approve' ? 'approved' : 'disapproved';
+            $updates['rm_action_at'] = $now;
+            $updates['rm_acted_by'] = $authHrid > 0 ? $authHrid : null;
+            $updates['rm_remarks'] = $remarks;
+            $updates['workflow_status'] = $decision === 'approve'
+                ? self::WORKFLOW_PENDING_HR
+                : self::WORKFLOW_DISAPPROVED;
+        } elseif (str_contains($authRole, 'hr')) {
+            if ($leave->workflow_status !== self::WORKFLOW_PENDING_HR) {
+                return response()->json(['message' => 'This request is not pending HR approval.'], 422);
+            }
+
+            $updates['hr_status'] = $decision === 'approve' ? 'approved' : 'disapproved';
+            $updates['hr_action_at'] = $now;
+            $updates['hr_acted_by'] = $authHrid > 0 ? $authHrid : null;
+            $updates['hr_remarks'] = $remarks;
+            $updates['workflow_status'] = $decision === 'approve'
+                ? self::WORKFLOW_PENDING_SDS
+                : self::WORKFLOW_DISAPPROVED;
+        } elseif (str_contains($authRole, 'sds')) {
+            if ($leave->workflow_status !== self::WORKFLOW_PENDING_SDS) {
+                return response()->json(['message' => 'This request is not pending SDS approval.'], 422);
+            }
+
+            $updates['sds_status'] = $decision === 'approve' ? 'approved' : 'disapproved';
+            $updates['sds_action_at'] = $now;
+            $updates['sds_acted_by'] = $authHrid > 0 ? $authHrid : null;
+            $updates['sds_remarks'] = $remarks;
+            $updates['workflow_status'] = $decision === 'approve'
+                ? self::WORKFLOW_APPROVED
+                : self::WORKFLOW_DISAPPROVED;
+        } else {
+            return response()->json(['message' => 'You are not authorized to decide this request.'], 403);
+        }
+
+        DB::table(self::LEAVE_TABLE)
+            ->where('leave_application_id', $id)
+            ->update(array_merge($updates, ['updated_at' => $now]));
+
+        return response()->json(['message' => 'Decision saved.']);
+    }
+
+    private function resolveReportingManagerHrid(?EmpOfficialInfo $officialInfo): ?int
+    {
+        if ($officialInfo === null || ! Schema::hasTable('tbl_emp_official_info')) {
+            return null;
+        }
+
+        $reportingQuery = EmpOfficialInfo::query()->where('role', 'Reporting Manager');
+
+        $departmentId = trim((string) ($officialInfo->department_id ?? ''));
+        $rawOffice = trim((string) ($officialInfo->office ?? ''));
+
+        if ($departmentId !== '' && ctype_digit($departmentId)) {
+            $reportingQuery->where('department_id', $departmentId);
+        }
+
+        if ($rawOffice !== '') {
+            $reportingQuery->where('office', $rawOffice);
+        }
+
+        $reportingRecord = $reportingQuery->select(['hrid'])->first();
+        $hrid = (int) ($reportingRecord->hrid ?? 0);
+
+        return $hrid > 0 ? $hrid : null;
     }
 }

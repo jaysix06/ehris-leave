@@ -78,12 +78,12 @@ const announcements = [
                     <img
                         src="/ehris.png"
                         alt="DepEd eHRIS"
-                        class="h-20 object-contain sm:h-24"
+                        class="h-50 object-contain sm:h-60"
                     />
 
                     <div class="max-w-2xl space-y-4">
                         <p class="mx-auto max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg">
-                            Manage employee services, records, and HR transactions through one secure platform.
+                            A modern HR platform for employee records and leave management.
                         </p>
                     </div>
 

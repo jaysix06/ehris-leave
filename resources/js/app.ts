@@ -2,8 +2,10 @@ import { createInertiaApp, router } from '@inertiajs/vue3';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import type { DefineComponent } from 'vue';
 import { createApp, h } from 'vue';
+import Vue3Toastify from 'vue3-toastify';
 import { setupCalendar } from 'v-calendar';
 import '../css/app.css';
+import 'vue3-toastify/dist/index.css';
 import 'v-calendar/style.css';
 import { initializeTheme } from './composables/useAppearance';
 import { configureEcho } from '@laravel/echo-vue';
@@ -36,6 +38,14 @@ createInertiaApp({
     setup({ el, App, props, plugin }) {
         createApp({ render: () => h(App, props) })
             .use(plugin)
+            .use(Vue3Toastify, {
+                autoClose: 4000,
+                position: 'bottom-right',
+                hideProgressBar: false,
+                closeOnClick: true,
+                pauseOnHover: true,
+                draggable: true,
+            })
             .use(setupCalendar, {})
             .mount(el);
     },
