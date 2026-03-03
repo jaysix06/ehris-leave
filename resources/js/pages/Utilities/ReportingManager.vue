@@ -41,6 +41,7 @@ type EmployeeRow = {
 
 const tableKey = ref(0);
 const isManagersLoading = ref(false);
+const isAutoAssigning = ref(false);
 const managers = ref<ManagerOption[]>([]);
 
 const assignDialog = reactive<{
@@ -217,6 +218,56 @@ const removeManager = async (hrid: number, employeeName: string) => {
     }
 };
 
+const autoAssignTeachers = async () => {
+    if (isAutoAssigning.value) return;
+
+    const confirm = await Swal.fire({
+        icon: 'question',
+        title: 'Auto-assign reporting managers?',
+        text: 'Teachers will be assigned to principal/manager by school first, then department fallback.',
+        showCancelButton: true,
+        confirmButtonText: 'Run Auto-Assign',
+        cancelButtonText: 'Cancel',
+    });
+
+    if (!confirm.isConfirmed) return;
+
+    isAutoAssigning.value = true;
+    try {
+        const response = await fetch('/api/utilities/reporting-manager/auto-assign', {
+            method: 'POST',
+            headers: {
+                Accept: 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': csrfToken(),
+            },
+            credentials: 'same-origin',
+        });
+
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+        const data = (await response.json()) as {
+            assigned: number;
+            unmatched: number;
+            teachers_scanned: number;
+            manager_candidates: number;
+        };
+
+        tableKey.value += 1;
+        await fetchManagers();
+
+        void Swal.fire({
+            icon: 'success',
+            title: 'Auto-assignment completed',
+            html: `Teachers scanned: <b>${data.teachers_scanned}</b><br>Assigned: <b>${data.assigned}</b><br>Unmatched: <b>${data.unmatched}</b>`,
+        });
+    } catch {
+        void Swal.fire({ icon: 'error', title: 'Auto-assignment failed' });
+    } finally {
+        isAutoAssigning.value = false;
+    }
+};
+
 const onTableClick = (e: MouseEvent) => {
     const target = e.target as HTMLElement;
     const button = target.closest('button[data-action]') as HTMLButtonElement | null;
@@ -258,9 +309,14 @@ onMounted(() => {
                             View and assign reporting managers to employees.
                         </p>
                     </div>
-                    <Button variant="outline" size="sm" :disabled="isManagersLoading" @click="fetchManagers()">
-                        Refresh Managers
-                    </Button>
+                    <div class="flex items-center gap-2">
+                        <Button variant="outline" size="sm" :disabled="isAutoAssigning" @click="autoAssignTeachers">
+                            {{ isAutoAssigning ? 'Assigning...' : 'Auto Assign by School/Department' }}
+                        </Button>
+                        <Button variant="outline" size="sm" :disabled="isManagersLoading" @click="fetchManagers()">
+                            Refresh Managers
+                        </Button>
+                    </div>
                 </header>
 
                 <section class="rounded-md border border-border bg-white overflow-x-auto" @click="onTableClick">

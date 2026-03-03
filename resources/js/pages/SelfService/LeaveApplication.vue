@@ -527,6 +527,9 @@ const submitLeaveApplication = () => {
         {
             forceFormData: true,
             preserveScroll: true,
+            onSuccess: () => {
+                showToast('Leave application submitted successfully.', 'success');
+            },
         },
     );
 };

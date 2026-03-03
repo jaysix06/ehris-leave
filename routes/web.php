@@ -427,6 +427,9 @@ Route::get('api/utilities/reporting-manager/managers', [ReportingManagerControll
 Route::post('api/utilities/reporting-manager/assign', [ReportingManagerController::class, 'assign'])
     ->middleware(['auth'])
     ->name('utilities.reporting-manager.assign');
+Route::post('api/utilities/reporting-manager/auto-assign', [ReportingManagerController::class, 'autoAssignBySchoolOrDepartment'])
+    ->middleware(['auth'])
+    ->name('utilities.reporting-manager.auto-assign');
 Route::delete('api/utilities/reporting-manager/{hrid}', [ReportingManagerController::class, 'remove'])
     ->middleware(['auth'])
     ->name('utilities.reporting-manager.remove');

@@ -175,12 +175,23 @@ class ReportingManagerController extends Controller
             return response()->json([]);
         }
 
-        $managers = DB::table('tbl_emp_official_info')
-            ->where('role', 'Reporting Manager')
+        $query = DB::table('tbl_emp_official_info')
             ->select(['hrid', 'firstname', 'middlename', 'lastname', 'extension', 'office'])
             ->orderBy('lastname')
-            ->orderBy('firstname')
-            ->get()
+            ->orderBy('firstname');
+
+        if (Schema::hasColumn('tbl_emp_official_info', 'is_reporting_manager')) {
+            $query->where(function ($q) {
+                $q->where('is_reporting_manager', 1)
+                    ->orWhere('is_reporting_manager', '1')
+                    ->orWhere('is_reporting_manager', true)
+                    ->orWhereRaw('LOWER(TRIM(CAST(is_reporting_manager AS CHAR))) IN (?, ?, ?)', ['true', 'yes', 'y']);
+            });
+        } else {
+            $query->where('role', 'Reporting Manager');
+        }
+
+        $managers = $query->get()
             ->map(fn ($row) => [
                 'hrid' => (int) $row->hrid,
                 'name' => trim(implode(' ', array_filter([
@@ -237,6 +248,156 @@ class ReportingManagerController extends Controller
         return response()->json(['hrid' => $hrid, 'reporting_manager' => null]);
     }
 
+    /**
+     * Auto-assign reporting managers to teachers by office (school) first, then department fallback.
+     */
+    public function autoAssignBySchoolOrDepartment()
+    {
+        $this->authorizeAdmin();
+
+        if (! Schema::hasTable('tbl_emp_official_info') || ! Schema::hasColumn('tbl_emp_official_info', 'reporting_manager')) {
+            return response()->json(['message' => 'reporting_manager column not available.'], 422);
+        }
+
+        $rows = DB::table('tbl_emp_official_info')
+            ->select([
+                'hrid',
+                'firstname',
+                'middlename',
+                'lastname',
+                'extension',
+                'job_title',
+                'role',
+                'office',
+                'department_id',
+                'is_reporting_manager',
+            ])
+            ->get();
+
+        $employees = $rows->map(function ($row) {
+            return (object) [
+                'hrid' => (int) ($row->hrid ?? 0),
+                'name' => $this->buildEmployeeName($row),
+                'job_title' => strtolower(trim((string) ($row->job_title ?? ''))),
+                'role' => strtolower(trim((string) ($row->role ?? ''))),
+                'office' => strtolower(trim((string) ($row->office ?? ''))),
+                'department_id' => $row->department_id,
+                'is_reporting_manager' => $this->isReportingManagerValue($row->is_reporting_manager ?? null),
+            ];
+        });
+
+        $managerCandidates = $employees
+            ->filter(fn ($employee) => $employee->hrid > 0 && $employee->is_reporting_manager)
+            ->values();
+
+        $teachers = $employees
+            ->filter(function ($employee) {
+                $isTeacher = str_contains($employee->job_title, 'teacher') || str_contains($employee->role, 'teacher');
+                $isPrincipal = str_contains($employee->job_title, 'principal') || str_contains($employee->role, 'principal');
+
+                return $employee->hrid > 0 && $isTeacher && ! $isPrincipal;
+            })
+            ->values();
+
+        $assigned = 0;
+        $unmatched = 0;
+
+        DB::beginTransaction();
+        try {
+            foreach ($teachers as $teacher) {
+                $sameOffice = $managerCandidates
+                    ->filter(fn ($candidate) => $candidate->hrid !== $teacher->hrid && $candidate->office !== '' && $candidate->office === $teacher->office)
+                    ->values();
+
+                $sameDepartment = $managerCandidates
+                    ->filter(fn ($candidate) => $candidate->hrid !== $teacher->hrid && $candidate->department_id !== null && $candidate->department_id === $teacher->department_id)
+                    ->values();
+
+                $selectedManager = $this->pickBestManager($sameOffice);
+
+                if (! $selectedManager) {
+                    $selectedManager = $this->pickBestManager($sameDepartment);
+                }
+
+                if (! $selectedManager) {
+                    $unmatched++;
+
+                    continue;
+                }
+
+                DB::table('tbl_emp_official_info')
+                    ->where('hrid', $teacher->hrid)
+                    ->update([
+                        'reporting_manager' => $selectedManager->name,
+                    ]);
+
+                $assigned++;
+            }
+
+            DB::commit();
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            throw $e;
+        }
+
+        return response()->json([
+            'assigned' => $assigned,
+            'unmatched' => $unmatched,
+            'teachers_scanned' => $teachers->count(),
+            'manager_candidates' => $managerCandidates->count(),
+        ]);
+    }
+
+    private function pickBestManager($candidates)
+    {
+        if ($candidates->isEmpty()) {
+            return null;
+        }
+
+        $ranked = $candidates->sortBy(function ($candidate) {
+            if (str_contains($candidate->role, 'principal') || str_contains($candidate->job_title, 'principal')) {
+                return 1;
+            }
+
+            if (str_contains($candidate->role, 'reporting manager') || str_contains($candidate->job_title, 'reporting manager')) {
+                return 2;
+            }
+
+            if (str_contains($candidate->role, 'head') || str_contains($candidate->job_title, 'head')) {
+                return 3;
+            }
+
+            return 4;
+        })->values();
+
+        return $ranked->first();
+    }
+
+    private function buildEmployeeName(object $row): string
+    {
+        return trim(implode(' ', array_filter([
+            (string) ($row->firstname ?? ''),
+            (string) ($row->middlename ?? ''),
+            (string) ($row->lastname ?? ''),
+            (string) ($row->extension ?? ''),
+        ])));
+    }
+
+    private function isReportingManagerValue(mixed $value): bool
+    {
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        if (is_int($value) || is_float($value)) {
+            return (int) $value === 1;
+        }
+
+        $normalized = strtolower(trim((string) $value));
+
+        return in_array($normalized, ['1', 'true', 'yes', 'y'], true);
+    }
+
     private function authorizeAdmin(): void
     {
         $auth = Auth::user();
@@ -245,22 +406,37 @@ class ReportingManagerController extends Controller
             abort(401);
         }
 
-        $role = strtolower(trim((string) ($auth->role ?? '')));
-        $allowedRoles = [
-            'system admin',
-            'system administrator',
-            'admin',
-            'hr manager',
-            'hr officer',
-            'hr',
-            'ao manager',
-            'ao',
-            'sds manager',
-            'sds',
-        ];
+        $rawRoles = array_filter([
+            (string) ($auth->role ?? ''),
+            (string) ($auth->user_role ?? ''),
+            (string) ($auth->usertype ?? ''),
+            (string) ($auth->user_type ?? ''),
+        ], fn ($value) => trim($value) !== '');
 
-        if (! in_array($role, $allowedRoles, true)) {
+        if (empty($rawRoles)) {
             abort(403);
         }
+
+        $normalizedRoles = array_map(fn ($role) => $this->normalizeRole($role), $rawRoles);
+        $deniedRoles = ['employee', 'teacher'];
+
+        foreach ($normalizedRoles as $role) {
+            if ($role === '') {
+                continue;
+            }
+
+            if (in_array($role, $deniedRoles, true)) {
+                abort(403);
+            }
+        }
+    }
+
+    private function normalizeRole(string $role): string
+    {
+        $normalized = strtolower(trim($role));
+        $normalized = preg_replace('/[^a-z0-9]+/', ' ', $normalized) ?? '';
+        $normalized = preg_replace('/\s+/', ' ', $normalized) ?? '';
+
+        return trim($normalized);
     }
 }
