@@ -282,21 +282,22 @@ class LeaveApplicationController extends Controller
             if ($requiresSupportingDoc) {
                 $hasMedical = $request->hasFile('medical_certificate');
                 $hasAffidavit = $request->hasFile('affidavit');
+                $hasSickLeaveSupport = $hasMedical || $hasAffidavit || $hasGenericSupportingDocs;
                 $consultation = $data['consultation_availed'] ?? null;
 
-                if ($consultation === 'yes' && ! $hasMedical) {
+                if ($consultation === 'yes' && ! ($hasMedical || $hasGenericSupportingDocs)) {
                     throw ValidationException::withMessages([
                         'medical_certificate' => 'Medical certificate is required when medical consultation was availed.',
                     ]);
                 }
 
-                if ($consultation === 'no' && ! $hasAffidavit) {
+                if ($consultation === 'no' && ! ($hasAffidavit || $hasGenericSupportingDocs)) {
                     throw ValidationException::withMessages([
                         'affidavit' => 'Affidavit is required when medical consultation was not availed.',
                     ]);
                 }
 
-                if ($consultation === null && ! ($hasMedical || $hasAffidavit)) {
+                if ($consultation === null && ! $hasSickLeaveSupport) {
                     throw ValidationException::withMessages([
                         'medical_certificate' => 'Please upload a medical certificate or an affidavit.',
                     ]);

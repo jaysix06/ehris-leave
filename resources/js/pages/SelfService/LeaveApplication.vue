@@ -9,6 +9,7 @@ import {
     X,
 } from 'lucide-vue-next';
 import { Calendar, DatePicker } from 'v-calendar';
+import { toast } from 'vue3-toastify';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import selfServiceRoutes from '@/routes/self-service';
@@ -98,69 +99,48 @@ const noOfDays = computed(() => {
     return differenceInDays(leaveRange.value.end, leaveRange.value.start) + 1;
 });
 
-const isFiledInAdvance = computed(
-    () => !!effectiveLeaveStartDate.value && effectiveLeaveStartDate.value > today,
-);
-const requiresSupportingDoc = computed(
-    () => isSickLeave.value && (isFiledInAdvance.value || noOfDays.value > 5),
-);
-const requiredDocType = computed(() => {
-    if (!requiresSupportingDoc.value) return null;
-    if (consultationAvailed.value === 'yes') return 'medical';
-    if (consultationAvailed.value === 'no') return 'affidavit';
-    return null;
-});
-
 const defaultLeaveTypeLabel = '- Select Leave Type -';
 const selectedLeaveType = ref<string>(defaultLeaveTypeLabel);
 const isLeaveTypeUnselected = computed(() => selectedLeaveType.value === defaultLeaveTypeLabel);
 const calendarKey = ref(0);
-const isSickLeave = computed(() => selectedLeaveType.value === 'Sick Leave');
-const isMaternityLeave = computed(() => selectedLeaveType.value === 'Maternity Leave');
-const isPaternityLeave = computed(() => selectedLeaveType.value === 'Paternity Leave');
 const isVacationLeave = computed(() => selectedLeaveType.value === 'Vacation Leave');
 const isSpecialPrivilegeLeave = computed(() => selectedLeaveType.value === 'Special Privilege Leave');
-const isSoloParentLeave = computed(() => selectedLeaveType.value === 'Solo Parent Leave');
-const isStudyLeave = computed(() => selectedLeaveType.value === 'Study Leave');
-const isVawcLeave = computed(
-    () => selectedLeaveType.value === 'VAWC Leave' || selectedLeaveType.value === '10-Day VAWC Leave',
-);
-const isRehabilitationLeave = computed(
-    () => selectedLeaveType.value === 'Rehabilitation Leave' || selectedLeaveType.value === 'Rehabilitation Privilege',
-);
-const isSpecialWomenLeave = computed(() => selectedLeaveType.value === 'Special Leave Benefits for Women');
-const isCalamityLeave = computed(() => selectedLeaveType.value === 'Special Emergency (Calamity) Leave');
-const isMonetizationLeave = computed(() => selectedLeaveType.value === 'Monetization of Leave Credits');
-const isTerminalLeave = computed(() => selectedLeaveType.value === 'Terminal Leave');
-const isMandatoryForceLeave = computed(
-    () =>
-        selectedLeaveType.value === 'Mandatory/Force Leave' ||
-        selectedLeaveType.value === 'Mandatory Leave' ||
-        selectedLeaveType.value === 'Forced Leave',
-);
 const leaveTypeDayLimit = computed<number | null>(() => {
-    if (isPaternityLeave.value) return 7;
-    if (isMaternityLeave.value) return 105;
-    if (isSpecialPrivilegeLeave.value) return 3;
-    if (isSoloParentLeave.value) return 7;
-    if (isStudyLeave.value) return 180;
-    if (isVawcLeave.value) return 10;
-    if (isRehabilitationLeave.value) return 180;
-    if (isSpecialWomenLeave.value) return 60;
-    if (isCalamityLeave.value) return 5;
-    if (isMandatoryForceLeave.value) return 5;
+    const leaveType = selectedLeaveType.value;
+    const limits: Record<string, number> = {
+        'Paternity Leave': 7,
+        'Maternity Leave': 105,
+        'Special Privilege Leave': 3,
+        'Solo Parent Leave': 7,
+        'Study Leave': 180,
+        'VAWC Leave': 10,
+        '10-Day VAWC Leave': 10,
+        'Rehabilitation Leave': 180,
+        'Rehabilitation Privilege': 180,
+        'Special Leave Benefits for Women': 60,
+        'Special Emergency (Calamity) Leave': 5,
+        'Mandatory/Force Leave': 5,
+        'Mandatory Leave': 5,
+        'Forced Leave': 5,
+    };
+
+    if (limits[leaveType]) {
+        return limits[leaveType];
+    }
+
     return null;
 });
 
 
 const minSelectableDate = computed<Date | null>(() => {
-    if (isSickLeave.value || isVawcLeave.value || isSpecialWomenLeave.value) {
+    const leaveType = selectedLeaveType.value;
+    if (['Sick Leave', 'VAWC Leave', '10-Day VAWC Leave', 'Special Leave Benefits for Women'].includes(leaveType)) {
         return null;
     }
-    if (isVacationLeave.value || isSoloParentLeave.value) {
+    if (leaveType === 'Vacation Leave' || leaveType === 'Solo Parent Leave') {
         return addDays(today, 5);
     }
-    if (isSpecialPrivilegeLeave.value) {
+    if (leaveType === 'Special Privilege Leave') {
         return addDays(today, 7);
     }
     return today;
@@ -279,58 +259,21 @@ const onSpecificDayClick = (day: CalendarDayClick) => {
 const reason = ref<string>('');
 const reasonSpecify = ref<string>('');
 const commutation = ref<string>('');
-const consultationAvailed = ref<'yes' | 'no' | ''>('');
-const medicalCertification = ref<File | null>(null);
-const affidavitFile = ref<File | null>(null);
-const proofOfDelivery = ref<File | null>(null);
-const isMedicalDropActive = ref(false);
-const isAffidavitDropActive = ref(false);
-const isProofOfDeliveryDropActive = ref(false);
 const supportingDocuments = ref<File[]>([]);
 const supportingDocumentsInput = ref<HTMLInputElement | null>(null);
 const destinationScope = ref<'within_ph' | 'abroad' | ''>('');
-const destinationDetails = ref('');
-const travelAuthorityNo = ref('');
-const isEmergencySpl = ref(false);
-const emergencyReason = ref('');
-const isTimingOverride = ref(false);
-const timingOverrideReason = ref('');
-const accidentDate = ref('');
-const surgeryDate = ref('');
-const calamityDate = ref('');
-const calamityType = ref('');
-const calamityArea = ref('');
-const residenceAddressSnapshot = ref('');
-const soloParentIdNo = ref('');
-const soloParentIdValidUntil = ref('');
-const studyContractId = ref('');
-const isPrivatePhysician = ref(false);
 const supervisorNotes = ref('');
-const separationType = ref('');
-const separationEffectiveDate = ref('');
-const creditsMonetized = ref<number | null>(null);
-const isMandatoryLeave = ref(false);
-const toastVisible = ref(false);
-const toastMessage = ref('');
-const toastType = ref<'error' | 'success'>('error');
-let toastTimer: ReturnType<typeof setTimeout> | null = null;
 
 const showToast = (message: string, type: 'error' | 'success' = 'error') => {
-    toastMessage.value = message;
-    toastType.value = type;
-    toastVisible.value = true;
-
-    if (toastTimer) {
-        clearTimeout(toastTimer);
+    if (type === 'success') {
+        toast.success(message);
+        return;
     }
-    toastTimer = setTimeout(() => {
-        toastVisible.value = false;
-    }, 4000);
+
+    toast.error(message);
 };
 
 const clearLeaveRequestForm = () => {
-    toastVisible.value = false;
-
     selectedLeaveType.value = defaultLeaveTypeLabel;
     leaveForMode.value = '- Select Leave For -';
     leaveRange.value = { start: null, end: null };
@@ -340,40 +283,11 @@ const clearLeaveRequestForm = () => {
     reason.value = '';
     reasonSpecify.value = '';
     commutation.value = '';
-    consultationAvailed.value = '';
-
-    medicalCertification.value = null;
-    affidavitFile.value = null;
-    proofOfDelivery.value = null;
     supportingDocuments.value = [];
     if (supportingDocumentsInput.value) supportingDocumentsInput.value.value = '';
 
-    isMedicalDropActive.value = false;
-    isAffidavitDropActive.value = false;
-    isProofOfDeliveryDropActive.value = false;
-
     destinationScope.value = '';
-    destinationDetails.value = '';
-    travelAuthorityNo.value = '';
-    isEmergencySpl.value = false;
-    emergencyReason.value = '';
-    isTimingOverride.value = false;
-    timingOverrideReason.value = '';
-    accidentDate.value = '';
-    surgeryDate.value = '';
-    calamityDate.value = '';
-    calamityType.value = '';
-    calamityArea.value = '';
-    residenceAddressSnapshot.value = '';
-    soloParentIdNo.value = '';
-    soloParentIdValidUntil.value = '';
-    studyContractId.value = '';
-    isPrivatePhysician.value = false;
     supervisorNotes.value = '';
-    separationType.value = '';
-    separationEffectiveDate.value = '';
-    creditsMonetized.value = null;
-    isMandatoryLeave.value = false;
 };
 
 const page = usePage();
@@ -539,79 +453,9 @@ watch(leaveTypeOptions, (options) => {
     }
 });
 
-watch([selectedLeaveType, consultationAvailed], () => {
-    if (!requiresSupportingDoc.value) {
-        consultationAvailed.value = '';
-        if (!isMaternityLeave.value) {
-            medicalCertification.value = null;
-        }
-        affidavitFile.value = null;
-    }
-
-    if (requiresSupportingDoc.value) {
-        if (consultationAvailed.value === 'yes') {
-            affidavitFile.value = null;
-        } else if (consultationAvailed.value === 'no') {
-            medicalCertification.value = null;
-        }
-    }
-
-    if (!isPaternityLeave.value) {
-        proofOfDelivery.value = null;
-    }
-
+watch(selectedLeaveType, () => {
     if (!(isVacationLeave.value || isSpecialPrivilegeLeave.value)) {
         destinationScope.value = '';
-        destinationDetails.value = '';
-        travelAuthorityNo.value = '';
-    }
-
-    if (!isSpecialPrivilegeLeave.value) {
-        isEmergencySpl.value = false;
-        emergencyReason.value = '';
-    }
-
-    if (!(isVacationLeave.value || isSoloParentLeave.value || isRehabilitationLeave.value)) {
-        isTimingOverride.value = false;
-        timingOverrideReason.value = '';
-    }
-
-    if (!isRehabilitationLeave.value) {
-        accidentDate.value = '';
-        isPrivatePhysician.value = false;
-    }
-
-    if (!isSpecialWomenLeave.value) {
-        surgeryDate.value = '';
-    }
-
-    if (!isCalamityLeave.value) {
-        calamityDate.value = '';
-        calamityType.value = '';
-        calamityArea.value = '';
-        residenceAddressSnapshot.value = '';
-    }
-
-    if (!isSoloParentLeave.value) {
-        soloParentIdNo.value = '';
-        soloParentIdValidUntil.value = '';
-    }
-
-    if (!isStudyLeave.value) {
-        studyContractId.value = '';
-    }
-
-    if (!isMonetizationLeave.value) {
-        creditsMonetized.value = null;
-    }
-
-    if (!isTerminalLeave.value) {
-        separationType.value = '';
-        separationEffectiveDate.value = '';
-    }
-
-    if (!(isVacationLeave.value || isMandatoryForceLeave.value)) {
-        isMandatoryLeave.value = false;
     }
 });
 
@@ -633,7 +477,6 @@ const formatDateForSubmit = (date: Date) => {
 };
 
 const submitLeaveApplication = () => {
-    toastVisible.value = false;
     const leaveStartDate = effectiveLeaveStartDate.value;
     const leaveEndDate = effectiveLeaveEndDate.value;
 
@@ -659,55 +502,8 @@ const submitLeaveApplication = () => {
         return;
     }
 
-    if (requiresSupportingDoc.value) {
-        if (requiredDocType.value === 'medical' && !medicalCertification.value) {
-            showToast('Medical certificate is required when consultation was availed.');
-            return;
-        }
-        if (requiredDocType.value === 'affidavit' && !affidavitFile.value) {
-            showToast('Affidavit is required when consultation was not availed.');
-            return;
-        }
-        if (!requiredDocType.value && !medicalCertification.value && !affidavitFile.value) {
-            showToast('Please upload a medical certificate or an affidavit.');
-            return;
-        }
-    }
-
-    if (isPaternityLeave.value) {
-        if (!proofOfDelivery.value) {
-            showToast('Please upload proof of child\'s delivery (e.g. birth certificate, medical certificate, or marriage contract).');
-            return;
-        }
-    }
-
     if ((isVacationLeave.value || isSpecialPrivilegeLeave.value) && !destinationScope.value) {
         showToast('Please indicate if your destination is within the Philippines or abroad.');
-        return;
-    }
-
-    if (isSpecialPrivilegeLeave.value && isEmergencySpl.value && !emergencyReason.value.trim()) {
-        showToast('Please provide emergency reason for Special Privilege Leave.');
-        return;
-    }
-
-    if (isRehabilitationLeave.value && !accidentDate.value) {
-        showToast('Accident date is required for Rehabilitation Leave.');
-        return;
-    }
-
-    if (isCalamityLeave.value && !calamityDate.value) {
-        showToast('Calamity date is required for Special Emergency (Calamity) Leave.');
-        return;
-    }
-
-    if (isMonetizationLeave.value && (!creditsMonetized.value || creditsMonetized.value <= 0)) {
-        showToast('Please provide credits to monetize.');
-        return;
-    }
-
-    if (isTerminalLeave.value && (!separationType.value || !separationEffectiveDate.value)) {
-        showToast('Please provide separation type and effective date for Terminal Leave.');
         return;
     }
 
@@ -719,32 +515,8 @@ const submitLeaveApplication = () => {
             leave_end_date: formatDateForSubmit(leaveEndDate),
             reason: reason.value || null,
             commutation: commutation.value || null,
-            consultation_availed: consultationAvailed.value || null,
-            medical_certificate: medicalCertification.value,
-            affidavit: affidavitFile.value,
-            proof_of_delivery: proofOfDelivery.value,
             destination_scope: destinationScope.value || null,
-            destination_details: destinationDetails.value || null,
-            travel_authority_no: travelAuthorityNo.value || null,
-            is_emergency_spl: isEmergencySpl.value,
-            emergency_reason: emergencyReason.value || null,
-            is_timing_override: isTimingOverride.value,
-            timing_override_reason: timingOverrideReason.value || null,
-            accident_date: accidentDate.value || null,
-            surgery_date: surgeryDate.value || null,
-            calamity_date: calamityDate.value || null,
-            calamity_type: calamityType.value || null,
-            calamity_area: calamityArea.value || null,
-            residence_address_snapshot: residenceAddressSnapshot.value || null,
-            solo_parent_id_no: soloParentIdNo.value || null,
-            solo_parent_id_valid_until: soloParentIdValidUntil.value || null,
-            study_contract_id: studyContractId.value || null,
-            is_private_physician: isPrivatePhysician.value,
             supervisor_notes: supervisorNotes.value || null,
-            separation_type: separationType.value || null,
-            separation_effective_date: separationEffectiveDate.value || null,
-            credits_monetized: creditsMonetized.value ?? null,
-            is_mandatory_leave: isMandatoryLeave.value,
             supporting_documents: supportingDocuments.value,
             leave_for_mode: leaveForMode.value,
             leave_specific_dates: isSpecificDaysMode.value
@@ -776,9 +548,6 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
-    if (toastTimer) {
-        clearTimeout(toastTimer);
-    }
     if (reverbEnabled) {
         try {
             echo().channel('leave-types').stopListening('LeaveTypeUpdated');
@@ -794,10 +563,6 @@ onBeforeUnmount(() => {
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="ehris-page leave-application-page">
-            <div v-if="toastVisible" class="toast-banner" :class="toastType === 'error' ? 'is-error' : 'is-success'">
-                {{ toastMessage }}
-            </div>
-
             <section class="leave-summary-row">
                 <article class="ehris-card leave-highlight-card">
                     <h3>Upcoming leaves</h3>
@@ -911,11 +676,11 @@ onBeforeUnmount(() => {
 
                                     <!-- Vacation Leave or Special Privilege Leave -->
                                     <label v-if="selectedLeaveType === 'Vacation Leave' || selectedLeaveType === 'Special Privilege Leave'" class="radio-option inline-flex  gap-2 cursor-pointer">
-                                        <input type="radio" v-model="reason" name="within" value="Within the Philippines" />
+                                        <input type="radio" v-model="destinationScope" name="destination_scope" value="within_ph" />
                                         Within the Philippines
                                     </label>
                                     <label v-if="selectedLeaveType === 'Vacation Leave' || selectedLeaveType === 'Special Privilege Leave'" class="radio-option inline-flex  gap-2 cursor-pointer">
-                                        <input type="radio" v-model="reason" name="abroad" value="Abroad" />
+                                        <input type="radio" v-model="destinationScope" name="destination_scope" value="abroad" />
                                         Abroad
                                     </label>
 
@@ -1079,30 +844,6 @@ onBeforeUnmount(() => {
 .leave-application-page {
     position: relative;
     gap: 1rem;
-}
-
-.toast-banner {
-    position: fixed;
-    top: 1rem;
-    right: 1rem;
-    z-index: 50;
-    max-width: min(420px, calc(100vw - 2rem));
-    padding: 0.7rem 0.9rem;
-    border-radius: 0.7rem;
-    border: 1px solid hsl(var(--border));
-    box-shadow: 0 12px 28px hsl(var(--foreground) / 0.15);
-    font-size: 0.84rem;
-    font-weight: 600;
-}
-
-.toast-banner.is-error {
-    background: hsl(var(--destructive));
-    color: hsl(var(--destructive-foreground));
-}
-
-.toast-banner.is-success {
-    background: hsl(var(--primary));
-    color: hsl(var(--primary-foreground));
 }
 
 .leave-top-row {
