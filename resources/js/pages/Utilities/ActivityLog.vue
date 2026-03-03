@@ -80,6 +80,7 @@ const getAjaxParams = computed(() => () => ({}));
                         :empty-message="emptyMessage"
                         :show-export-buttons="false"
                         :per-page-options="[10, 25, 50, 100, -1]"
+                        :default-order="[0, 'desc']"
                     />
                 </div>
             </section>

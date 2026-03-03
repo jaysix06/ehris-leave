@@ -781,7 +781,7 @@ const getAjaxParams = computed(() => () => ({
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="p-6 flex flex-col gap-6">
             <!-- Page Header -->
-            <section class="border border-border rounded-lg bg-background p-6 shadow-sm">
+            <section class="border border-border rounded-lg bg-card p-6 shadow-sm">
                 <div class="mb-4">
                     <h1 class="text-3xl font-bold">{{ pageTitle }}</h1>
                     <p class="text-muted-foreground mt-1">
@@ -793,7 +793,7 @@ const getAjaxParams = computed(() => () => ({
             </section>
 
             <!-- Charts Section -->
-            <section class="border border-border rounded-lg bg-background p-6 shadow-sm">
+            <section class="border border-border rounded-lg bg-card p-6 shadow-sm">
                 <div class="mb-4">
                     <h2 class="text-xl font-semibold">Analytics & Reports</h2>
                     <p class="text-sm text-muted-foreground mt-1">
@@ -803,7 +803,7 @@ const getAjaxParams = computed(() => () => ({
 
                 <!-- Charts -->
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 items-start">
-                    <div class="rounded-lg border p-4 bg-background">
+                    <div class="rounded-lg border p-4 bg-card">
                         <h3 class="text-sm font-semibold text-muted-foreground mb-3">Employment Status</h3>
                         <div class="h-[240px]">
                             <Doughnut
@@ -916,7 +916,7 @@ const getAjaxParams = computed(() => () => ({
                             </transition>
                         </div>
                     </div>
-                    <div class="rounded-lg border p-4 bg-background">
+                    <div class="rounded-lg border p-4 bg-card">
                         <h3 class="text-sm font-semibold text-muted-foreground mb-3">By School/Office</h3>
                         <div class="h-[240px]">
                             <Doughnut
@@ -1031,7 +1031,7 @@ const getAjaxParams = computed(() => () => ({
                     </div>
                 </div>
                 <div class="grid grid-cols-1 gap-6 mb-6">
-                    <div class="rounded-lg border p-4 bg-background">
+                    <div class="rounded-lg border p-4 bg-card">
                         <h3 class="text-sm font-semibold text-muted-foreground mb-3">Count per Job Title (top 10)</h3>
                         <div class="h-[320px]">
                             <Bar
@@ -1051,7 +1051,7 @@ const getAjaxParams = computed(() => () => ({
             </section>
 
             <!-- Filter Section -->
-            <section class="border border-border rounded-lg bg-background p-6 shadow-sm">
+            <section class="border border-border rounded-lg bg-card p-6 shadow-sm">
                 <div class="flex items-center justify-between mb-4">
                     <div>
                         <h2 class="text-xl font-semibold flex items-center gap-2">
@@ -1255,7 +1255,7 @@ const getAjaxParams = computed(() => () => ({
             </section>
 
             <!-- Report Results Section -->
-            <section class="border border-border rounded-lg bg-background p-6 shadow-sm">
+            <section class="border border-border rounded-lg bg-card p-6 shadow-sm">
                 <div class="mb-4">
                     <h2 class="text-xl font-semibold">Employee Listing Results</h2>
                     <p class="text-sm text-muted-foreground mt-1">
@@ -1265,15 +1265,15 @@ const getAjaxParams = computed(() => () => ({
 
                 <!-- Summary Statistics -->
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                    <div class="rounded-lg border p-4 bg-background">
+                    <div class="rounded-lg border p-4 bg-card">
                         <div class="text-sm text-muted-foreground">Total Employees</div>
                         <div class="text-2xl font-bold mt-1 text-primary">{{ summaryStatsData.total }}</div>
                     </div>
-                    <div class="rounded-lg border p-4 bg-background">
+                    <div class="rounded-lg border p-4 bg-card">
                         <div class="text-sm text-muted-foreground">Permanent</div>
                         <div class="text-2xl font-bold mt-1 text-primary">{{ summaryStatsData.permanent }}</div>
                     </div>
-                    <div class="rounded-lg border p-4 bg-background">
+                    <div class="rounded-lg border p-4 bg-card">
                         <div class="text-sm text-muted-foreground">Avg Leave Balance</div>
                         <div class="text-2xl font-bold mt-1 text-primary">{{ summaryStatsData.avgLeaveBalance }}</div>
                     </div>

@@ -57,6 +57,8 @@ const props = withDefaults(
         cellRenderers?: Record<string, (row: any, value: any, type?: string) => string>;
         /** Accordion content renderer - function that returns HTML string */
         accordionRenderer?: (row: any) => string;
+        /** Default order - array of [columnIndex, direction] where direction is 'asc' or 'desc' */
+        defaultOrder?: [number, 'asc' | 'desc'];
     }>(),
     {
         loading: false,
@@ -68,6 +70,7 @@ const props = withDefaults(
         showExportButtons: false,
         cellRenderers: undefined,
         accordionRenderer: undefined,
+        defaultOrder: () => [0, 'asc'],
     },
 );
 
@@ -317,7 +320,7 @@ onMounted(() => {
                 props.perPageOptions.map(opt => opt === -1 ? -1 : opt),
                 props.perPageOptions.map(opt => opt === -1 ? 'All' : String(opt))
             ],
-            order: [[0, 'asc']],
+            order: [props.defaultOrder || [0, 'asc']],
             language: {
                 emptyTable: props.emptyMessage,
                 processing: '<div class="flex items-center justify-center gap-2"><div class="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div><span>Loading...</span></div>',
