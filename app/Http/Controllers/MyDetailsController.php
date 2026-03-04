@@ -15,6 +15,7 @@ use App\Models\EmpServiceRecord;
 use App\Models\EmpTraining;
 use App\Models\EmpWorkExperienceInfo;
 use App\Models\Expertise;
+use App\Models\FamilyInfo;
 use App\Models\LeaveHistory;
 use App\Models\Performance;
 use App\Models\Researches;
@@ -37,6 +38,7 @@ class MyDetailsController extends Controller
             'officialInfo' => null,
             'personalInfo' => null,
             'contactInfo' => null,
+            'family' => [],
             'education' => [],
             'workExperience' => [],
             'eligibility' => [],
@@ -81,6 +83,11 @@ class MyDetailsController extends Controller
                     'key' => 'personalInfo',
                     'type' => 'single',
                     'query' => fn () => EmpPersonalInfo::query()->where('hrid', $hrid)->first(),
+                ],
+                'tbl_emp_family_info' => [
+                    'key' => 'family',
+                    'type' => 'collection',
+                    'query' => fn () => FamilyInfo::query()->where('hrid', $hrid)->get(),
                 ],
                 'tbl_emp_contact_info' => [
                     'key' => 'contactInfo',
