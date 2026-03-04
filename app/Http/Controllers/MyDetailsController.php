@@ -45,6 +45,7 @@ class MyDetailsController extends Controller
             'serviceRecord' => [],
             'leaveHistory' => [],
             'documents' => [],
+            'voluntaryWork' => [],
             'training' => [],
             'awards' => [],
             'performance' => [],
@@ -137,6 +138,11 @@ class MyDetailsController extends Controller
                     'type' => 'collection',
                     'query' => fn () => Document::query()->where('hrid', $hrid)->get(),
                 ],
+                'tbl_emp_voluntary_work' => [
+                    'key' => 'voluntaryWork',
+                    'type' => 'collection',
+                    'query' => fn () => DB::table('tbl_emp_voluntary_work')->where('hrid', $hrid)->get(),
+                ],
                 'tbl_emp_training' => [
                     'key' => 'training',
                     'type' => 'collection',
@@ -183,6 +189,13 @@ class MyDetailsController extends Controller
                 } catch (\Throwable $e) {
                     // skip if table missing or query fails
                 }
+            }
+
+            if ($data['voluntaryWork'] === [] && Schema::hasTable('tbl_voluntary_work')) {
+                $data['voluntaryWork'] = DB::table('tbl_voluntary_work')->where('hrid', $hrid)->get()->all();
+            }
+            if ($data['voluntaryWork'] === [] && $data['affiliation'] !== []) {
+                $data['voluntaryWork'] = $data['affiliation'];
             }
 
             // Enrich contact info with resolved barangay/province names so the
@@ -313,15 +326,18 @@ class MyDetailsController extends Controller
         $family = Schema::hasTable('tbl_emp_family_info')
             ? DB::table('tbl_emp_family_info')->where('hrid', $hrid)->get()
             : collect();
-        $education = Schema::hasTable('tbl_emp_education_info')
-            ? DB::table('tbl_emp_education_info')->where('hrid', $hrid)->orderBy('id')->get()
-            : collect();
-        $workExperience = Schema::hasTable('tbl_emp_work_experience_info')
-            ? DB::table('tbl_emp_work_experience_info')->where('hrid', $hrid)->orderBy('id')->get()
-            : collect();
-        $eligibility = Schema::hasTable('tbl_emp_civil_service_info')
-            ? DB::table('tbl_emp_civil_service_info')->where('hrid', $hrid)->orderBy('id')->get()
-            : collect();
+        $education = $this->getOrderedRowsByHrid('tbl_emp_education_info', $hrid, ['id', 'education_id']);
+        $workExperience = $this->getOrderedRowsByHrid('tbl_emp_work_experience_info', $hrid, ['id', 'work_experience_id']);
+        $eligibility = $this->getOrderedRowsByHrid('tbl_emp_civil_service_info', $hrid, ['id', 'civil_service_id']);
+        $voluntaryWork = Schema::hasTable('tbl_emp_voluntary_work')
+            ? $this->getOrderedRowsByHrid('tbl_emp_voluntary_work', $hrid, ['id', 'voluntary_work_id'])
+            : (Schema::hasTable('tbl_voluntary_work')
+                ? $this->getOrderedRowsByHrid('tbl_voluntary_work', $hrid, ['id', 'voluntary_work_id'])
+                : $this->getOrderedRowsByHrid('tbl_affiliation', $hrid, ['id', 'affiliation_id']));
+        $training = $this->getOrderedRowsByHrid('tbl_emp_training', $hrid, ['id', 'training_id']);
+        $awards = $this->getOrderedRowsByHrid('tbl_awards', $hrid, ['id', 'award_id']);
+        $expertise = $this->getOrderedRowsByHrid('tbl_expertise', $hrid, ['id', 'expertise_id']);
+        $affiliation = $this->getOrderedRowsByHrid('tbl_affiliation', $hrid, ['id', 'affiliation_id']);
 
         $spouse = $family->first(fn ($row) => strtolower((string) ($row->relationship ?? '')) === 'spouse');
         $father = $family->first(fn ($row) => strtolower((string) ($row->relationship ?? '')) === 'father');
@@ -340,6 +356,11 @@ class MyDetailsController extends Controller
             'education' => $education,
             'workExperience' => $workExperience,
             'eligibility' => $eligibility,
+            'voluntaryWork' => $voluntaryWork,
+            'training' => $training,
+            'awards' => $awards,
+            'expertise' => $expertise,
+            'affiliation' => $affiliation,
             'spouse' => $spouse,
             'father' => $father,
             'mother' => $mother,
@@ -361,6 +382,27 @@ class MyDetailsController extends Controller
         }, $filename, [
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ]);
+    }
+
+    /**
+     * @param  array<int, string>  $orderColumns
+     * @return \Illuminate\Support\Collection<int, object>
+     */
+    private function getOrderedRowsByHrid(string $table, mixed $hrid, array $orderColumns): \Illuminate\Support\Collection
+    {
+        if (! Schema::hasTable($table)) {
+            return collect();
+        }
+
+        $query = DB::table($table)->where('hrid', $hrid);
+
+        foreach ($orderColumns as $column) {
+            if (Schema::hasColumn($table, $column)) {
+                return $query->orderBy($column)->get();
+            }
+        }
+
+        return $query->get();
     }
 
     /**
