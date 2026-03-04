@@ -668,9 +668,9 @@ class IdCardImageService
                         $logoSrcW = \imagesx($logo);
                         $logoSrcH = \imagesy($logo);
                         $logoDstW = (int) round($pocketDstW * 0.56);
-                        $logoDstH = (int) round($pocketDstH * 0.068);
+                        $logoDstH = (int) round($pocketDstH * 0.066);
                         $logoDstX = $pocketDstX + (int) round($pocketDstW * 0.22);
-                        $logoDstY = $pocketDstY + (int) round($pocketDstH * 0.11);
+                        $logoDstY = $pocketDstY + (int) round($pocketDstH * 0.125);
                         \imagecopyresampled($img, $logo, $logoDstX, $logoDstY, 0, 0, $logoDstW, $logoDstH, $logoSrcW, $logoSrcH);
                         \imagedestroy($logo);
                     }
