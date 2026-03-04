@@ -71,6 +71,109 @@ class UserListController extends Controller
     }
 
     /**
+     * API endpoint: DataTables server-side processing for User List.
+     */
+    public function datatables(Request $request)
+    {
+        $draw = (int) $request->get('draw', 1);
+        $start = (int) $request->get('start', 0);
+        $length = (int) $request->get('length', 10);
+        $searchValue = trim((string) $request->input('search.value', ''));
+        $orderColumnIndex = (int) $request->input('order.0.column', 0);
+        $orderDir = $request->input('order.0.dir', 'desc') === 'asc' ? 'asc' : 'desc';
+
+        $baseQuery = DB::table('tbl_user as u')
+            ->leftJoin('tbl_department as d', 'u.department_id', '=', 'd.department_id')
+            ->select([
+                'u.userId as id',
+                'u.hrid as hrid',
+                'u.email',
+                'u.lastname',
+                'u.firstname',
+                'u.middlename',
+                'u.extname',
+                'u.fullname',
+                'u.job_title',
+                'u.role',
+                'u.active',
+                'u.date_created',
+                'u.department_id',
+                'd.department_name as office',
+            ]);
+
+        $totalRecords = DB::table('tbl_user')->count();
+
+        $query = clone $baseQuery;
+        if ($searchValue !== '') {
+            $query->where(function ($q) use ($searchValue) {
+                $q->where('u.email', 'like', '%'.$searchValue.'%')
+                    ->orWhere('u.lastname', 'like', '%'.$searchValue.'%')
+                    ->orWhere('u.firstname', 'like', '%'.$searchValue.'%')
+                    ->orWhere('u.middlename', 'like', '%'.$searchValue.'%')
+                    ->orWhere('u.fullname', 'like', '%'.$searchValue.'%')
+                    ->orWhere('u.role', 'like', '%'.$searchValue.'%')
+                    ->orWhere('d.department_name', 'like', '%'.$searchValue.'%')
+                    ->orWhere('u.hrid', 'like', '%'.$searchValue.'%');
+            });
+        }
+        $filteredRecords = $query->count();
+
+        $columns = ['id', 'hrid', 'email', 'name', 'role', 'office', 'active', 'actions'];
+        $orderColumn = $columns[$orderColumnIndex] ?? 'id';
+        if ($orderColumn === 'name') {
+            $baseQuery->orderBy('u.firstname', $orderDir)->orderBy('u.lastname', $orderDir);
+        } elseif ($orderColumn !== 'actions') {
+            $dbCol = $orderColumn === 'id' ? 'u.userId' : ($orderColumn === 'office' ? 'd.department_name' : 'u.'.$orderColumn);
+            $baseQuery->orderBy($dbCol, $orderDir);
+        } else {
+            $baseQuery->orderByDesc('u.date_created')->orderByDesc('u.userId');
+        }
+
+        if ($searchValue !== '') {
+            $baseQuery->where(function ($q) use ($searchValue) {
+                $q->where('u.email', 'like', '%'.$searchValue.'%')
+                    ->orWhere('u.lastname', 'like', '%'.$searchValue.'%')
+                    ->orWhere('u.firstname', 'like', '%'.$searchValue.'%')
+                    ->orWhere('u.middlename', 'like', '%'.$searchValue.'%')
+                    ->orWhere('u.fullname', 'like', '%'.$searchValue.'%')
+                    ->orWhere('u.role', 'like', '%'.$searchValue.'%')
+                    ->orWhere('d.department_name', 'like', '%'.$searchValue.'%')
+                    ->orWhere('u.hrid', 'like', '%'.$searchValue.'%');
+            });
+        }
+
+        $length = $length > 0 ? $length : 10;
+        $users = $baseQuery->skip($start)->take($length)->get();
+
+        $data = $users->map(function ($row) {
+            $name = trim(implode(' ', array_filter([
+                $row->firstname,
+                $row->middlename,
+                $row->lastname,
+                $row->extname,
+            ]))) ?: ($row->fullname ?? $row->email ?? '—');
+
+            return [
+                'id' => $row->id,
+                'hrid' => $row->hrid ?? '—',
+                'email' => $row->email ?? '—',
+                'name' => $name,
+                'role' => $row->role ?? '—',
+                'office' => $row->office ?? '—',
+                'active' => (bool) $row->active,
+                '_raw' => $row,
+            ];
+        });
+
+        return response()->json([
+            'draw' => $draw,
+            'recordsTotal' => $totalRecords,
+            'recordsFiltered' => $filteredRecords,
+            'data' => $data,
+        ]);
+    }
+
+    /**
      * API endpoint: departments list (for Office/School dropdown).
      */
     public function departments()
@@ -86,6 +189,36 @@ class UserListController extends Controller
             ->get();
 
         return response()->json($departments);
+    }
+
+    /**
+     * API endpoint: get a single user (for edit modal).
+     */
+    public function show(User $user)
+    {
+        $this->authorizeAdmin();
+
+        $row = DB::table('tbl_user as u')
+            ->leftJoin('tbl_department as d', 'u.department_id', '=', 'd.department_id')
+            ->where('u.userId', $user->getKey())
+            ->select([
+                'u.userId as id',
+                'u.hrid as hrid',
+                'u.email',
+                'u.lastname',
+                'u.firstname',
+                'u.middlename',
+                'u.extname',
+                'u.fullname',
+                'u.job_title',
+                'u.role',
+                'u.active',
+                'u.department_id',
+                'd.department_name as office',
+            ])
+            ->first();
+
+        return response()->json($row);
     }
 
     /**

@@ -303,6 +303,10 @@ Route::get('my-details/pds-export', [MyDetailsController::class, 'exportPdsExcel
     ->middleware(['auth', 'verified'])
     ->name('my-details.export-pds');
 
+Route::get('my-profile', function () {
+    return Inertia::render('MyProfile');
+})->middleware(['auth', 'verified'])->name('my-profile');
+
 Route::get('utilities', function () {
     return Inertia::render('Utilities');
 })->middleware(['auth', 'verified'])->name('utilities');
@@ -315,6 +319,12 @@ Route::get('utilities/user-list', [UserListController::class, 'index'])
 Route::get('api/utilities/users', [UserListController::class, 'api'])
     ->middleware(['auth'])
     ->name('utilities.user-list.api');
+Route::get('api/utilities/users/datatables', [UserListController::class, 'datatables'])
+    ->middleware(['auth'])
+    ->name('utilities.user-list.datatables');
+Route::get('api/utilities/users/{user}', [UserListController::class, 'show'])
+    ->middleware(['auth'])
+    ->name('utilities.user-list.show');
 Route::get('api/utilities/departments', [UserListController::class, 'departments'])
     ->middleware(['auth'])
     ->name('utilities.departments');

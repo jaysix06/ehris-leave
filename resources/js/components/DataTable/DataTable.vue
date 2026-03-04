@@ -18,10 +18,14 @@ export type DataTableColumn = {
     slot?: string;
     /** Width style, e.g. "8rem" or "minmax(100px, 1fr)" */
     width?: string;
-    /** DataTables column data source (defaults to key) */
-    data?: string;
+    /** DataTables column data source (defaults to key). Use null for computed columns. */
+    data?: string | null;
     /** Custom render function for the column */
     render?: (data: unknown, type: string, row: any, meta: any) => string;
+    /** Whether column is orderable (default true) */
+    orderable?: boolean;
+    /** Whether column is searchable (default true) */
+    searchable?: boolean;
 };
 
 
@@ -121,11 +125,11 @@ onMounted(() => {
         // Build DataTables columns configuration
         const dtColumns = props.columns.map((col) => {
             const columnConfig: any = {
-                data: col.data || col.key,
+                data: col.data ?? col.key,
                 title: col.label,
                 className: col.class || col.tdClass || '',
-                orderable: true, // Enable column sorting
-                searchable: true, // Enable column search
+                orderable: col.orderable !== false,
+                searchable: col.searchable !== false,
             };
             
             // Custom render function
