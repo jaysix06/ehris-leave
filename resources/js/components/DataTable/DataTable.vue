@@ -22,9 +22,11 @@ export type DataTableColumn = {
     data?: string | null;
     /** Custom render function for the column */
     render?: (data: unknown, type: string, row: any, meta: any) => string;
-    /** Whether column is orderable (default true) */
+    /** Hide column from display but keep in data for exports (default: true) */
+    visible?: boolean;
+    /** Whether column is sortable (default: true) */
     orderable?: boolean;
-    /** Whether column is searchable (default true) */
+    /** Whether column is searchable (default: true) */
     searchable?: boolean;
 };
 
@@ -54,9 +56,11 @@ const props = withDefaults(
         /** Show built-in export buttons (CSV, Excel, Print) */
         showExportButtons?: boolean;
         /** Custom cell renderers - function that returns HTML string */
-        cellRenderers?: Record<string, (row: any, value: any) => string>;
+        cellRenderers?: Record<string, (row: any, value: any, type?: string) => string>;
         /** Accordion content renderer - function that returns HTML string */
         accordionRenderer?: (row: any) => string;
+        /** Default order - array of [columnIndex, direction] where direction is 'asc' or 'desc' */
+        defaultOrder?: [number, 'asc' | 'desc'];
     }>(),
     {
         loading: false,
@@ -68,6 +72,7 @@ const props = withDefaults(
         showExportButtons: false,
         cellRenderers: undefined,
         accordionRenderer: undefined,
+        defaultOrder: () => [0, 'asc'],
     },
 );
 
@@ -96,16 +101,32 @@ function toggleRow(row: any, rowElement?: HTMLElement) {
     
     const wasExpanded = expandedRows.value.has(rowKey);
     if (wasExpanded) {
+        // Close the current row
         expandedRows.value.delete(rowKey);
         dataTableInstance.row(rowEl).child.hide();
+        rowEl.classList.remove('expanded');
         emit('row-collapse', row._raw);
         emit('row-toggle', row._raw, false);
     } else {
+        // Close all previously expanded rows first (only one open at a time)
+        expandedRows.value.forEach((expandedKey) => {
+            if (expandedKey !== rowKey) {
+                const expandedRowEl = tableRef.value?.querySelector(`tr[data-row-key="${expandedKey}"]`) as HTMLElement;
+                if (expandedRowEl) {
+                    expandedRows.value.delete(expandedKey);
+                    dataTableInstance.row(expandedRowEl).child.hide();
+                    expandedRowEl.classList.remove('expanded');
+                }
+            }
+        });
+        
+        // Open the new row
         expandedRows.value.add(rowKey);
         if (props.accordionRenderer) {
             const content = props.accordionRenderer(row._raw);
             dataTableInstance.row(rowEl).child(content).show();
         }
+        rowEl.classList.add('expanded');
         emit('row-expand', row._raw);
         emit('row-toggle', row._raw, true);
     }
@@ -132,13 +153,26 @@ onMounted(() => {
                 searchable: col.searchable !== false,
             };
             
+            // Hide column if visible is false (but keep in data for exports)
+            if (col.visible === false) {
+                columnConfig.visible = false;
+            }
+            
             // Custom render function
             if (col.render) {
                 columnConfig.render = col.render;
             } else if (col.slot && props.cellRenderers?.[col.slot]) {
                 columnConfig.render = (data: unknown, type: string, row: any) => {
-                    if (type === 'display' || type === 'type') {
-                        return props.cellRenderers![col.slot!](row._raw, data);
+                    // For exports (csv, excel, print, export), return plain data without HTML
+                    const isExport = type === 'export' || type === 'csv' || type === 'excel' || type === 'print' || 
+                                    type === 'xlsx' || type === 'xls';
+                    
+                    if (isExport) {
+                        // For exports, get plain text value directly from the data
+                        return data ?? '';
+                    }
+                    if (type === 'display' || type === 'type' || !type) {
+                        return props.cellRenderers![col.slot!](row._raw, data, type);
                     }
                     return data ?? '';
                 };
@@ -159,11 +193,66 @@ onMounted(() => {
             return columnConfig;
         });
         
+        // Helper function to strip HTML tags from text
+        const stripHtml = (html: string): string => {
+            const tmp = document.createElement('DIV');
+            tmp.innerHTML = html;
+            return tmp.textContent || tmp.innerText || '';
+        };
+
         // Built-in DataTables buttons configuration
         const buttons: any[] = [];
         
         if (props.showExportButtons) {
-            buttons.push('csv', 'excel', 'print');
+            buttons.push(
+                {
+                    extend: 'csv',
+                    title: 'Employee Listing Reports',
+                    filename: 'Employee Listing Reports',
+                    exportOptions: {
+                        format: {
+                            body: (data: any, row: number, column: number, node: any) => {
+                                // Strip HTML from cell content for CSV export
+                                if (typeof data === 'string' && data.includes('<')) {
+                                    return stripHtml(data);
+                                }
+                                return data ?? '';
+                            },
+                        },
+                    },
+                },
+                {
+                    extend: 'excel',
+                    title: 'Employee Listing Reports',
+                    filename: 'Employee Listing Reports',
+                    exportOptions: {
+                        format: {
+                            body: (data: any, row: number, column: number, node: any) => {
+                                // Strip HTML from cell content for Excel export
+                                if (typeof data === 'string' && data.includes('<')) {
+                                    return stripHtml(data);
+                                }
+                                return data ?? '';
+                            },
+                        },
+                    },
+                },
+                {
+                    extend: 'print',
+                    title: 'Employee Listing Reports',
+                    exportOptions: {
+                        format: {
+                            body: (data: any, row: number, column: number, node: any) => {
+                                // Strip HTML from cell content for Print export
+                                if (typeof data === 'string' && data.includes('<')) {
+                                    return stripHtml(data);
+                                }
+                                return data ?? '';
+                            },
+                        },
+                    },
+                }
+            );
         }
         
         // DataTables configuration
@@ -233,7 +322,7 @@ onMounted(() => {
                 props.perPageOptions.map(opt => opt === -1 ? -1 : opt),
                 props.perPageOptions.map(opt => opt === -1 ? 'All' : String(opt))
             ],
-            order: [[0, 'asc']],
+            order: [props.defaultOrder || [0, 'asc']],
             language: {
                 emptyTable: props.emptyMessage,
                 processing: '<div class="flex items-center justify-center gap-2"><div class="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div><span>Loading...</span></div>',
@@ -322,6 +411,45 @@ onMounted(() => {
         // Initialize DataTable
         // @ts-ignore - DataTables types
         dataTableInstance = new DataTablesCore(table, dtConfig);
+        
+        // Limit pagination to show only 3 page numbers (current page + 2 adjacent)
+        const limitPagination = () => {
+            const paginateContainer = table.querySelector('.dataTables_paginate');
+            if (paginateContainer) {
+                const pageButtons = Array.from(paginateContainer.querySelectorAll('.paginate_button:not(.first):not(.previous):not(.next):not(.last)')) as HTMLElement[];
+                const currentButton = paginateContainer.querySelector('.paginate_button.current') as HTMLElement;
+                
+                if (currentButton && pageButtons.length > 0) {
+                    const currentIndex = pageButtons.indexOf(currentButton);
+                    
+                    // Hide all page buttons first
+                    pageButtons.forEach(btn => {
+                        btn.style.display = 'none';
+                    });
+                    
+                    // Show current page and up to 2 adjacent pages (total 3 pages)
+                    const startIndex = Math.max(0, currentIndex - 1);
+                    const endIndex = Math.min(pageButtons.length - 1, currentIndex + 1);
+                    
+                    for (let i = startIndex; i <= endIndex && i < startIndex + 3; i++) {
+                        if (pageButtons[i]) {
+                            pageButtons[i].style.display = 'inline-block';
+                        }
+                    }
+                } else {
+                    // Fallback: show first 3 pages if no current page found
+                    pageButtons.slice(0, 3).forEach(btn => {
+                        btn.style.display = 'inline-block';
+                    });
+                }
+            }
+        };
+        
+        // Limit pagination on initial draw and after each draw
+        setTimeout(limitPagination, 100);
+        dataTableInstance.on('draw', () => {
+            setTimeout(limitPagination, 100);
+        });
     });
 });
 
@@ -405,6 +533,7 @@ onUnmounted(() => {
     align-items: center;
     margin-top: 0.5rem;
     gap: 1rem;
+    flex-wrap: wrap;
 }
 
 /* Header row 2 left: Length menu */
@@ -417,6 +546,8 @@ onUnmounted(() => {
     flex: 0 0 auto;
     display: flex;
     justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 0.25rem;
 }
 
 /* Search bar styling */
@@ -517,6 +648,15 @@ onUnmounted(() => {
     flex-wrap: wrap;
 }
 
+:deep(.dataTables-footer .dataTables_info) {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+:deep(.dataTables-footer .dataTables_paginate) {
+    flex: 0 0 auto;
+}
+
 :deep(.dataTables_info) {
     margin: 0;
     color: hsl(var(--muted-foreground));
@@ -524,16 +664,31 @@ onUnmounted(() => {
 
 :deep(.dataTables_paginate) {
     margin: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    align-items: center;
+}
+
+/* Limit pagination - JavaScript handles showing only 3 page numbers */
+/* Always show First, Previous, Next, Last buttons */
+:deep(.dataTables_paginate .paginate_button.first),
+:deep(.dataTables_paginate .paginate_button.previous),
+:deep(.dataTables_paginate .paginate_button.next),
+:deep(.dataTables_paginate .paginate_button.last) {
+    display: inline-block !important;
 }
 
 :deep(.dataTables_paginate .paginate_button) {
     padding: 0.5rem 0.75rem;
-    margin: 0 0.25rem;
+    margin: 0;
     border: 1px solid hsl(var(--input));
     border-radius: 0.375rem;
     background: hsl(var(--background));
     color: hsl(var(--foreground));
     cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 :deep(.dataTables_paginate .paginate_button:hover) {
@@ -556,6 +711,16 @@ onUnmounted(() => {
 /* Accordion row styles */
 :deep(tr.expanded) {
     background-color: hsl(var(--muted) / 0.3);
+}
+
+:deep(tr.expanded .accordion-arrow),
+:deep(tr.expanded .accordion-arrow-css) {
+    transform: rotate(90deg);
+    color: hsl(var(--primary));
+}
+
+:deep(tr.expanded .accordion-arrow-css)::after {
+    color: hsl(var(--primary));
 }
 
 :deep(.child) {

@@ -1,10 +1,15 @@
 <?php
 
 use App\Http\Controllers\Auth\PasswordResetOtpController;
-use App\Http\Controllers\MyDetails\FamilyController;
+use App\Http\Controllers\EmployeeManagement\IdCardPrintingController;
 use App\Http\Controllers\MyDetailsController;
+use App\Http\Controllers\SelfService\IdCardController;
 use App\Http\Controllers\SelfService\LeaveApplicationController;
+use App\Http\Controllers\Utilities\ActivityLogController;
+use App\Http\Controllers\Utilities\BusinessDepartmentController;
+use App\Http\Controllers\Utilities\JobTitleMonthlySalaryController;
 use App\Http\Controllers\Utilities\LeaveTypeController;
+use App\Http\Controllers\Utilities\ReportingManagerController;
 use App\Http\Controllers\Utilities\UserListController;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -97,9 +102,15 @@ Route::get('employee-management/employee-profile', function () {
 Route::get('employee-management/psipop-update', function () {
     return Inertia::render('EmployeeManagement/PsipopUpdate');
 })->middleware(['auth', 'verified'])->name('employee-management.psipop-update');
-Route::get('employee-management/id-card-printing', function () {
-    return Inertia::render('EmployeeManagement/IdCardPrinting');
-})->middleware(['auth', 'verified'])->name('employee-management.id-card-printing');
+Route::get('employee-management/id-card-printing', [IdCardPrintingController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('employee-management.id-card-printing');
+Route::get('employee-management/id-card-printing/{id}/eodb-id-bb', [IdCardPrintingController::class, 'eodbIdBb'])
+    ->middleware(['auth', 'verified'])
+    ->name('employee-management.id-card-printing.eodb-id-bb');
+Route::get('employee-management/id-card-printing/{id}/eodb-id', [IdCardPrintingController::class, 'eodbId'])
+    ->middleware(['auth', 'verified'])
+    ->name('employee-management.id-card-printing.eodb-id');
 Route::get('employee-management/deped-email-requests', function () {
     return Inertia::render('EmployeeManagement/DepedEmailRequests');
 })->middleware(['auth', 'verified'])->name('employee-management.deped-email-requests');
@@ -110,9 +121,15 @@ Route::get('self-service', function () {
 Route::get('self-service/wfh-time-in-out', function () {
     return Inertia::render('SelfService/WfhTimeInOut');
 })->middleware(['auth', 'verified'])->name('self-service.wfh-time-in-out');
-Route::get('self-service/id-card', function () {
-    return Inertia::render('SelfService/IdCard');
-})->middleware(['auth', 'verified'])->name('self-service.id-card');
+Route::get('self-service/id-card', [IdCardController::class, 'show'])
+    ->middleware(['auth', 'verified'])
+    ->name('self-service.id-card');
+Route::get('self-service/id-card/template/{filename}', [IdCardController::class, 'template'])
+    ->middleware(['auth', 'verified'])
+    ->name('self-service.id-card.template');
+Route::put('self-service/id-card/update', [IdCardController::class, 'update'])
+    ->middleware(['auth', 'verified'])
+    ->name('self-service.id-card.update');
 Route::get('self-service/service-record', function () {
     return Inertia::render('SelfService/ServiceRecord');
 })->middleware(['auth', 'verified'])->name('self-service.service-record');
@@ -122,6 +139,12 @@ Route::get('self-service/leave-application', [LeaveApplicationController::class,
 Route::post('self-service/leave-application', [LeaveApplicationController::class, 'store'])
     ->middleware(['auth', 'verified'])
     ->name('self-service.leave-application.store');
+Route::get('self-service/leave-application/approvals', [LeaveApplicationController::class, 'approvals'])
+    ->middleware(['auth', 'verified'])
+    ->name('self-service.leave-application.approvals');
+Route::patch('self-service/leave-application/{id}/decision', [LeaveApplicationController::class, 'decide'])
+    ->middleware(['auth', 'verified'])
+    ->name('self-service.leave-application.decision');
 Route::get('self-service/deped-email-requests', function () {
     return Inertia::render('SelfService/DepedEmailRequests');
 })->middleware(['auth', 'verified'])->name('self-service.deped-email-requests');
@@ -136,172 +159,17 @@ Route::get('request-status/my-leave', function () {
     return Inertia::render('RequestStatus/MyLeave');
 })->middleware(['auth', 'verified'])->name('request-status.my-leave');
 
-Route::get('my-details', function (Request $request) {
-    $authUser = $request->user();
-    $dbProfile = null;
-    $hrid = null;
-    $officialInfo = null;
-    $personalInfo = null;
-    $contactInfo = null;
-    $family = [];
-    $education = [];
-    $workExperience = [];
-    $eligibility = [];
-    $serviceRecord = [];
-    $leaveHistory = [];
-    $documents = [];
-    $training = [];
-    $awards = [];
-    $performance = [];
-    $researches = [];
-    $expertise = [];
-    $affiliation = [];
-
-    if ($authUser && Schema::hasTable('tbl_user')) {
-        $profileUser = User::where('email', $authUser->email)->first();
-        if ($profileUser) {
-            $dbProfile = $profileUser->only([
-                'hrId',
-                'email',
-                'lastname',
-                'firstname',
-                'middlename',
-                'extname',
-                'avatar',
-                'job_title',
-                'role',
-                'fullname',
-            ]);
-            $hrid = $profileUser->hrId;
-        }
-    }
-
-    if ($hrid !== null) {
-        $tables = [
-            'tbl_emp_official_info' => fn () => DB::table('tbl_emp_official_info')->where('hrid', $hrid)->first(),
-            'tbl_emp_personal_info' => fn () => DB::table('tbl_emp_personal_info')->where('hrid', $hrid)->first(),
-            'tbl_emp_contact_info' => fn () => DB::table('tbl_emp_contact_info')->where('hrid', $hrid)->first(),
-            'tbl_emp_family_info' => fn () => DB::table('tbl_emp_family_info')->where('hrid', $hrid)->get(),
-            'tbl_emp_education_info' => fn () => DB::table('tbl_emp_education_info')->where('hrid', $hrid)->get(),
-            'tbl_emp_work_experience_info' => fn () => DB::table('tbl_emp_work_experience_info')->where('hrid', $hrid)->get(),
-            'tbl_emp_civil_service_info' => fn () => DB::table('tbl_emp_civil_service_info')->where('hrid', $hrid)->get(),
-            'tbl_emp_service_record' => fn () => DB::table('tbl_emp_service_record')->where('hrid', $hrid)->get(),
-            'tbl_leave_history' => fn () => DB::table('tbl_leave_history')->where('hrid', $hrid)->get(),
-            'tbl_document' => fn () => DB::table('tbl_document')->where('hrid', $hrid)->get(),
-            'tbl_emp_training' => fn () => DB::table('tbl_emp_training')->where('hrid', $hrid)->get(),
-            'tbl_awards' => fn () => DB::table('tbl_awards')->where('hrid', $hrid)->get(),
-            'tbl_performance' => fn () => DB::table('tbl_performance')->where('hrid', $hrid)->get(),
-            'tbl_researches' => fn () => DB::table('tbl_researches')->where('hrid', $hrid)->get(),
-            'tbl_expertise' => fn () => DB::table('tbl_expertise')->where('hrid', $hrid)->get(),
-            'tbl_affiliation' => fn () => DB::table('tbl_affiliation')->where('hrid', $hrid)->get(),
-        ];
-        foreach ($tables as $table => $query) {
-            if (! Schema::hasTable($table)) {
-                continue;
-            }
-            try {
-                $result = $query();
-                if ($result instanceof \Illuminate\Support\Collection) {
-                    $result = $result->all();
-                } elseif (is_object($result)) {
-                    $result = json_decode(json_encode($result), true);
-                }
-                switch ($table) {
-                    case 'tbl_emp_official_info': $officialInfo = $result;
-                        break;
-                    case 'tbl_emp_personal_info': $personalInfo = $result;
-                        break;
-                    case 'tbl_emp_contact_info': $contactInfo = $result;
-                        break;
-                    case 'tbl_emp_family_info': $family = $result;
-                        break;
-                    case 'tbl_emp_education_info': $education = $result;
-                        break;
-                    case 'tbl_emp_work_experience_info': $workExperience = $result;
-                        break;
-                    case 'tbl_emp_civil_service_info': $eligibility = $result;
-                        break;
-                    case 'tbl_emp_service_record': $serviceRecord = $result;
-                        break;
-                    case 'tbl_leave_history': $leaveHistory = $result;
-                        break;
-                    case 'tbl_document': $documents = $result;
-                        break;
-                    case 'tbl_emp_training': $training = $result;
-                        break;
-                    case 'tbl_awards': $awards = $result;
-                        break;
-                    case 'tbl_performance': $performance = $result;
-                        break;
-                    case 'tbl_researches': $researches = $result;
-                        break;
-                    case 'tbl_expertise': $expertise = $result;
-                        break;
-                    case 'tbl_affiliation': $affiliation = $result;
-                        break;
-                }
-            } catch (\Throwable $e) {
-                // skip if table missing or query fails
-            }
-        }
-    }
-
-    // Fallback: when employee tables have no row, show at least profile (tbl_user) or auth user data so sections aren't empty
-    $profileArray = $dbProfile
-        ? json_decode(json_encode($dbProfile), true)
-        : ($authUser ? $authUser->only(['hrId', 'email', 'lastname', 'firstname', 'middlename', 'extname', 'avatar', 'job_title', 'role', 'fullname']) : null);
-    if ($profileArray !== null) {
-        if ($officialInfo === null) {
-            $officialInfo = [
-                'hrid' => $profileArray['hrId'] ?? $authUser?->hrId ?? null,
-                'employee_id' => null,
-                'firstname' => $profileArray['firstname'] ?? null,
-                'middlename' => $profileArray['middlename'] ?? null,
-                'lastname' => $profileArray['lastname'] ?? null,
-                'extension' => $profileArray['extname'] ?? null,
-                'email' => $profileArray['email'] ?? null,
-                'job_title' => $profileArray['job_title'] ?? null,
-                'role' => $profileArray['role'] ?? null,
-            ];
-        }
-        if ($personalInfo === null) {
-            $personalInfo = [
-                'firstname' => $profileArray['firstname'] ?? null,
-                'middlename' => $profileArray['middlename'] ?? null,
-                'lastname' => $profileArray['lastname'] ?? null,
-            ];
-        }
-        if ($contactInfo === null) {
-            $contactInfo = [
-                'email' => $profileArray['email'] ?? null,
-            ];
-        }
-    }
-
-    return Inertia::render('MyDetails', [
-        'profile' => $profileArray ?? ($dbProfile ? json_decode(json_encode($dbProfile), true) : null),
-        'officialInfo' => $officialInfo,
-        'personalInfo' => $personalInfo,
-        'contactInfo' => $contactInfo,
-        'family' => $family,
-        'education' => $education,
-        'workExperience' => $workExperience,
-        'eligibility' => $eligibility,
-        'serviceRecord' => $serviceRecord,
-        'leaveHistory' => $leaveHistory,
-        'documents' => $documents,
-        'training' => $training,
-        'awards' => $awards,
-        'performance' => $performance,
-        'researches' => $researches,
-        'expertise' => $expertise,
-        'affiliation' => $affiliation,
-    ]);
-})->middleware(['auth', 'verified'])->name('my-details');
+Route::get('my-details', [MyDetailsController::class, 'show'])
+    ->middleware(['auth', 'verified'])
+    ->name('my-details');
 
 Route::get('my-details/pds-export', [MyDetailsController::class, 'exportPdsExcel'])
     ->middleware(['auth', 'verified'])
     ->name('my-details.export-pds');
+
+Route::post('my-details/education', [MyDetailsController::class, 'updateEducation'])
+    ->middleware(['auth', 'verified'])
+    ->name('my-details.education.store');
 
 Route::get('my-profile', function () {
     return Inertia::render('MyProfile');
@@ -340,15 +208,92 @@ Route::delete('api/utilities/users/{user}', [UserListController::class, 'destroy
 Route::get('utilities/business-department-list', function () {
     return Inertia::render('Utilities/BusinessDepartmentList');
 })->middleware(['auth', 'verified'])->name('utilities.business-department-list');
+Route::get('utilities/job-title-monthly-salary', [JobTitleMonthlySalaryController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('utilities.job-title-monthly-salary');
+
+Route::get('api/utilities/job-title-monthly-salary/job-titles/datatables', [JobTitleMonthlySalaryController::class, 'jobTitlesDatatables'])
+    ->middleware(['auth', 'verified'])
+    ->name('api.utilities.job-titles.datatables');
+
+Route::get('api/utilities/job-title-monthly-salary/monthly-salaries/datatables', [JobTitleMonthlySalaryController::class, 'monthlySalariesDatatables'])
+    ->middleware(['auth', 'verified'])
+    ->name('api.utilities.monthly-salaries.datatables');
+
+Route::post('api/utilities/job-title-monthly-salary/job-titles', [JobTitleMonthlySalaryController::class, 'storeJobTitle'])
+    ->middleware(['auth', 'verified'])
+    ->name('api.utilities.job-titles.store');
+
+Route::put('api/utilities/job-title-monthly-salary/job-titles/{id}', [JobTitleMonthlySalaryController::class, 'updateJobTitle'])
+    ->middleware(['auth', 'verified'])
+    ->name('api.utilities.job-titles.update');
+
+Route::delete('api/utilities/job-title-monthly-salary/job-titles/{id}', [JobTitleMonthlySalaryController::class, 'destroyJobTitle'])
+    ->middleware(['auth', 'verified'])
+    ->name('api.utilities.job-titles.destroy');
+
+Route::post('api/utilities/job-title-monthly-salary/monthly-salaries', [JobTitleMonthlySalaryController::class, 'storeMonthlySalary'])
+    ->middleware(['auth', 'verified'])
+    ->name('api.utilities.monthly-salaries.store');
+
+Route::put('api/utilities/job-title-monthly-salary/monthly-salaries/{id}', [JobTitleMonthlySalaryController::class, 'updateMonthlySalary'])
+    ->middleware(['auth', 'verified'])
+    ->name('api.utilities.monthly-salaries.update');
+
+Route::delete('api/utilities/job-title-monthly-salary/monthly-salaries/{id}', [JobTitleMonthlySalaryController::class, 'destroyMonthlySalary'])
+    ->middleware(['auth', 'verified'])
+    ->name('api.utilities.monthly-salaries.destroy');
+Route::get('utilities/business-department-list', [BusinessDepartmentController::class, 'index'])
+    ->middleware(['auth', 'verified'])->name('utilities.business-department-list');
+Route::post('utilities/business-department-list/business-units', [BusinessDepartmentController::class, 'storeBusinessUnit'])
+    ->middleware(['auth', 'verified'])->name('utilities.business-department-list.business-units.store');
+Route::put('utilities/business-department-list/business-units/{id}', [BusinessDepartmentController::class, 'updateBusinessUnit'])
+    ->middleware(['auth', 'verified'])->name('utilities.business-department-list.business-units.update');
+Route::post('utilities/business-department-list/departments', [BusinessDepartmentController::class, 'storeDepartment'])
+    ->middleware(['auth', 'verified'])->name('utilities.business-department-list.departments.store');
+Route::put('utilities/business-department-list/departments/{id}', [BusinessDepartmentController::class, 'updateDepartment'])
+    ->middleware(['auth', 'verified'])->name('utilities.business-department-list.departments.update');
+Route::delete('utilities/business-department-list/business-units/{id}', [BusinessDepartmentController::class, 'destroyBusinessUnit'])
+    ->middleware(['auth', 'verified'])->name('utilities.business-department-list.business-units.destroy');
+Route::delete('utilities/business-department-list/departments/{id}', [BusinessDepartmentController::class, 'destroyDepartment'])
+    ->middleware(['auth', 'verified'])->name('utilities.business-department-list.departments.destroy');
+Route::get('api/utilities/business-department-list/business-units/datatables', [BusinessDepartmentController::class, 'datatablesBusinessUnit'])
+    ->middleware(['auth', 'verified'])->name('api.utilities.business-department-list.business-units.datatables');
+Route::get('api/utilities/business-department-list/departments/datatables', [BusinessDepartmentController::class, 'datatablesDepartment'])
+    ->middleware(['auth', 'verified'])->name('api.utilities.business-department-list.departments.datatables');
 Route::get('utilities/job-title-monthly-salary', function () {
     return Inertia::render('Utilities/JobTitleMonthlySalary');
 })->middleware(['auth', 'verified'])->name('utilities.job-title-monthly-salary');
-Route::get('utilities/reporting-manager', function () {
-    return Inertia::render('Utilities/ReportingManager');
-})->middleware(['auth', 'verified'])->name('utilities.reporting-manager');
-Route::get('utilities/activity-log', function () {
-    return Inertia::render('Utilities/ActivityLog');
-})->middleware(['auth', 'verified'])->name('utilities.activity-log');
+Route::get('utilities/reporting-manager', [ReportingManagerController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('utilities.reporting-manager');
+Route::get('api/utilities/reporting-manager', [ReportingManagerController::class, 'api'])
+    ->middleware(['auth'])
+    ->name('utilities.reporting-manager.api');
+Route::get('api/utilities/reporting-manager/datatables', [ReportingManagerController::class, 'datatables'])
+    ->middleware(['auth'])
+    ->name('utilities.reporting-manager.datatables');
+Route::get('api/utilities/reporting-manager/managers', [ReportingManagerController::class, 'managers'])
+    ->middleware(['auth'])
+    ->name('utilities.reporting-manager.managers');
+Route::post('api/utilities/reporting-manager/assign', [ReportingManagerController::class, 'assign'])
+    ->middleware(['auth'])
+    ->name('utilities.reporting-manager.assign');
+Route::post('api/utilities/reporting-manager/auto-assign', [ReportingManagerController::class, 'autoAssignBySchoolOrDepartment'])
+    ->middleware(['auth'])
+    ->name('utilities.reporting-manager.auto-assign');
+Route::delete('api/utilities/reporting-manager/{hrid}', [ReportingManagerController::class, 'remove'])
+    ->middleware(['auth'])
+    ->name('utilities.reporting-manager.remove');
+
+Route::get('utilities/activity-log', [ActivityLogController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('utilities.activity-log');
+
+// API route for Activity Log DataTables
+Route::get('api/utilities/activity-log/datatables', [ActivityLogController::class, 'datatables'])
+    ->middleware(['auth', 'verified'])
+    ->name('api.utilities.activity-log.datatables');
 Route::get('utilities/survey-management', function () {
     return Inertia::render('Utilities/SurveyManagement');
 })->middleware(['auth', 'verified'])->name('utilities.survey-management');

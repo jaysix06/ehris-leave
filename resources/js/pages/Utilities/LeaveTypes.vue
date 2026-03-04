@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, router, usePage } from '@inertiajs/vue3';
 import { computed, reactive } from 'vue';
+import { toast } from 'vue3-toastify';
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { BreadcrumbItem } from '@/types';
 import utilitiesRoutes from '@/routes/utilities';
@@ -44,18 +45,38 @@ const createLeaveType = () => {
         onSuccess: () => {
             newLeaveType.leave = '';
             newLeaveType.leave_type = '';
+            toast.success('Leave type created successfully.');
+        },
+        onError: (errors) => {
+            const errorMessage = errors?.leave_type?.[0] || errors?.leave?.[0] || 'Failed to create leave type.';
+            toast.error(errorMessage);
         },
     });
 };
 
 const updateLeaveType = (row: LeaveTypeRow) => {
     const edit = getEdit(row);
-    router.put(utilitiesRoutes.leaveTypes.update(row.id).url, edit);
+    router.put(utilitiesRoutes.leaveTypes.update(row.id).url, edit, {
+        onSuccess: () => {
+            toast.success('Leave type updated successfully.');
+        },
+        onError: (errors) => {
+            const errorMessage = errors?.leave_type?.[0] || errors?.leave?.[0] || 'Failed to update leave type.';
+            toast.error(errorMessage);
+        },
+    });
 };
 
 const deleteLeaveType = (row: LeaveTypeRow) => {
     if (!confirm(`Delete leave type "${row.leave_type}"?`)) return;
-    router.delete(utilitiesRoutes.leaveTypes.destroy(row.id).url);
+    router.delete(utilitiesRoutes.leaveTypes.destroy(row.id).url, {
+        onSuccess: () => {
+            toast.success('Leave type deleted successfully.');
+        },
+        onError: () => {
+            toast.error('Failed to delete leave type.');
+        },
+    });
 };
 </script>
 
@@ -64,7 +85,7 @@ const deleteLeaveType = (row: LeaveTypeRow) => {
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="p-6">
-            <div class="rounded-lg border border-sidebar-border/70 bg-background p-6">
+            <div class="rounded-lg border border-sidebar-border/70 bg-card p-6">
                 <h1 class="text-2xl font-semibold">{{ pageTitle }}</h1>
 
                 <div class="mt-6 grid gap-3">

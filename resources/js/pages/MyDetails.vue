@@ -74,6 +74,7 @@ const props = defineProps<{
     contactInfo?: Record<string, unknown> | null;
     family?: Record<string, unknown>[];
     education?: Record<string, unknown>[];
+    educationUpdateUrl?: string;
     workExperience?: Record<string, unknown>[];
     eligibility?: Record<string, unknown>[];
     serviceRecord?: Record<string, unknown>[];
@@ -140,13 +141,20 @@ const employeeEmail = computed(() => {
 });
 
 const avatarSrc = computed(() => {
-    const avatar = props.profile?.avatar || authUser.value?.avatar;
-    if (typeof avatar !== 'string' || avatar.length === 0) return null;
-    if (avatar.includes('avatar-default') || avatar.includes('default')) return null;
-    if (avatar.startsWith('http://') || avatar.startsWith('https://') || avatar.startsWith('/')) {
-        return avatar;
+    const avatar = props.profile?.avatar ?? authUser.value?.avatar;
+    if (typeof avatar !== 'string') return null;
+
+    const s = avatar.trim();
+    if (s === '') return null;
+
+    const cleaned = s.split('?')[0]?.split('#')[0] ?? '';
+    const normalizedName = cleaned.split('/').pop()?.toLowerCase() ?? '';
+    if (normalizedName === 'avatar-default.jpg') return null;
+
+    if (/^(https?:)?\/\//i.test(s) || s.startsWith('/') || s.startsWith('data:') || s.startsWith('blob:')) {
+        return s;
     }
-    return `/${avatar}`;
+    return `/${s}`;
 });
 
 watch(avatarSrc, () => {
@@ -181,7 +189,7 @@ function sectionProps(index: number): Record<string, unknown> {
         case 2:
             return { family: props.family };
         case 3:
-            return { education: props.education };
+            return { education: props.education, educationUpdateUrl: props.educationUpdateUrl };
         case 4:
             return { eligibility: props.eligibility };
         case 5:

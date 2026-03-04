@@ -1,5 +1,6 @@
 // DataTables configuration and setup
 // This file initializes DataTables.net-vue3 and its dependencies
+/// <reference path="../types/pdfmake.d.ts" />
 import JSZip from 'jszip';
 import pdfMake from 'pdfmake';
 import * as pdfFonts from 'pdfmake/build/vfs_fonts';
@@ -27,5 +28,15 @@ import 'datatables.net-buttons-dt/css/buttons.dataTables.css';
 
 // Use DataTables core
 DataTable.use(DataTablesCore);
+
+// Show only 3 page number buttons in pagination (e.g. 1, 2, 3) instead of 7
+try {
+    const DT = DataTablesCore as unknown as { ext?: { pager?: { numbers_length: number } } };
+    if (DT?.ext?.pager && typeof DT.ext.pager.numbers_length === 'number') {
+        DT.ext.pager.numbers_length = 3;
+    }
+} catch {
+    // ignore if pager config is not available
+}
 
 export { DataTable, DataTablesCore };
