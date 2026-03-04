@@ -38,7 +38,7 @@ const newPopupMessage = reactive({
 const editPopupMessage = reactive({
     message: '',
     link: '',
-    status: 'Active' as 'Active' | 'Inactive',
+    // Status is not editable in the modal
 });
 
 const openAddModal = () => {
@@ -59,7 +59,7 @@ const openEditModal = (row: PopupMessageRow) => {
     editingId.value = row.id;
     editPopupMessage.message = row.message;
     editPopupMessage.link = row.link || '';
-    editPopupMessage.status = row.status;
+    // Status is not editable in the modal - it's managed via table buttons
     showEditModal.value = true;
 };
 
@@ -68,7 +68,6 @@ const closeEditModal = () => {
     editingId.value = null;
     editPopupMessage.message = '';
     editPopupMessage.link = '';
-    editPopupMessage.status = 'Active';
 };
 
 const createPopupMessage = () => {
@@ -106,11 +105,11 @@ const updatePopupMessage = () => {
         return;
     }
 
-    // Prepare data: convert empty link to null
-    const data = {
+    // Prepare data: convert empty link to null (status is not included - can only be changed via table buttons)
+    const trimmedLink = editPopupMessage.link.trim();
+    const data: { message: string; link: string | null } = {
         message: editPopupMessage.message.trim(),
-        link: editPopupMessage.link.trim() || null,
-        status: editPopupMessage.status,
+        link: trimmedLink === '' ? null : trimmedLink,
     };
 
     router.put(utilitiesRoutes.popUpManagement.update(editingId.value).url, data, {
@@ -119,7 +118,32 @@ const updatePopupMessage = () => {
             toast.success('Popup message updated successfully.');
         },
         onError: (errors) => {
+            console.error('Update error:', errors);
             const errorMessage = errors?.message?.[0] || errors?.link?.[0] || errors?.status?.[0] || 'Failed to update popup message.';
+            toast.error(errorMessage);
+        },
+    });
+};
+
+const toggleStatus = (row: PopupMessageRow, newStatus: 'Active' | 'Inactive') => {
+    // Only update if status is different
+    if (row.status === newStatus) {
+        return;
+    }
+
+    // Update status via API
+    const data = {
+        message: row.message,
+        link: row.link || null,
+        status: newStatus,
+    };
+
+    router.put(utilitiesRoutes.popUpManagement.update(row.id).url, data, {
+        onSuccess: () => {
+            toast.success(`Popup message status changed to ${newStatus}.`);
+        },
+        onError: (errors) => {
+            const errorMessage = errors?.status?.[0] || 'Failed to update popup status.';
             toast.error(errorMessage);
         },
     });
@@ -194,14 +218,32 @@ const formatDate = (dateString: string) => {
                                         </div>
                                     </td>
                                     <td class="border border-border px-3 py-2">
-                                        <span
-                                            :class="[
-                                                'inline-flex rounded-full px-2 py-1 text-xs font-semibold',
-                                                row.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800',
-                                            ]"
-                                        >
-                                            {{ row.status }}
-                                        </span>
+                                        <div class="flex gap-2">
+                                            <button
+                                                type="button"
+                                                :class="[
+                                                    'rounded-md border px-3 py-1 text-xs font-semibold transition-colors',
+                                                    row.status === 'Active'
+                                                        ? 'border-green-500 bg-green-500 text-white hover:bg-green-600'
+                                                        : 'border-input bg-background text-foreground hover:bg-muted',
+                                                ]"
+                                                @click="toggleStatus(row, 'Active')"
+                                            >
+                                                Active
+                                            </button>
+                                            <button
+                                                type="button"
+                                                :class="[
+                                                    'rounded-md border px-3 py-1 text-xs font-semibold transition-colors',
+                                                    row.status === 'Inactive'
+                                                        ? 'border-gray-500 bg-gray-500 text-white hover:bg-gray-600'
+                                                        : 'border-input bg-background text-foreground hover:bg-muted',
+                                                ]"
+                                                @click="toggleStatus(row, 'Inactive')"
+                                            >
+                                                Inactive
+                                            </button>
+                                        </div>
                                     </td>
                                     <td class="border border-border px-3 py-2">{{ formatDate(row.created_at) }}</td>
                                     <td class="border border-border px-3 py-2">
@@ -280,13 +322,32 @@ const formatDate = (dateString: string) => {
 
                     <div>
                         <label class="mb-2 block text-sm font-medium">Status:</label>
-                        <select
-                            v-model="newPopupMessage.status"
-                            class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                        >
-                            <option value="Active">Active</option>
-                            <option value="Inactive">Inactive</option>
-                        </select>
+                        <div class="flex gap-2">
+                            <button
+                                type="button"
+                                :class="[
+                                    'flex-1 rounded-md border px-4 py-2 text-sm font-semibold transition-colors',
+                                    newPopupMessage.status === 'Active'
+                                        ? 'border-green-500 bg-green-500 text-white hover:bg-green-600'
+                                        : 'border-input bg-background text-foreground hover:bg-muted',
+                                ]"
+                                @click="newPopupMessage.status = 'Active'"
+                            >
+                                Active
+                            </button>
+                            <button
+                                type="button"
+                                :class="[
+                                    'flex-1 rounded-md border px-4 py-2 text-sm font-semibold transition-colors',
+                                    newPopupMessage.status === 'Inactive'
+                                        ? 'border-gray-500 bg-gray-500 text-white hover:bg-gray-600'
+                                        : 'border-input bg-background text-foreground hover:bg-muted',
+                                ]"
+                                @click="newPopupMessage.status = 'Inactive'"
+                            >
+                                Inactive
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -345,16 +406,6 @@ const formatDate = (dateString: string) => {
                         />
                     </div>
 
-                    <div>
-                        <label class="mb-2 block text-sm font-medium">Status:</label>
-                        <select
-                            v-model="editPopupMessage.status"
-                            class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                        >
-                            <option value="Active">Active</option>
-                            <option value="Inactive">Inactive</option>
-                        </select>
-                    </div>
                 </div>
 
                 <div class="mt-6 flex justify-end">

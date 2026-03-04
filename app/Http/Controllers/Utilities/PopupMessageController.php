@@ -57,15 +57,19 @@ class PopupMessageController extends Controller
 
     public function update(Request $request, PopupMessage $popupMessage): RedirectResponse
     {
-        // Convert empty link string to null
-        $request->merge([
-            'link' => $request->input('link') ?: null,
-        ]);
+        // Convert empty link string to null before validation
+        $linkInput = $request->input('link');
+        if ($linkInput === '' || $linkInput === null) {
+            $request->merge(['link' => null]);
+        } else {
+            // Trim the link if it's not empty
+            $request->merge(['link' => trim($linkInput)]);
+        }
 
         $data = $request->validate([
             'message' => ['required', 'string', 'max:1000'],
             'link' => ['nullable', 'string', 'max:500', 'url'],
-            'status' => ['required', 'string', 'in:Active,Inactive'],
+            'status' => ['nullable', 'string', 'in:Active,Inactive'], // Status is optional - can be changed via table buttons
         ], [
             'message.required' => 'The message field is required.',
             'link.url' => 'The link must be a valid URL.',
@@ -78,13 +82,16 @@ class PopupMessageController extends Controller
 
         // Update popup message - set attributes individually so mutator is called
         $popupMessage->message = $data['message'];
-        $popupMessage->link = $data['link'];
-        $popupMessage->status = $data['status']; // Mutator converts 'Active'/'Inactive' to 1/0
+        $popupMessage->link = $data['link'] ?? null;
+        // Only update status if provided (when toggling from table)
+        if (isset($data['status'])) {
+            $popupMessage->status = $data['status']; // Mutator converts 'Active'/'Inactive' to 1/0
+        }
         $popupMessage->save();
 
         $newMessage = substr($data['message'], 0, 50).'...';
         $newLink = $data['link'] ? " (Link: {$data['link']})" : '';
-        $newStatus = $data['status'];
+        $newStatus = $data['status'] ?? $popupMessage->status;
 
         $changes = [];
         if ($oldMessage !== $newMessage) {
@@ -93,7 +100,7 @@ class PopupMessageController extends Controller
         if ($oldLink !== $newLink) {
             $changes[] = "link from '{$oldLink}' to '{$newLink}'";
         }
-        if ($oldStatus !== $newStatus) {
+        if (isset($data['status']) && $oldStatus !== $newStatus) {
             $changes[] = "status from '{$oldStatus}' to '{$newStatus}'";
         }
 
