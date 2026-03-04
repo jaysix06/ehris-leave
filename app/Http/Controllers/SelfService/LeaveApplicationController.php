@@ -115,46 +115,87 @@ class LeaveApplicationController extends Controller
 
             $reportingManager = null;
             if ($officialInfo !== null && Schema::hasTable('tbl_emp_official_info')) {
-                $reportingQuery = EmpOfficialInfo::query()->where('role', 'Reporting Manager');
+                $managerHrid = null;
+                $rawReportingManager = trim((string) ($officialInfo->reporting_manager ?? ''));
 
-                $departmentId = trim((string) ($officialInfo->department_id ?? ''));
-                $rawOffice = trim((string) ($officialInfo->office ?? ''));
-
-                if ($departmentId !== '' && ctype_digit($departmentId)) {
-                    $reportingQuery->where('department_id', $departmentId);
-                } elseif ($officeSchool !== null && Schema::hasTable('tbl_department')) {
-                    $deptId = Department::query()
-                        ->where('department_name', $officeSchool)
-                        ->value('department_id');
-                    if ($deptId !== null) {
-                        $reportingQuery->where('department_id', (string) $deptId);
+                // Prefer explicit employee assignment in official info.
+                if ($rawReportingManager !== '') {
+                    if (ctype_digit($rawReportingManager)) {
+                        $managerHrid = (int) $rawReportingManager;
+                    } else {
+                        $reportingManager = $rawReportingManager;
                     }
                 }
 
-                if ($rawOffice !== '') {
-                    $reportingQuery->where('office', $rawOffice);
-                } elseif ($officeSchool !== null && Schema::hasTable('tbl_office')) {
-                    $officeId = Office::query()
-                        ->where('office_name', $officeSchool)
-                        ->value('office_Id');
-                    if ($officeId !== null) {
-                        $reportingQuery->where('office', (string) $officeId);
-                    } else {
+                // Fallback to department mapping table.
+                if ($managerHrid === null && $reportingManager === null && ! empty($officialInfo->department_id) && Schema::hasTable('tbl_reporting_manager')) {
+                    $mappedHrid = DB::table('tbl_reporting_manager')
+                        ->whereRaw('CAST(department_id AS UNSIGNED) = ?', [(int) $officialInfo->department_id])
+                        ->value('manager_name');
+                    if ($mappedHrid !== null && ctype_digit((string) $mappedHrid)) {
+                        $managerHrid = (int) $mappedHrid;
+                    }
+                }
+
+                if ($managerHrid !== null) {
+                    $managerRow = DB::table('tbl_emp_official_info')
+                        ->select(['firstname', 'middlename', 'lastname', 'extension'])
+                        ->where('hrid', $managerHrid)
+                        ->first();
+                    if ($managerRow !== null) {
+                        $nameParts = array_filter([
+                            trim((string) ($managerRow->firstname ?? '')),
+                            trim((string) ($managerRow->middlename ?? '')),
+                            trim((string) ($managerRow->lastname ?? '')),
+                            trim((string) ($managerRow->extension ?? '')),
+                        ], fn ($part) => $part !== '');
+                        $reportingManager = $nameParts !== [] ? trim(implode(' ', $nameParts)) : null;
+                    }
+                }
+
+                // Last fallback to previous role/office matching behavior.
+                if ($reportingManager === null) {
+                    $reportingQuery = EmpOfficialInfo::query()->where('role', 'Reporting Manager');
+
+                    $departmentId = trim((string) ($officialInfo->department_id ?? ''));
+                    $rawOffice = trim((string) ($officialInfo->office ?? ''));
+
+                    if ($departmentId !== '' && ctype_digit($departmentId)) {
+                        $reportingQuery->where('department_id', $departmentId);
+                    } elseif ($officeSchool !== null && Schema::hasTable('tbl_department')) {
+                        $deptId = Department::query()
+                            ->where('department_name', $officeSchool)
+                            ->value('department_id');
+                        if ($deptId !== null) {
+                            $reportingQuery->where('department_id', (string) $deptId);
+                        }
+                    }
+
+                    if ($rawOffice !== '') {
+                        $reportingQuery->where('office', $rawOffice);
+                    } elseif ($officeSchool !== null && Schema::hasTable('tbl_office')) {
+                        $officeId = Office::query()
+                            ->where('office_name', $officeSchool)
+                            ->value('office_Id');
+                        if ($officeId !== null) {
+                            $reportingQuery->where('office', (string) $officeId);
+                        } else {
+                            $reportingQuery->where('office', $officeSchool);
+                        }
+                    } elseif ($officeSchool !== null) {
                         $reportingQuery->where('office', $officeSchool);
                     }
-                } elseif ($officeSchool !== null) {
-                    $reportingQuery->where('office', $officeSchool);
-                }
 
-                $reportingRecord = $reportingQuery->first();
-                if ($reportingRecord !== null) {
-                    $nameParts = array_filter([
-                        $reportingRecord->firstname ?? null,
-                        $reportingRecord->middlename ?? null,
-                        $reportingRecord->lastname ?? null,
-                        $reportingRecord->extension ?? null,
-                    ], fn ($part) => is_string($part) && trim($part) !== '');
-                    $reportingManager = $nameParts !== [] ? trim(implode(' ', $nameParts)) : null;
+                    $reportingRecord = $reportingQuery->first();
+                    if ($reportingRecord !== null) {
+                        $nameParts = array_filter([
+                            $reportingRecord->firstname ?? null,
+                            $reportingRecord->middlename ?? null,
+                            $reportingRecord->lastname ?? null,
+                            $reportingRecord->extension ?? null,
+                        ], fn ($part) => is_string($part) && trim($part) !== '');
+                        $reportingManager = $nameParts !== [] ? trim(implode(' ', $nameParts)) : null;
+                    }
                 }
             }
 
