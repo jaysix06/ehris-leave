@@ -11,4 +11,16 @@ class EmpEducationInfo extends Model
     protected $primaryKey = 'id';
 
     public $timestamps = false;
+
+    protected $fillable = [
+        'hrid',
+        'education_level',
+        'school_name',
+        'course',
+        'from_year',
+        'to_year',
+        'year_graduated',
+        'highest_grade',
+        'scholarship',
+    ];
 }

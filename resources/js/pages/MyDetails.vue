@@ -74,6 +74,7 @@ const props = defineProps<{
     contactInfo?: Record<string, unknown> | null;
     family?: Record<string, unknown>[];
     education?: Record<string, unknown>[];
+    educationUpdateUrl?: string;
     workExperience?: Record<string, unknown>[];
     eligibility?: Record<string, unknown>[];
     serviceRecord?: Record<string, unknown>[];
@@ -181,7 +182,7 @@ function sectionProps(index: number): Record<string, unknown> {
         case 2:
             return { family: props.family };
         case 3:
-            return { education: props.education };
+            return { education: props.education, educationUpdateUrl: props.educationUpdateUrl };
         case 4:
             return { eligibility: props.eligibility };
         case 5:
