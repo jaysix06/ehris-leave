@@ -9,11 +9,11 @@ use App\Models\BusinessUnit;
 use App\Models\Department;
 use App\Models\EmploymentStatus;
 use App\Models\User;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Schema;
 use App\Services\ActivityLogService;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Laravel\Fortify\Contracts\CreatesNewUsers;
@@ -73,6 +73,9 @@ class CreateNewUser implements CreatesNewUsers
         // After create, userId is set; use it as hrId so we can link Employee
         $user->hrId = $user->getKey();
         $user->save();
+
+        // Log registration activity
+        ActivityLogService::logCreate('User Registration', "{$fullname} ({$user->email})", $user->userId);
 
         $hrid = (int) $user->hrId;
         $nickname = trim((string) ($input['firstname'] ?? '')) ?: '—';
