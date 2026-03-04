@@ -3,6 +3,7 @@
 use App\Http\Controllers\Auth\PasswordResetOtpController;
 use App\Http\Controllers\EmployeeManagement\IdCardPrintingController;
 use App\Http\Controllers\MyDetailsController;
+use App\Http\Controllers\RequestStatus\MyLeaveController;
 use App\Http\Controllers\SelfService\IdCardController;
 use App\Http\Controllers\SelfService\LeaveApplicationController;
 use App\Http\Controllers\Utilities\ActivityLogController;
@@ -11,12 +12,9 @@ use App\Http\Controllers\Utilities\JobTitleMonthlySalaryController;
 use App\Http\Controllers\Utilities\LeaveTypeController;
 use App\Http\Controllers\Utilities\ReportingManagerController;
 use App\Http\Controllers\Utilities\UserListController;
-use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
-use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
 
@@ -155,9 +153,15 @@ Route::get('request-status', function () {
 Route::get('request-status/my-requests', function () {
     return Inertia::render('RequestStatus/MyRequests');
 })->middleware(['auth', 'verified'])->name('request-status.my-requests');
-Route::get('request-status/my-leave', function () {
-    return Inertia::render('RequestStatus/MyLeave');
-})->middleware(['auth', 'verified'])->name('request-status.my-leave');
+Route::get('request-status/my-leave', [MyLeaveController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('request-status.my-leave');
+Route::get('api/request-status/my-leave/datatables', [MyLeaveController::class, 'datatables'])
+    ->middleware(['auth'])
+    ->name('api.request-status.my-leave.datatables');
+Route::delete('request-status/my-leave/{id}', [MyLeaveController::class, 'cancel'])
+    ->middleware(['auth', 'verified'])
+    ->name('request-status.my-leave.cancel');
 
 Route::get('my-details', [MyDetailsController::class, 'show'])
     ->middleware(['auth', 'verified'])

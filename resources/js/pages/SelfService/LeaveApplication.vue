@@ -1022,7 +1022,7 @@ onBeforeUnmount(() => {
 .left-form textarea,
 .date-readonly {
     border-radius: 0.7rem;
-    border: 1px solid hsl(var(--input));
+    border: 1.5px solid hsl(var(--muted-foreground) / 0.45);
     background: hsl(var(--card));
     color: hsl(var(--foreground));
     font-size: 0.94rem;
@@ -1101,7 +1101,7 @@ onBeforeUnmount(() => {
     grid-template-columns: 1fr auto;
     align-items: center;
     gap: 0.55rem;
-    border: 1px solid hsl(var(--border));
+    border: 1.5px solid hsl(var(--muted-foreground) / 0.45);
     background: hsl(var(--card));
     border-radius: 0.7rem;
     padding: 0.5rem 0.6rem;
@@ -1162,7 +1162,7 @@ onBeforeUnmount(() => {
 }
 
 .calendar-box {
-    border: 1px solid hsl(var(--border));
+    border: 1.5px solid hsl(var(--muted-foreground) / 0.45);
     border-radius: 0.8rem;
     background: hsl(var(--card));
     padding: 0.7rem;
@@ -1302,7 +1302,7 @@ onBeforeUnmount(() => {
 
 .employee-details-card .info-readonly {
     border-radius: 0.7rem;
-    border: 1px solid hsl(var(--input));
+    border: 1.5px solid hsl(var(--muted-foreground) / 0.45);
     background: hsl(var(--card));
     color: hsl(var(--foreground));
     font-size: 0.92rem;
