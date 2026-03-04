@@ -352,9 +352,19 @@ Route::get('my-details/pds-export', [MyDetailsController::class, 'exportPdsExcel
 Route::get('utilities', function () {
     return Inertia::render('Utilities');
 })->middleware(['auth', 'verified'])->name('utilities');
-Route::get('utilities/employee-list', function () {
-    return Inertia::render('Utilities/EmployeeList');
-})->middleware(['auth', 'verified'])->name('utilities.employee-list');
+Route::get('utilities/employee-list', [App\Http\Controllers\Utilities\EmployeeListController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('utilities.employee-list');
+Route::get('api/utilities/employee-list/datatables', [App\Http\Controllers\Utilities\EmployeeListController::class, 'datatables'])
+    ->middleware(['auth', 'verified'])
+    ->name('api.utilities.employee-list.datatables');
+Route::post('api/utilities/employee-list', [App\Http\Controllers\Utilities\EmployeeListController::class, 'store'])
+    ->middleware(['auth', 'verified'])
+    ->name('api.utilities.employee-list.store');
+Route::delete('api/utilities/employee-list/{employee}', [App\Http\Controllers\Utilities\EmployeeListController::class, 'destroy'])
+    ->middleware(['auth', 'verified'])
+    ->name('api.utilities.employee-list.destroy')
+    ->where('employee', '[0-9]+');
 Route::get('utilities/user-list', [UserListController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('utilities.user-list');
