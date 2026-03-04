@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\RequestStatus;
 
+use App\Events\LeaveRequestUpdated;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Carbon\Carbon;
@@ -146,6 +147,14 @@ class MyLeaveController extends Controller
         DB::table(self::LEAVE_TABLE)
             ->where('leave_application_id', $id)
             ->delete();
+
+        LeaveRequestUpdated::dispatch(
+            isset($leave->leave_application_id) ? (int) $leave->leave_application_id : $id,
+            isset($leave->employee_hrid) ? (int) $leave->employee_hrid : null,
+            isset($leave->rm_assignee_hrid) ? (int) $leave->rm_assignee_hrid : null,
+            'cancelled',
+            'cancelled',
+        );
 
         return back()->with('success', 'Leave request cancelled successfully.');
     }

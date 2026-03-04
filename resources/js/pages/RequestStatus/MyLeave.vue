@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { Head, router } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { Head, router, usePage } from '@inertiajs/vue3';
+import { echo } from '@laravel/echo-vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { toast } from 'vue3-toastify';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { DataTable, type DataTableColumn } from '@/components/DataTable';
@@ -18,6 +19,13 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 const confirmId = ref<number | null>(null);
 const cancellingId = ref<number | null>(null);
+const page = usePage();
+const reverbEnabled = import.meta.env.VITE_REVERB_ENABLED !== 'false';
+const authHrid = computed(() => {
+    const value = (page.props.auth?.user as Record<string, unknown> | undefined)?.hrId;
+    const parsed = Number(value ?? 0);
+    return Number.isFinite(parsed) ? parsed : 0;
+});
 
 const statusBadgeHtml: Record<string, { label: string; cls: string }> = {
     pending_rm: { label: 'Pending (RM)', cls: 'background:hsl(45 93% 47%/.12);color:hsl(45 93% 30%)' },
@@ -103,6 +111,31 @@ function executeCancel() {
 function dismissConfirm() {
     confirmId.value = null;
 }
+
+const handleLeaveRequestUpdated = (payload: any) => {
+    const employeeHrid = Number(payload?.employeeHrid ?? 0);
+    if (authHrid.value > 0 && employeeHrid === authHrid.value) {
+        dataTableRef.value?.reload?.();
+    }
+};
+
+onMounted(() => {
+    if (!reverbEnabled) return;
+    try {
+        echo().channel('leave-requests').listen('.LeaveRequestUpdated', handleLeaveRequestUpdated);
+    } catch {
+        // Reverb not connected; real-time updates disabled
+    }
+});
+
+onBeforeUnmount(() => {
+    if (!reverbEnabled) return;
+    try {
+        echo().channel('leave-requests').stopListening('LeaveRequestUpdated');
+    } catch {
+        // ignore
+    }
+});
 </script>
 
 <template>

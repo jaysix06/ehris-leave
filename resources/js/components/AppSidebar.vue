@@ -104,6 +104,10 @@ const mainNavItems: NavItem[] = [
                 title: 'DepEd Email Requests',
                 href: employeeManagementRoutes.depedEmailRequests(),
             },
+            {
+                title: 'Leave Requests',
+                href: employeeManagementRoutes.leaveRequests(),
+            },
         ],
     },
     {

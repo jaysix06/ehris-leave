@@ -539,12 +539,21 @@ const refreshLeaveTypes = () => {
     router.reload({ only: ['leaveTypes'] });
 };
 
+const refreshLeaveSummaryOnRealtimeUpdate = (payload: any) => {
+    const authHrid = Number((authUser.value as Record<string, unknown> | undefined)?.hrId ?? 0);
+    const employeeHrid = Number(payload?.employeeHrid ?? 0);
+    if (authHrid > 0 && employeeHrid === authHrid) {
+        router.reload({ only: ['mandatoryLeaveSummary'] });
+    }
+};
+
 const reverbEnabled = import.meta.env.VITE_REVERB_ENABLED !== 'false';
 
 onMounted(() => {
     if (reverbEnabled) {
         try {
             echo().channel('leave-types').listen('.LeaveTypeUpdated', refreshLeaveTypes);
+            echo().channel('leave-requests').listen('.LeaveRequestUpdated', refreshLeaveSummaryOnRealtimeUpdate);
         } catch {
             // Reverb not connected; real-time updates disabled
         }
@@ -555,6 +564,7 @@ onBeforeUnmount(() => {
     if (reverbEnabled) {
         try {
             echo().channel('leave-types').stopListening('LeaveTypeUpdated');
+            echo().channel('leave-requests').stopListening('LeaveRequestUpdated');
         } catch {
             // ignore
         }

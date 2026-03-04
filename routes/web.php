@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Auth\PasswordResetOtpController;
 use App\Http\Controllers\EmployeeManagement\IdCardPrintingController;
+use App\Http\Controllers\EmployeeManagement\LeaveRequestsController;
 use App\Http\Controllers\MyDetailsController;
 use App\Http\Controllers\RequestStatus\MyLeaveController;
 use App\Http\Controllers\SelfService\IdCardController;
@@ -108,10 +109,16 @@ Route::get('employee-management/id-card-printing/{id}/eodb-id-bb', [IdCardPrinti
     ->name('employee-management.id-card-printing.eodb-id-bb');
 Route::get('employee-management/id-card-printing/{id}/eodb-id', [IdCardPrintingController::class, 'eodbId'])
     ->middleware(['auth', 'verified'])
-    ->name('employee-management.id-card-printing.eodb-id');
-Route::get('employee-management/deped-email-requests', function () {
-    return Inertia::render('EmployeeManagement/DepedEmailRequests');
-})->middleware(['auth', 'verified'])->name('employee-management.deped-email-requests');
+        ->name('employee-management.id-card-printing.eodb-id');
+    Route::get('employee-management/deped-email-requests', function () {
+        return Inertia::render('EmployeeManagement/DepedEmailRequests');
+    })->middleware(['auth', 'verified'])->name('employee-management.deped-email-requests');
+Route::get('employee-management/leave-requests', [LeaveRequestsController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('employee-management.leave-requests');
+Route::get('api/employee-management/leave-requests/datatables', [LeaveRequestsController::class, 'datatables'])
+    ->middleware(['auth', 'verified'])
+    ->name('api.employee-management.leave-requests.datatables');
 
 Route::get('self-service', function () {
     return Inertia::render('SelfService');
