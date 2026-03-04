@@ -34,8 +34,10 @@ class PdsExportHandler
             'D15' => $personalInfo->pob ?? null,
             'I13' => $personalInfo->citizenship ?? null,
             'I16' => $personalInfo->dual_citizenship ?? null,
-            'M15' => $personalInfo->country
-                ?? $this->deriveCountryFromCitizenship($personalInfo->citizenship ?? null),
+            'M15' => $this->resolveCountryForPds(
+                $personalInfo->country ?? null,
+                $personalInfo->citizenship ?? null
+            ),
             'I17' => $contactInfo->house_block_lotnum ?? null,
             'L17' => $contactInfo->street_add ?? null,
             'I19' => $contactInfo->subdivision_village ?? null,
@@ -53,8 +55,12 @@ class PdsExportHandler
             'D22' => $this->formatHeight($personalInfo->height ?? null),
             'D24' => $this->formatWeight($personalInfo->weight ?? null),
             'D25' => $personalInfo->blood_type ?? null,
+            'D27' => $this->firstAvailableValue($personalInfo, ['umid', 'umid_no', 'umid_num']),
             'D29' => $personalInfo->pag_ibig ?? $personalInfo->pagibig ?? null,
             'D31' => $personalInfo->philhealth ?? null,
+            'D32' => $this->firstAvailableValue($personalInfo, ['philsys', 'philsys_no', 'philsys_num', 'psn']),
+            'D33' => $this->firstAvailableValue($personalInfo, ['tin', 'tin_no']),
+            'D34' => $this->firstAvailableValue($personalInfo, ['agency_emp_num', 'agency_employee_no', 'agency_emp_no']),
             'I32' => $contactInfo->phone_num ?? null,
             'I33' => $contactInfo->mobile_num ?? null,
             'I34' => $contactInfo->email ?? ($officialInfo->email ?? $dbProfile->email ?? null),
@@ -255,7 +261,41 @@ class PdsExportHandler
             }
         }
 
+        if ($this->isFilipinoCitizenship($stringValue)) {
+            return 'Philippines';
+        }
+
         return $stringValue;
+    }
+
+    private function resolveCountryForPds(mixed $country, mixed $citizenship): ?string
+    {
+        $countryValue = trim((string) ($country ?? ''));
+        if ($countryValue !== '') {
+            return $countryValue;
+        }
+
+        $derivedCountry = $this->deriveCountryFromCitizenship($citizenship);
+        if ($derivedCountry !== null && trim($derivedCountry) !== '') {
+            return $derivedCountry;
+        }
+
+        return $this->isFilipinoCitizenship((string) ($citizenship ?? '')) ? 'Philippines' : null;
+    }
+
+    private function firstAvailableValue(?object $source, array $keys): mixed
+    {
+        if (! is_object($source)) {
+            return null;
+        }
+
+        foreach ($keys as $key) {
+            if (isset($source->{$key}) && trim((string) $source->{$key}) !== '') {
+                return $source->{$key};
+            }
+        }
+
+        return null;
     }
 
     private function pdsValue(mixed $value): string
@@ -621,6 +661,12 @@ class PdsExportHandler
                     (string) ($cellMap['I13'] ?? ''),
                     (string) ($cellMap['I16'] ?? '')
                 )
+            );
+            $this->setCountryDropDownSelection(
+                $worksheetRelsXml,
+                dirname($sheetXmlPath),
+                $updatedSheetXml,
+                (string) ($cellMap['M15'] ?? '')
             );
             $vmlPaths = $this->resolveVmlPaths($worksheetRelsXml, dirname($sheetXmlPath));
             foreach ($vmlPaths as $vmlPath) {
@@ -1733,7 +1779,11 @@ class PdsExportHandler
                 continue;
             }
 
-            $controlPr->setAttribute('checked', $checkStates[$controlName] ? 'Checked' : 'Unchecked');
+            if ($checkStates[$controlName]) {
+                $controlPr->setAttribute('checked', 'Checked');
+            } elseif ($controlPr->hasAttribute('checked')) {
+                $controlPr->removeAttribute('checked');
+            }
         }
 
         return $dom->saveXML() ?: $worksheetXml;
@@ -1822,10 +1872,174 @@ class PdsExportHandler
                 continue;
             }
 
-            $formControl->setAttribute('checked', $shouldCheck ? '1' : '0');
+            if ($shouldCheck) {
+                $formControl->setAttribute('checked', 'Checked');
+            } elseif ($formControl->hasAttribute('checked')) {
+                $formControl->removeAttribute('checked');
+            }
             $ctrlOut = $ctrlPropDom->saveXML() ?: $ctrlPropXml;
             file_put_contents($ctrlPropPath, $this->ensureXmlDeclarationHasEncoding($ctrlOut));
         }
+    }
+
+    private function setCountryDropDownSelection(
+        string $worksheetRelsXml,
+        string $relsDirectory,
+        string $worksheetXml,
+        string $country
+    ): void {
+        $country = trim($country);
+        if ($country === '') {
+            return;
+        }
+
+        $rels = @simplexml_load_string($worksheetRelsXml);
+        if (! $rels) {
+            return;
+        }
+        $rels->registerXPathNamespace('pr', 'http://schemas.openxmlformats.org/package/2006/relationships');
+
+        $ctrlPropPathsByRid = [];
+        $ctrlPropRelations = $rels->xpath("//pr:Relationship[contains(@Type, '/ctrlProp')]");
+        if ($ctrlPropRelations) {
+            foreach ($ctrlPropRelations as $relation) {
+                $rid = (string) ($relation['Id'] ?? '');
+                $target = (string) ($relation['Target'] ?? '');
+                if ($rid === '' || $target === '') {
+                    continue;
+                }
+                $target = str_replace('\\', '/', $target);
+                $resolved = realpath($relsDirectory.'/'.$target) ?: $relsDirectory.'/'.$target;
+                $ctrlPropPathsByRid[$rid] = $resolved;
+            }
+        }
+        if ($ctrlPropPathsByRid === []) {
+            return;
+        }
+
+        $sheetDom = new \DOMDocument('1.0', 'UTF-8');
+        if (! @$sheetDom->loadXML($worksheetXml)) {
+            return;
+        }
+        $sheetXPath = new \DOMXPath($sheetDom);
+        $dropControl = $sheetXPath->query('//*[local-name()="control"][@name="Drop Down 31"]')->item(0);
+        if (! $dropControl instanceof \DOMElement) {
+            return;
+        }
+
+        $rid = $dropControl->getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id');
+        if ($rid === '') {
+            $rid = $dropControl->getAttribute('r:id');
+        }
+        if ($rid === '') {
+            return;
+        }
+
+        $ctrlPropPath = $ctrlPropPathsByRid[$rid] ?? null;
+        if (! $ctrlPropPath || ! is_file($ctrlPropPath)) {
+            return;
+        }
+
+        $ctrlPropXml = file_get_contents($ctrlPropPath);
+        if (! is_string($ctrlPropXml) || trim($ctrlPropXml) === '') {
+            return;
+        }
+
+        $ctrlPropDom = new \DOMDocument('1.0', 'UTF-8');
+        if (! @$ctrlPropDom->loadXML($ctrlPropXml)) {
+            return;
+        }
+        $ctrlPropXPath = new \DOMXPath($ctrlPropDom);
+        $formControl = $ctrlPropXPath->query('//*[local-name()="formControlPr"]')->item(0);
+        if (! $formControl instanceof \DOMElement) {
+            return;
+        }
+
+        $fmlaRange = (string) $formControl->getAttribute('fmlaRange');
+        if ($fmlaRange === '') {
+            return;
+        }
+
+        $optionIndex = $this->findCountryDropDownOptionIndex($worksheetXml, $relsDirectory, $fmlaRange, $country);
+        if ($optionIndex === null) {
+            return;
+        }
+
+        $formControl->setAttribute('sel', (string) ($optionIndex + 1));
+        $formControl->setAttribute('val', (string) $optionIndex);
+
+        $ctrlOut = $ctrlPropDom->saveXML() ?: $ctrlPropXml;
+        file_put_contents($ctrlPropPath, $this->ensureXmlDeclarationHasEncoding($ctrlOut));
+    }
+
+    private function findCountryDropDownOptionIndex(
+        string $worksheetXml,
+        string $relsDirectory,
+        string $fmlaRange,
+        string $country
+    ): ?int {
+        if (! preg_match("/^(?:'[^']+'!|[^!]+!)?\\$?([A-Z]+)\\$?(\\d+):\\$?([A-Z]+)\\$?(\\d+)$/i", $fmlaRange, $match)) {
+            return null;
+        }
+
+        $column = strtoupper($match[1]);
+        $startRow = (int) $match[2];
+        $endRow = (int) $match[4];
+        if ($startRow <= 0 || $endRow < $startRow) {
+            return null;
+        }
+
+        $sheetDom = new \DOMDocument('1.0', 'UTF-8');
+        if (! @$sheetDom->loadXML($worksheetXml)) {
+            return null;
+        }
+        $sheetXPath = new \DOMXPath($sheetDom);
+        $sheetData = $sheetXPath->query("//*[local-name()='sheetData']")->item(0);
+        if (! $sheetData instanceof \DOMElement) {
+            return null;
+        }
+
+        $sharedStringsPath = realpath($relsDirectory.'/../sharedStrings.xml') ?: $relsDirectory.'/../sharedStrings.xml';
+        $sharedStrings = [];
+        if (is_file($sharedStringsPath)) {
+            $sharedDom = new \DOMDocument('1.0', 'UTF-8');
+            if (@$sharedDom->load($sharedStringsPath)) {
+                $sharedXPath = new \DOMXPath($sharedDom);
+                foreach ($sharedXPath->query("//*[local-name()='si']") as $si) {
+                    $sharedStrings[] = trim((string) $si->textContent);
+                }
+            }
+        }
+
+        $target = strtolower(trim($country));
+        $index = 0;
+        for ($row = $startRow; $row <= $endRow; $row++) {
+            $cellRef = $column.$row;
+            $cellNode = $sheetXPath->query(".//*[local-name()='row'][@r='{$row}']/*[local-name()='c'][@r='{$cellRef}']", $sheetData)->item(0);
+            $value = '';
+            if ($cellNode instanceof \DOMElement) {
+                $type = $cellNode->getAttribute('t');
+                if ($type === 's') {
+                    $vNode = $sheetXPath->query("*[local-name()='v']", $cellNode)->item(0);
+                    $stringIndex = $vNode ? (int) trim((string) $vNode->textContent) : -1;
+                    if ($stringIndex >= 0 && isset($sharedStrings[$stringIndex])) {
+                        $value = $sharedStrings[$stringIndex];
+                    }
+                } elseif ($type === 'inlineStr') {
+                    $value = trim((string) $sheetXPath->query("string(*[local-name()='is'])", $cellNode));
+                } else {
+                    $vNode = $sheetXPath->query("*[local-name()='v']", $cellNode)->item(0);
+                    $value = $vNode ? trim((string) $vNode->textContent) : '';
+                }
+            }
+
+            if (strtolower(trim($value)) === $target) {
+                return $index;
+            }
+            $index++;
+        }
+
+        return null;
     }
 
     /**
@@ -1847,6 +2061,8 @@ class PdsExportHandler
             'Check Box 37' => false,
             'Check Box 21' => false,
             'Check Box 22' => false,
+            'Check Box 39' => false,
+            'Check Box 40' => false,
         ];
 
         $genderKey = $this->normalizeGenderToCheckbox($gender);
@@ -1869,14 +2085,20 @@ class PdsExportHandler
             $checkStates['Check Box 37'] = true;
         }
 
-        $normalizedCitizenship = strtolower(trim($citizenship));
-        if ($normalizedCitizenship !== '' && str_contains($normalizedCitizenship, 'Philippines')) {
+        if ($this->isFilipinoCitizenship($citizenship)) {
             $checkStates['Check Box 21'] = true;
+            $checkStates['Check Box 39'] = true;
         }
 
         $normalizedDual = strtolower(trim($dualCitizenship));
         if ($normalizedDual !== '' && $normalizedDual !== 'n/a') {
             $checkStates['Check Box 22'] = true;
+        }
+        $dualMode = $this->normalizeDualCitizenshipMode($dualCitizenship);
+        if ($dualMode === 'by birth') {
+            $checkStates['Check Box 39'] = true;
+        } elseif ($dualMode === 'by naturalization') {
+            $checkStates['Check Box 40'] = true;
         }
 
         return $checkStates;
@@ -1927,13 +2149,19 @@ class PdsExportHandler
         if ($civilKey !== null) {
             $selected[$civilKey] = true;
         }
-        $normalizedCitizenship = strtolower(trim($citizenship));
-        if ($normalizedCitizenship !== '' && str_contains($normalizedCitizenship, 'filipino')) {
+        if ($this->isFilipinoCitizenship($citizenship)) {
             $selected['filipino'] = true;
+            $selected['by birth'] = true;
         }
         $normalizedDual = strtolower(trim($dualCitizenship));
         if ($normalizedDual !== '' && $normalizedDual !== 'n/a') {
             $selected['dual citizenship'] = true;
+        }
+        $dualMode = $this->normalizeDualCitizenshipMode($dualCitizenship);
+        if ($dualMode === 'by birth') {
+            $selected['by birth'] = true;
+        } elseif ($dualMode === 'by naturalization') {
+            $selected['by naturalization'] = true;
         }
 
         $dom = new \DOMDocument('1.0', 'UTF-8');
@@ -2010,6 +2238,8 @@ class PdsExportHandler
 
         $checks = [
             'dual citizenship' => 'dual citizenship',
+            'by naturalization' => 'by naturalization',
+            'by birth' => 'by birth',
             'filipino' => 'filipino',
             'other/s:' => 'other/s',
             'separated' => 'separated',
@@ -2036,10 +2266,10 @@ class PdsExportHandler
             return null;
         }
 
-        if (str_contains($normalized, 'female')) {
+        if (in_array($normalized, ['f', 'female'], true) || str_contains($normalized, 'female')) {
             return 'female';
         }
-        if (str_contains($normalized, 'male')) {
+        if (in_array($normalized, ['m', 'male'], true) || str_contains($normalized, 'male')) {
             return 'male';
         }
 
@@ -2065,8 +2295,41 @@ class PdsExportHandler
         if (str_contains($normalized, 'separated')) {
             return 'separated';
         }
+        if (str_contains($normalized, 'annulled') || str_contains($normalized, 'divorc')) {
+            return 'other/s';
+        }
         if (str_contains($normalized, 'other')) {
             return 'other/s';
+        }
+
+        return null;
+    }
+
+    private function isFilipinoCitizenship(string $citizenship): bool
+    {
+        $normalized = strtolower(trim($citizenship));
+        if ($normalized === '' || $normalized === 'n/a') {
+            return false;
+        }
+
+        return str_contains($normalized, 'filipino')
+            || str_contains($normalized, 'philippine')
+            || str_contains($normalized, 'philippines')
+            || $normalized === 'ph'
+            || $normalized === 'phl';
+    }
+
+    private function normalizeDualCitizenshipMode(string $dualCitizenship): ?string
+    {
+        $normalized = strtolower(trim($dualCitizenship));
+        if ($normalized === '' || $normalized === 'n/a') {
+            return null;
+        }
+        if (str_contains($normalized, 'birth')) {
+            return 'by birth';
+        }
+        if (str_contains($normalized, 'natural')) {
+            return 'by naturalization';
         }
 
         return null;
