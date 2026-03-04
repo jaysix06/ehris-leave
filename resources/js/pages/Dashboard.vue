@@ -8,7 +8,7 @@ import {
     LinearScale,
     Tooltip,
 } from 'chart.js';
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, usePage } from '@inertiajs/vue3';
 import {
     Activity,
     ArrowRight,
@@ -37,7 +37,6 @@ import {
 } from '@/routes';
 import { leaveApplication, idCard as selfServiceIdCard } from '@/routes/self-service';
 import { employeeListing } from '@/routes/reports';
-import { activityLog, reportingManager } from '@/routes/utilities';
 import type { BreadcrumbItem } from '@/types';
 import type { Component } from 'vue';
 
@@ -51,6 +50,30 @@ const breadcrumbs: BreadcrumbItem[] = [
         href: dashboard().url,
     },
 ];
+
+const page = usePage();
+const showPopups = computed(() => (page.props.showPopups ?? false) as boolean);
+const activePopups = computed(() => (page.props.activePopups ?? []) as Array<{
+    id: number;
+    message: string;
+    link: string | null;
+    status: string;
+    created_at: string;
+}>);
+
+const dismissedPopups = ref<number[]>([]);
+
+const visiblePopups = computed(() => {
+    // Only show popups if showPopups flag is true (after login)
+    if (!showPopups.value) {
+        return [];
+    }
+    return activePopups.value.filter(popup => !dismissedPopups.value.includes(popup.id));
+});
+
+const dismissPopup = (id: number) => {
+    dismissedPopups.value.push(id);
+};
 
 // ---------------------------------------------------------------------------
 // Theme-reactive chart rendering
@@ -126,7 +149,7 @@ const leaveMonthlyOptions = computed(() => {
                     usePointStyle: true,
                     pointStyle: 'rectRounded' as const,
                     padding: 16,
-                    font: { size: 12, family: 'Manrope', weight: '600' as const },
+                    font: { size: 12, family: 'Manrope', weight: 'bold' as const },
                 },
             },
             tooltip: {
@@ -137,7 +160,7 @@ const leaveMonthlyOptions = computed(() => {
                 borderWidth: 1,
                 cornerRadius: 8,
                 padding: 10,
-                titleFont: { family: 'Manrope', weight: '700' as const },
+                titleFont: { family: 'Manrope', weight: 'bold' as const },
                 bodyFont: { family: 'Manrope' },
             },
         },
@@ -190,7 +213,7 @@ const leaveStatusOptions = computed(() => {
                     usePointStyle: true,
                     pointStyle: 'circle' as const,
                     padding: 16,
-                    font: { size: 12, family: 'Manrope', weight: '600' as const },
+                    font: { size: 12, family: 'Manrope', weight: 'bold' as const },
                 },
             },
             tooltip: {
@@ -201,7 +224,7 @@ const leaveStatusOptions = computed(() => {
                 borderWidth: 1,
                 cornerRadius: 8,
                 padding: 10,
-                titleFont: { family: 'Manrope', weight: '700' as const },
+                titleFont: { family: 'Manrope', weight: 'bold' as const },
                 bodyFont: { family: 'Manrope' },
             },
         },
@@ -291,8 +314,8 @@ const pageCards: PageCard[] = [
         href: utilities().url,
         color: 'text-amber-600 bg-amber-500/10 dark:text-amber-400 dark:bg-amber-400/10',
         links: [
-            { label: 'Reporting Manager', href: reportingManager().url },
-            { label: 'Activity Log', href: activityLog().url },
+            { label: 'Reporting Manager', href: '/utilities/reporting-manager' },
+            { label: 'Activity Log', href: '/utilities/activity-log' },
         ],
     },
 ];
@@ -302,6 +325,42 @@ const pageCards: PageCard[] = [
     <Head :title="pageTitle" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
+        <!-- Popup Messages -->
+        <div
+            v-if="visiblePopups.length > 0"
+            class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            style="pointer-events: none;"
+        >
+            <div class="w-full max-w-2xl space-y-4" style="pointer-events: auto;">
+                <div
+                    v-for="popup in visiblePopups"
+                    :key="popup.id"
+                    class="relative rounded-lg border border-primary/20 bg-card p-6 shadow-lg"
+                >
+                    <button
+                        type="button"
+                        class="absolute right-4 top-4 text-muted-foreground hover:text-foreground"
+                        @click="dismissPopup(popup.id)"
+                    >
+                        <X class="h-5 w-5" />
+                    </button>
+
+                    <div class="pr-8">
+                        <p class="text-lg font-semibold text-foreground">{{ popup.message }}</p>
+
+                        <div v-if="popup.link" class="mt-4">
+                            <a
+                                :href="popup.link"
+                                class="inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+                            >
+                                Click Here
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="ehris-page">
             <!-- Stats Overview -->
             <section>

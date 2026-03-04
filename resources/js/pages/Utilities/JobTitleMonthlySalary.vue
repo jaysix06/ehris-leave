@@ -457,20 +457,20 @@ if (typeof window !== 'undefined') {
         if (formValues) {
             try {
                 const response = await fetch(`/api/utilities/job-title-monthly-salary/job-titles/${id}`, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-                    },
-                    credentials: 'same-origin',
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                },
+                credentials: 'same-origin',
                     body: JSON.stringify(formValues),
                 });
 
                 const data = await response.json();
 
-                if (data.success) {
+                    if (data.success) {
                     // Reload DataTable by incrementing key
                     jobTitleTableKey.value++;
                     await Swal.fire({
@@ -479,14 +479,14 @@ if (typeof window !== 'undefined') {
                         text: 'Job title updated successfully.',
                         confirmButtonColor: '#2563eb',
                     });
-                } else {
+                    } else {
                     // Handle validation errors
                     let errorMessage = data.message || 'Failed to update job title.';
                     if (data.errors) {
                         const errorMessages: string[] = [];
                         if (data.errors.job_title) {
                             errorMessages.push(Array.isArray(data.errors.job_title) ? data.errors.job_title[0] : data.errors.job_title);
-                        }
+                    }
                         if (data.errors.job_shorten) {
                             errorMessages.push(Array.isArray(data.errors.job_shorten) ? data.errors.job_shorten[0] : data.errors.job_shorten);
                         }
@@ -502,7 +502,7 @@ if (typeof window !== 'undefined') {
                     });
                 }
             } catch (error) {
-                console.error('Error updating job title:', error);
+                    console.error('Error updating job title:', error);
                 await Swal.fire({
                     icon: 'error',
                     title: 'Error',
@@ -690,20 +690,20 @@ if (typeof window !== 'undefined') {
         if (formValues) {
             try {
                 const response = await fetch(`/api/utilities/job-title-monthly-salary/monthly-salaries/${id}`, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-                    },
-                    credentials: 'same-origin',
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                },
+                credentials: 'same-origin',
                     body: JSON.stringify(formValues),
                 });
 
                 const data = await response.json();
 
-                if (data.success) {
+                    if (data.success) {
                     // Reload DataTable by incrementing key
                     monthlySalaryTableKey.value++;
                     await Swal.fire({
@@ -712,7 +712,7 @@ if (typeof window !== 'undefined') {
                         text: 'Monthly salary updated successfully.',
                         confirmButtonColor: '#2563eb',
                     });
-                } else {
+                    } else {
                     // Handle validation errors
                     let errorMessage = data.message || 'Failed to update monthly salary.';
                     if (data.errors) {
@@ -738,7 +738,7 @@ if (typeof window !== 'undefined') {
                     });
                 }
             } catch (error) {
-                console.error('Error updating monthly salary:', error);
+                    console.error('Error updating monthly salary:', error);
                 await Swal.fire({
                     icon: 'error',
                     title: 'Error',

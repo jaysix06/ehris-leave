@@ -2,8 +2,8 @@
 
 namespace App\Http\Responses;
 
-use Illuminate\Support\Facades\Auth;
 use App\Services\ActivityLogService;
+use Illuminate\Support\Facades\Auth;
 use Laravel\Fortify\Contracts\LoginResponse as LoginResponseContract;
 
 class LoginResponse implements LoginResponseContract
@@ -35,6 +35,9 @@ class LoginResponse implements LoginResponseContract
 
         // Log login activity
         ActivityLogService::logLogin();
+
+        // Set flag to show popups on next dashboard visit (only after login)
+        $request->session()->put('show_popups_after_login', true);
 
         return redirect()->intended(config('fortify.home'));
     }
