@@ -270,6 +270,14 @@ class PdsExportHandler
     }
 
     /**
+     * Strip XML-invalid control characters so Excel can open the workbook without "problem with some content".
+     */
+    private function sanitizeForXml(string $s): string
+    {
+        return preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F]/u', '', $s);
+    }
+
+    /**
      * @param  \Illuminate\Support\Collection<int, object>  $education
      * @return object{school_name: string|null, course: string|null, from_year: string|null, to_year: string|null, highest_grade: string|null, year_graduated: string|null, scholarship: string|null}
      */
@@ -997,7 +1005,7 @@ class PdsExportHandler
             $is = $dom->createElementNS($ns, 'is');
             $t = $dom->createElementNS($ns, 't');
             $t->setAttributeNS('http://www.w3.org/XML/1998/namespace', 'xml:space', 'preserve');
-            $t->appendChild($dom->createTextNode((string) $value));
+            $t->appendChild($dom->createTextNode($this->sanitizeForXml((string) $value)));
             $is->appendChild($t);
             $cellNode->appendChild($is);
         }
