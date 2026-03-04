@@ -665,7 +665,7 @@ onBeforeUnmount(() => {
                                 </label>
                             </div>
 
-                            <label>
+                            <label v-if="selectedLeaveType !== '- Select Leave Type -'">
                                 Reason for {{ selectedLeaveType }}
                                 <div class="flex flex-wrap mt-2" :class="selectedLeaveType === 'Study Leave' || selectedLeaveType === 'Others' ? 'gap-3' : 'gap-12'">
                                     <!-- Sick Leave -->

@@ -1,4 +1,13 @@
 <script setup lang="ts">
+import {
+    ArcElement,
+    BarElement,
+    CategoryScale,
+    Chart as ChartJS,
+    Legend,
+    LinearScale,
+    Tooltip,
+} from 'chart.js';
 import { Head, Link } from '@inertiajs/vue3';
 import {
     Activity,
@@ -14,6 +23,8 @@ import {
     Users,
     UsersRound,
 } from 'lucide-vue-next';
+import { Bar, Doughnut } from 'vue-chartjs';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import {
     dashboard,
@@ -30,6 +41,8 @@ import { activityLog, reportingManager } from '@/routes/utilities';
 import type { BreadcrumbItem } from '@/types';
 import type { Component } from 'vue';
 
+ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend);
+
 const pageTitle = 'Dashboard';
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -39,12 +52,29 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
-interface StatItem {
-    title: string;
-    value: string;
-    icon: Component;
-    color: string;
+// ---------------------------------------------------------------------------
+// Theme-reactive chart rendering
+// ---------------------------------------------------------------------------
+const themeKey = ref(0);
+let themeObserver: MutationObserver | null = null;
+
+function cssVar(name: string): string {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
+
+onMounted(() => {
+    themeObserver = new MutationObserver(() => { themeKey.value++; });
+    themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+});
+
+onBeforeUnmount(() => {
+    themeObserver?.disconnect();
+});
+
+// ---------------------------------------------------------------------------
+// Stats
+// ---------------------------------------------------------------------------
+interface StatItem { title: string; value: string; icon: Component; color: string }
 
 const stats: StatItem[] = [
     { title: 'Active Employees', value: '214', icon: Users, color: 'text-blue-600 bg-blue-500/10 dark:text-blue-400 dark:bg-blue-400/10' },
@@ -53,13 +83,140 @@ const stats: StatItem[] = [
     { title: 'Today Activity Logs', value: '63', icon: Activity, color: 'text-violet-600 bg-violet-500/10 dark:text-violet-400 dark:bg-violet-400/10' },
 ];
 
-interface QuickAction {
-    title: string;
-    description: string;
-    icon: Component;
-    href: string;
-    color: string;
-}
+// ---------------------------------------------------------------------------
+// Charts — Monthly Leave Trend (Bar)
+// ---------------------------------------------------------------------------
+const leaveMonthlyData = computed(() => {
+    void themeKey.value;
+    return {
+        labels: ['Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'],
+        datasets: [
+            {
+                label: 'Approved',
+                data: [12, 19, 8, 15, 22, 14],
+                backgroundColor: cssVar('--chart-2'),
+                borderRadius: 6,
+                borderSkipped: false as const,
+            },
+            {
+                label: 'Pending',
+                data: [3, 5, 2, 8, 4, 6],
+                backgroundColor: cssVar('--chart-3'),
+                borderRadius: 6,
+                borderSkipped: false as const,
+            },
+        ],
+    };
+});
+
+const leaveMonthlyOptions = computed(() => {
+    void themeKey.value;
+    const mutedFg = cssVar('--muted-foreground');
+    const border = cssVar('--border');
+
+    return {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: 'top' as const,
+                align: 'end' as const,
+                labels: {
+                    color: mutedFg,
+                    usePointStyle: true,
+                    pointStyle: 'rectRounded' as const,
+                    padding: 16,
+                    font: { size: 12, family: 'Manrope', weight: '600' as const },
+                },
+            },
+            tooltip: {
+                backgroundColor: cssVar('--card'),
+                titleColor: cssVar('--foreground'),
+                bodyColor: mutedFg,
+                borderColor: border,
+                borderWidth: 1,
+                cornerRadius: 8,
+                padding: 10,
+                titleFont: { family: 'Manrope', weight: '700' as const },
+                bodyFont: { family: 'Manrope' },
+            },
+        },
+        scales: {
+            x: {
+                grid: { display: false },
+                ticks: { color: mutedFg, font: { size: 12, family: 'Manrope' } },
+                border: { display: false },
+            },
+            y: {
+                grid: { color: border },
+                ticks: { color: mutedFg, font: { size: 12, family: 'Manrope' }, stepSize: 5 },
+                border: { display: false },
+            },
+        },
+    };
+});
+
+// ---------------------------------------------------------------------------
+// Charts — Leave Status (Doughnut)
+// ---------------------------------------------------------------------------
+const leaveStatusData = computed(() => {
+    void themeKey.value;
+    return {
+        labels: ['Approved', 'Pending', 'Rejected'],
+        datasets: [
+            {
+                data: [45, 18, 5],
+                backgroundColor: [cssVar('--chart-2'), cssVar('--chart-3'), cssVar('--chart-5')],
+                borderWidth: 0,
+                spacing: 3,
+                borderRadius: 4,
+            },
+        ],
+    };
+});
+
+const leaveStatusOptions = computed(() => {
+    void themeKey.value;
+    const mutedFg = cssVar('--muted-foreground');
+    return {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '72%',
+        plugins: {
+            legend: {
+                position: 'bottom' as const,
+                labels: {
+                    color: mutedFg,
+                    usePointStyle: true,
+                    pointStyle: 'circle' as const,
+                    padding: 16,
+                    font: { size: 12, family: 'Manrope', weight: '600' as const },
+                },
+            },
+            tooltip: {
+                backgroundColor: cssVar('--card'),
+                titleColor: cssVar('--foreground'),
+                bodyColor: mutedFg,
+                borderColor: cssVar('--border'),
+                borderWidth: 1,
+                cornerRadius: 8,
+                padding: 10,
+                titleFont: { family: 'Manrope', weight: '700' as const },
+                bodyFont: { family: 'Manrope' },
+            },
+        },
+    };
+});
+
+const leaveStatusTotal = computed(() => {
+    const ds = leaveStatusData.value.datasets[0];
+    return (ds.data as number[]).reduce((sum, n) => sum + n, 0);
+});
+
+// ---------------------------------------------------------------------------
+// Quick Actions
+// ---------------------------------------------------------------------------
+interface QuickAction { title: string; description: string; icon: Component; href: string; color: string }
 
 const quickActions: QuickAction[] = [
     {
@@ -92,14 +249,10 @@ const quickActions: QuickAction[] = [
     },
 ];
 
-interface PageCard {
-    title: string;
-    description: string;
-    icon: Component;
-    href: string;
-    color: string;
-    links: { label: string; href: string }[];
-}
+// ---------------------------------------------------------------------------
+// Explore Cards
+// ---------------------------------------------------------------------------
+interface PageCard { title: string; description: string; icon: Component; href: string; color: string; links: { label: string; href: string }[] }
 
 const pageCards: PageCard[] = [
     {
@@ -171,6 +324,41 @@ const pageCards: PageCard[] = [
                             <p class="mt-0.5 text-sm text-muted-foreground">{{ item.title }}</p>
                         </div>
                     </article>
+                </div>
+            </section>
+
+            <!-- Charts -->
+            <section class="grid grid-cols-1 gap-4 lg:grid-cols-[1.6fr_1fr]">
+                <div class="ehris-card flex flex-col">
+                    <div class="mb-4">
+                        <h3 class="text-lg font-bold text-foreground">Monthly Leave Trend</h3>
+                        <p class="mt-0.5 text-sm text-muted-foreground">Leave applications over the last 6 months.</p>
+                    </div>
+                    <div class="relative min-h-[280px] flex-1">
+                        <Bar :key="`bar-${themeKey}`" :data="leaveMonthlyData" :options="leaveMonthlyOptions" />
+                    </div>
+                </div>
+
+                <div class="ehris-card flex flex-col items-center">
+                    <div class="mb-4 w-full">
+                        <h3 class="text-lg font-bold text-foreground">Leave Status</h3>
+                        <p class="mt-0.5 text-sm text-muted-foreground">Distribution of all leave requests.</p>
+                    </div>
+                    <div class="relative flex flex-1 items-center justify-center">
+                        <div class="relative h-[230px] w-[230px]">
+                            <Doughnut :key="`doughnut-${themeKey}`" :data="leaveStatusData" :options="leaveStatusOptions" />
+                            <div class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                                <span class="text-3xl font-bold text-foreground">{{ leaveStatusTotal }}</span>
+                                <span class="text-xs text-muted-foreground">Total</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-3 flex w-full justify-center gap-6">
+                        <div v-for="(label, i) in leaveStatusData.labels" :key="label" class="text-center">
+                            <p class="text-lg font-bold text-foreground">{{ leaveStatusData.datasets[0].data[i] }}</p>
+                            <p class="text-xs text-muted-foreground">{{ label }}</p>
+                        </div>
+                    </div>
                 </div>
             </section>
 
