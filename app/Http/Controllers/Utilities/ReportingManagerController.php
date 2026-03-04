@@ -19,10 +19,11 @@ class ReportingManagerController extends Controller
 
     /**
      * Paginated list of employees with their assigned reporting manager.
-     * Viewable by any authenticated user (admin check only on modify actions).
      */
     public function api(Request $request)
     {
+        $this->authorizeAdmin();
+
         if (! Schema::hasTable('tbl_reporting_manager')) {
             return response()->json(['data' => [], 'total' => 0]);
         }
@@ -62,10 +63,11 @@ class ReportingManagerController extends Controller
 
     /**
      * DataTables server-side endpoint for employees with reporting manager assignments.
-     * Viewable by any authenticated user (admin check only on modify actions).
      */
     public function datatables(Request $request)
     {
+        $this->authorizeAdmin();
+
         if (! Schema::hasTable('tbl_reporting_manager')) {
             return response()->json([
                 'draw' => (int) $request->get('draw', 1),
