@@ -10,7 +10,7 @@ class PdsC2Handler
 {
     private const ELIGIBILITY_START_ROW = 5;
 
-    private const ELIGIBILITY_MAX_ROWS = 11;
+    private const ELIGIBILITY_MAX_ROWS = 7;
 
     private const WORK_EXPERIENCE_START_ROW = 18;
 

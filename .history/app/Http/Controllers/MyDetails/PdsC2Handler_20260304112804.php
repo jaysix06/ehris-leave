@@ -3,23 +3,16 @@
 namespace App\Http\Controllers\MyDetails;
 
 /**
- * Handles building the C2 (Civil Service Eligibility + Work Experience continuation)
- * cell map and applying it to the C2 worksheet XML.
+ * Handles building the C2 (Work Experience continuation) cell map and applying it to the C2 worksheet XML.
  */
 class PdsC2Handler
 {
-    private const ELIGIBILITY_START_ROW = 5;
-
-    private const ELIGIBILITY_MAX_ROWS = 11;
-
     private const WORK_EXPERIENCE_START_ROW = 18;
 
     private const WORK_EXPERIENCE_MAX_ROWS = 45;
 
     /**
-     * Build cell map for the C2 sheet:
-     * - Civil Service Eligibility continuation rows 5-11
-     * - Work Experience continuation rows 18-44
+     * Build cell map for the C2 sheet (Work Experience continuation rows 18–44).
      *
      * @param  \Illuminate\Support\Collection<int, object>  $eligibility
      * @param  \Illuminate\Support\Collection<int, object>  $workExperience
@@ -30,19 +23,6 @@ class PdsC2Handler
     public function buildCellMap($eligibility, $workExperience, callable $formatDate, callable $pdsValue): array
     {
         $map = [];
-
-        foreach ($eligibility->take(self::ELIGIBILITY_MAX_ROWS)->values() as $i => $row) {
-            $r = self::ELIGIBILITY_START_ROW + $i;
-            // IV. CIVIL SERVICE ELIGIBILITY (C2)
-            // A:E - Career Service / Eligibility, F - Rating, G:H - Date Exam/Conferment,
-            // I - Place, J - License Number, K - Valid Until.
-            $map["A{$r}"] = $pdsValue($row->title ?? null);
-            $map["F{$r}"] = $pdsValue($row->rating ?? null);
-            $map["G{$r}"] = $pdsValue($formatDate($row->date_exam ?? null));
-            $map["I{$r}"] = $pdsValue($row->place_exam ?? null);
-            $map["J{$r}"] = $pdsValue($row->license_no ?? null);
-            $map["K{$r}"] = $pdsValue($formatDate($row->date_release ?? null));
-        }
 
         foreach ($workExperience->take(self::WORK_EXPERIENCE_MAX_ROWS)->values() as $i => $row) {
             $r = self::WORK_EXPERIENCE_START_ROW + $i;
