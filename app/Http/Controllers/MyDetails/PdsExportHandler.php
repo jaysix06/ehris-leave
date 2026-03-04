@@ -9,7 +9,7 @@ class PdsExportHandler
     /**
      * Export PDS data to an xlsx file. Returns the path to the generated file.
      *
-     * @param  array{hrid: mixed, dbProfile: object|null, officialInfo: object|null, personalInfo: object|null, contactInfo: object|null, family: \Illuminate\Support\Collection, education: \Illuminate\Support\Collection, workExperience: \Illuminate\Support\Collection, eligibility: \Illuminate\Support\Collection, spouse: object|null, father: object|null, mother: object|null, children: \Illuminate\Support\Collection}  $data
+     * @param  array{hrid: mixed, dbProfile: object|null, officialInfo: object|null, personalInfo: object|null, contactInfo: object|null, family: \Illuminate\Support\Collection, education: \Illuminate\Support\Collection, workExperience: \Illuminate\Support\Collection, eligibility: \Illuminate\Support\Collection, spouse: object|null, father: object|null, mother: object|null, children: \Illuminate\Support\Collection, voluntaryWork?: \Illuminate\Support\Collection|array<int, mixed>, training?: \Illuminate\Support\Collection|array<int, mixed>, awards?: \Illuminate\Support\Collection|array<int, mixed>, expertise?: \Illuminate\Support\Collection|array<int, mixed>, affiliation?: \Illuminate\Support\Collection|array<int, mixed>}  $data
      */
     public function export(string $templatePath, array $data): string
     {
@@ -151,6 +151,16 @@ class PdsExportHandler
             fn ($value) => $this->formatDate($value),
             fn ($value) => $this->pdsValue($value)
         );
+        $c3Handler = new \App\Http\Controllers\MyDetails\PdsC3Handler;
+        $c3CellMap = $c3Handler->buildCellMap(
+            $data['voluntaryWork'] ?? [],
+            $data['training'] ?? [],
+            $data['expertise'] ?? [],
+            $data['awards'] ?? [],
+            $data['affiliation'] ?? [],
+            fn ($value) => $this->formatDate($value),
+            fn ($value) => $this->pdsValue($value)
+        );
 
         return $this->populateTemplateWorkbook(
             $templatePath,
@@ -160,7 +170,8 @@ class PdsExportHandler
             (string) ($personalInfo->civil_stat ?? ''),
             [],
             count($educationRows),
-            $c2CellMap
+            $c2CellMap,
+            $c3CellMap
         );
     }
 
@@ -532,6 +543,7 @@ class PdsExportHandler
     /**
      * @param  array<string, array{start: int, end: int}>  $educationMergeGroups
      * @param  array<string, string>  $c2CellMap
+     * @param  array<string, string>  $c3CellMap
      */
     private function populateTemplateWorkbook(
         string $templatePath,
@@ -541,7 +553,8 @@ class PdsExportHandler
         string $civilStatus = '',
         array $educationMergeGroups = [],
         int $educationRowCount = 5,
-        array $c2CellMap = []
+        array $c2CellMap = [],
+        array $c3CellMap = []
     ): string {
         if (! class_exists('PclZip')) {
             require_once base_path('vendor/phpoffice/phpexcel/Classes/PHPExcel/Shared/PCLZip/pclzip.lib.php');
@@ -644,6 +657,17 @@ class PdsExportHandler
                     $sheet2Xml = file_get_contents($sheet2Path) ?: '';
                     $sheet2Xml = (new PdsC2Handler)->applyCellMapToWorksheetXml($sheet2Xml, $c2CellMap);
                     file_put_contents($sheet2Path, $sheet2Xml);
+                }
+            }
+        }
+        if ($c3CellMap !== []) {
+            $sheet3EntryPath = $this->resolveWorksheetEntryPath($workbookXml, $relsXml, 'C3');
+            if ($sheet3EntryPath !== null) {
+                $sheet3Path = $extractRoot.'/'.$sheet3EntryPath;
+                if (is_file($sheet3Path)) {
+                    $sheet3Xml = file_get_contents($sheet3Path) ?: '';
+                    $sheet3Xml = (new \App\Http\Controllers\MyDetails\PdsC3Handler)->applyCellMapToWorksheetXml($sheet3Xml, $c3CellMap);
+                    file_put_contents($sheet3Path, $sheet3Xml);
                 }
             }
         }
