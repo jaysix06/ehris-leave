@@ -462,6 +462,14 @@ watch(
     { deep: true },
 );
 
+function reload() {
+    if (dataTableInstance) {
+        dataTableInstance.ajax.reload(null, false);
+    }
+}
+
+defineExpose({ reload });
+
 // Watch for accordion state changes to update row rendering
 watch(
     () => props.isRowExpanded,

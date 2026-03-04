@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\SelfService;
 
+use App\Events\LeaveRequestUpdated;
 use App\Http\Controllers\Controller;
 use App\Models\Department;
 use App\Models\EmpOfficialInfo;
@@ -115,46 +116,87 @@ class LeaveApplicationController extends Controller
 
             $reportingManager = null;
             if ($officialInfo !== null && Schema::hasTable('tbl_emp_official_info')) {
-                $reportingQuery = EmpOfficialInfo::query()->where('role', 'Reporting Manager');
+                $managerHrid = null;
+                $rawReportingManager = trim((string) ($officialInfo->reporting_manager ?? ''));
 
-                $departmentId = trim((string) ($officialInfo->department_id ?? ''));
-                $rawOffice = trim((string) ($officialInfo->office ?? ''));
-
-                if ($departmentId !== '' && ctype_digit($departmentId)) {
-                    $reportingQuery->where('department_id', $departmentId);
-                } elseif ($officeSchool !== null && Schema::hasTable('tbl_department')) {
-                    $deptId = Department::query()
-                        ->where('department_name', $officeSchool)
-                        ->value('department_id');
-                    if ($deptId !== null) {
-                        $reportingQuery->where('department_id', (string) $deptId);
+                // Prefer explicit employee assignment in official info.
+                if ($rawReportingManager !== '') {
+                    if (ctype_digit($rawReportingManager)) {
+                        $managerHrid = (int) $rawReportingManager;
+                    } else {
+                        $reportingManager = $rawReportingManager;
                     }
                 }
 
-                if ($rawOffice !== '') {
-                    $reportingQuery->where('office', $rawOffice);
-                } elseif ($officeSchool !== null && Schema::hasTable('tbl_office')) {
-                    $officeId = Office::query()
-                        ->where('office_name', $officeSchool)
-                        ->value('office_Id');
-                    if ($officeId !== null) {
-                        $reportingQuery->where('office', (string) $officeId);
-                    } else {
+                // Fallback to department mapping table.
+                if ($managerHrid === null && $reportingManager === null && ! empty($officialInfo->department_id) && Schema::hasTable('tbl_reporting_manager')) {
+                    $mappedHrid = DB::table('tbl_reporting_manager')
+                        ->whereRaw('CAST(department_id AS UNSIGNED) = ?', [(int) $officialInfo->department_id])
+                        ->value('manager_name');
+                    if ($mappedHrid !== null && ctype_digit((string) $mappedHrid)) {
+                        $managerHrid = (int) $mappedHrid;
+                    }
+                }
+
+                if ($managerHrid !== null) {
+                    $managerRow = DB::table('tbl_emp_official_info')
+                        ->select(['firstname', 'middlename', 'lastname', 'extension'])
+                        ->where('hrid', $managerHrid)
+                        ->first();
+                    if ($managerRow !== null) {
+                        $nameParts = array_filter([
+                            trim((string) ($managerRow->firstname ?? '')),
+                            trim((string) ($managerRow->middlename ?? '')),
+                            trim((string) ($managerRow->lastname ?? '')),
+                            trim((string) ($managerRow->extension ?? '')),
+                        ], fn ($part) => $part !== '');
+                        $reportingManager = $nameParts !== [] ? trim(implode(' ', $nameParts)) : null;
+                    }
+                }
+
+                // Last fallback to previous role/office matching behavior.
+                if ($reportingManager === null) {
+                    $reportingQuery = EmpOfficialInfo::query()->where('role', 'Reporting Manager');
+
+                    $departmentId = trim((string) ($officialInfo->department_id ?? ''));
+                    $rawOffice = trim((string) ($officialInfo->office ?? ''));
+
+                    if ($departmentId !== '' && ctype_digit($departmentId)) {
+                        $reportingQuery->where('department_id', $departmentId);
+                    } elseif ($officeSchool !== null && Schema::hasTable('tbl_department')) {
+                        $deptId = Department::query()
+                            ->where('department_name', $officeSchool)
+                            ->value('department_id');
+                        if ($deptId !== null) {
+                            $reportingQuery->where('department_id', (string) $deptId);
+                        }
+                    }
+
+                    if ($rawOffice !== '') {
+                        $reportingQuery->where('office', $rawOffice);
+                    } elseif ($officeSchool !== null && Schema::hasTable('tbl_office')) {
+                        $officeId = Office::query()
+                            ->where('office_name', $officeSchool)
+                            ->value('office_Id');
+                        if ($officeId !== null) {
+                            $reportingQuery->where('office', (string) $officeId);
+                        } else {
+                            $reportingQuery->where('office', $officeSchool);
+                        }
+                    } elseif ($officeSchool !== null) {
                         $reportingQuery->where('office', $officeSchool);
                     }
-                } elseif ($officeSchool !== null) {
-                    $reportingQuery->where('office', $officeSchool);
-                }
 
-                $reportingRecord = $reportingQuery->first();
-                if ($reportingRecord !== null) {
-                    $nameParts = array_filter([
-                        $reportingRecord->firstname ?? null,
-                        $reportingRecord->middlename ?? null,
-                        $reportingRecord->lastname ?? null,
-                        $reportingRecord->extension ?? null,
-                    ], fn ($part) => is_string($part) && trim($part) !== '');
-                    $reportingManager = $nameParts !== [] ? trim(implode(' ', $nameParts)) : null;
+                    $reportingRecord = $reportingQuery->first();
+                    if ($reportingRecord !== null) {
+                        $nameParts = array_filter([
+                            $reportingRecord->firstname ?? null,
+                            $reportingRecord->middlename ?? null,
+                            $reportingRecord->lastname ?? null,
+                            $reportingRecord->extension ?? null,
+                        ], fn ($part) => is_string($part) && trim($part) !== '');
+                        $reportingManager = $nameParts !== [] ? trim(implode(' ', $nameParts)) : null;
+                    }
                 }
             }
 
@@ -784,7 +826,15 @@ class LeaveApplicationController extends Controller
             'calamity_date' => $data['calamity_date'] ?? null,
         ];
 
-        DB::table(self::LEAVE_TABLE)->insert($payload);
+        $leaveId = (int) DB::table(self::LEAVE_TABLE)->insertGetId($payload);
+
+        LeaveRequestUpdated::dispatch(
+            $leaveId > 0 ? $leaveId : null,
+            $hrid > 0 ? $hrid : null,
+            $rmAssigneeHrid,
+            'submitted',
+            self::WORKFLOW_PENDING_RM,
+        );
 
         return back()->with('status', 'Leave application submitted.');
     }
@@ -822,10 +872,10 @@ class LeaveApplicationController extends Controller
         ]);
     }
 
-    public function decide(Request $request, int $id): JsonResponse
+    public function decide(Request $request, int $id): \Illuminate\Http\RedirectResponse
     {
         if (! Schema::hasTable(self::LEAVE_TABLE)) {
-            return response()->json(['message' => 'Leave application table not found.'], 422);
+            return back()->withErrors(['decision' => 'Leave application table not found.']);
         }
 
         $payload = $request->validate([
@@ -838,7 +888,7 @@ class LeaveApplicationController extends Controller
             ->first();
 
         if (! $leave) {
-            return response()->json(['message' => 'Leave application not found.'], 404);
+            return back()->withErrors(['decision' => 'Leave application not found.']);
         }
 
         $authRole = strtolower((string) ($request->user()?->role ?? ''));
@@ -850,10 +900,10 @@ class LeaveApplicationController extends Controller
 
         if (str_contains($authRole, 'reporting manager')) {
             if ($leave->workflow_status !== self::WORKFLOW_PENDING_RM) {
-                return response()->json(['message' => 'This request is not pending RM approval.'], 422);
+                return back()->withErrors(['decision' => 'This request is not pending RM approval.']);
             }
             if (isset($leave->rm_assignee_hrid) && (int) $leave->rm_assignee_hrid > 0 && (int) $leave->rm_assignee_hrid !== $authHrid) {
-                return response()->json(['message' => 'You are not assigned to this leave request.'], 403);
+                return back()->withErrors(['decision' => 'You are not assigned to this leave request.']);
             }
 
             $updates['rm_status'] = $decision === 'approve' ? 'approved' : 'disapproved';
@@ -865,7 +915,7 @@ class LeaveApplicationController extends Controller
                 : self::WORKFLOW_DISAPPROVED;
         } elseif (str_contains($authRole, 'hr')) {
             if ($leave->workflow_status !== self::WORKFLOW_PENDING_HR) {
-                return response()->json(['message' => 'This request is not pending HR approval.'], 422);
+                return back()->withErrors(['decision' => 'This request is not pending HR approval.']);
             }
 
             $updates['hr_status'] = $decision === 'approve' ? 'approved' : 'disapproved';
@@ -877,7 +927,7 @@ class LeaveApplicationController extends Controller
                 : self::WORKFLOW_DISAPPROVED;
         } elseif (str_contains($authRole, 'sds')) {
             if ($leave->workflow_status !== self::WORKFLOW_PENDING_SDS) {
-                return response()->json(['message' => 'This request is not pending SDS approval.'], 422);
+                return back()->withErrors(['decision' => 'This request is not pending SDS approval.']);
             }
 
             $updates['sds_status'] = $decision === 'approve' ? 'approved' : 'disapproved';
@@ -888,14 +938,22 @@ class LeaveApplicationController extends Controller
                 ? self::WORKFLOW_APPROVED
                 : self::WORKFLOW_DISAPPROVED;
         } else {
-            return response()->json(['message' => 'You are not authorized to decide this request.'], 403);
+            return back()->withErrors(['decision' => 'You are not authorized to decide this request.']);
         }
 
         DB::table(self::LEAVE_TABLE)
             ->where('leave_application_id', $id)
             ->update(array_merge($updates, ['updated_at' => $now]));
 
-        return response()->json(['message' => 'Decision saved.']);
+        LeaveRequestUpdated::dispatch(
+            isset($leave->leave_application_id) ? (int) $leave->leave_application_id : $id,
+            isset($leave->employee_hrid) ? (int) $leave->employee_hrid : null,
+            isset($leave->rm_assignee_hrid) ? (int) $leave->rm_assignee_hrid : null,
+            $decision,
+            (string) ($updates['workflow_status'] ?? $leave->workflow_status ?? ''),
+        );
+
+        return back();
     }
 
     private function resolveReportingManagerHrid(?EmpOfficialInfo $officialInfo): ?int
@@ -904,22 +962,61 @@ class LeaveApplicationController extends Controller
             return null;
         }
 
-        $reportingQuery = EmpOfficialInfo::query()->where('role', 'Reporting Manager');
+        $rawReportingManager = trim((string) ($officialInfo->reporting_manager ?? ''));
 
+        // 1) Use explicit assigned RM in official info when it is already an HRID.
+        if ($rawReportingManager !== '' && ctype_digit($rawReportingManager)) {
+            $hrid = (int) $rawReportingManager;
+            if ($hrid > 0) {
+                return $hrid;
+            }
+        }
+
+        // 2) If explicit assigned RM is a name, resolve it to HRID.
+        if ($rawReportingManager !== '') {
+            $managerByName = DB::table('tbl_emp_official_info')
+                ->select('hrid')
+                ->whereRaw(
+                    "LOWER(TRIM(CONCAT_WS(' ', firstname, middlename, lastname, extension))) = ?",
+                    [strtolower($rawReportingManager)]
+                )
+                ->first();
+
+            $hridFromName = (int) ($managerByName->hrid ?? 0);
+            if ($hridFromName > 0) {
+                return $hridFromName;
+            }
+        }
+
+        // 3) Fallback to department-to-manager mapping table.
         $departmentId = trim((string) ($officialInfo->department_id ?? ''));
-        $rawOffice = trim((string) ($officialInfo->office ?? ''));
+        if ($departmentId !== '' && ctype_digit($departmentId) && Schema::hasTable('tbl_reporting_manager')) {
+            $mappedHrid = DB::table('tbl_reporting_manager')
+                ->whereRaw('CAST(department_id AS UNSIGNED) = ?', [(int) $departmentId])
+                ->value('manager_name');
 
+            if ($mappedHrid !== null && ctype_digit((string) $mappedHrid)) {
+                $hrid = (int) $mappedHrid;
+                if ($hrid > 0) {
+                    return $hrid;
+                }
+            }
+        }
+
+        // 4) Last fallback to legacy role-based matching.
+        $reportingQuery = EmpOfficialInfo::query()->where('role', 'Reporting Manager');
         if ($departmentId !== '' && ctype_digit($departmentId)) {
             $reportingQuery->where('department_id', $departmentId);
         }
 
+        $rawOffice = trim((string) ($officialInfo->office ?? ''));
         if ($rawOffice !== '') {
             $reportingQuery->where('office', $rawOffice);
         }
 
         $reportingRecord = $reportingQuery->select(['hrid'])->first();
-        $hrid = (int) ($reportingRecord->hrid ?? 0);
+        $fallbackHrid = (int) ($reportingRecord->hrid ?? 0);
 
-        return $hrid > 0 ? $hrid : null;
+        return $fallbackHrid > 0 ? $fallbackHrid : null;
     }
 }

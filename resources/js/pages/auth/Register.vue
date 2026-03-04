@@ -193,7 +193,7 @@ const handleDistrictChange = (event: Event) => {
                                 :tabindex="6"
                                 class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                             >
-                                <option value="">Select status</option>
+                                <option value="" disabled selected>Select status</option>
                                 <option
                                     v-for="status in (props.employmentStatuses ?? [])"
                                     :key="status"

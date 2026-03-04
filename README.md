@@ -1,6 +1,4 @@
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
+
 # EHRIS
 
 Laravel 12 + Vue 3 (Inertia) application.

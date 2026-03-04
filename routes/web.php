@@ -2,21 +2,21 @@
 
 use App\Http\Controllers\Auth\PasswordResetOtpController;
 use App\Http\Controllers\EmployeeManagement\IdCardPrintingController;
+use App\Http\Controllers\EmployeeManagement\LeaveRequestsController;
 use App\Http\Controllers\MyDetailsController;
+use App\Http\Controllers\RequestStatus\MyLeaveController;
 use App\Http\Controllers\SelfService\IdCardController;
 use App\Http\Controllers\SelfService\LeaveApplicationController;
 use App\Http\Controllers\Utilities\ActivityLogController;
 use App\Http\Controllers\Utilities\BusinessDepartmentController;
 use App\Http\Controllers\Utilities\JobTitleMonthlySalaryController;
 use App\Http\Controllers\Utilities\LeaveTypeController;
+use App\Http\Controllers\Utilities\PopupMessageController;
 use App\Http\Controllers\Utilities\ReportingManagerController;
 use App\Http\Controllers\Utilities\UserListController;
-use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
-use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
 
@@ -51,8 +51,26 @@ Route::get('email/verified-success', function (Request $request) {
     return Inertia::render('auth/EmailVerifiedSuccess');
 })->name('verification.success');
 
-Route::get('dashboard', function () {
-    return Inertia::render('Dashboard');
+Route::get('dashboard', function (Request $request) {
+    $activePopups = [];
+    $showPopups = false;
+
+    // Only fetch and show popups if this is right after login
+    if ($request->session()->get('show_popups_after_login', false)) {
+        $activePopups = \App\Models\PopupMessage::query()
+            ->where('status', 1) // 1 = Active
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        $showPopups = true;
+        // Clear the flag so popups don't show on subsequent dashboard visits
+        $request->session()->forget('show_popups_after_login');
+    }
+
+    return Inertia::render('Dashboard', [
+        'activePopups' => $activePopups,
+        'showPopups' => $showPopups,
+    ]);
 })->middleware(['auth', 'verified'])->name('dashboard');
 
 Route::get('cot-rpms-summary', function () {
@@ -110,10 +128,16 @@ Route::get('employee-management/id-card-printing/{id}/eodb-id-bb', [IdCardPrinti
     ->name('employee-management.id-card-printing.eodb-id-bb');
 Route::get('employee-management/id-card-printing/{id}/eodb-id', [IdCardPrintingController::class, 'eodbId'])
     ->middleware(['auth', 'verified'])
-    ->name('employee-management.id-card-printing.eodb-id');
-Route::get('employee-management/deped-email-requests', function () {
-    return Inertia::render('EmployeeManagement/DepedEmailRequests');
-})->middleware(['auth', 'verified'])->name('employee-management.deped-email-requests');
+        ->name('employee-management.id-card-printing.eodb-id');
+    Route::get('employee-management/deped-email-requests', function () {
+        return Inertia::render('EmployeeManagement/DepedEmailRequests');
+    })->middleware(['auth', 'verified'])->name('employee-management.deped-email-requests');
+Route::get('employee-management/leave-requests', [LeaveRequestsController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('employee-management.leave-requests');
+Route::get('api/employee-management/leave-requests/datatables', [LeaveRequestsController::class, 'datatables'])
+    ->middleware(['auth', 'verified'])
+    ->name('api.employee-management.leave-requests.datatables');
 
 Route::get('self-service', function () {
     return Inertia::render('SelfService');
@@ -155,172 +179,15 @@ Route::get('request-status', function () {
 Route::get('request-status/my-requests', function () {
     return Inertia::render('RequestStatus/MyRequests');
 })->middleware(['auth', 'verified'])->name('request-status.my-requests');
-Route::get('request-status/my-leave', function () {
-    return Inertia::render('RequestStatus/MyLeave');
-})->middleware(['auth', 'verified'])->name('request-status.my-leave');
-
-Route::get('my-details', function (Request $request) {
-    $authUser = $request->user();
-    $dbProfile = null;
-    $hrid = null;
-    $officialInfo = null;
-    $personalInfo = null;
-    $contactInfo = null;
-    $family = [];
-    $education = [];
-    $workExperience = [];
-    $eligibility = [];
-    $serviceRecord = [];
-    $leaveHistory = [];
-    $documents = [];
-    $training = [];
-    $awards = [];
-    $performance = [];
-    $researches = [];
-    $expertise = [];
-    $affiliation = [];
-
-    if ($authUser && Schema::hasTable('tbl_user')) {
-        $profileUser = User::where('email', $authUser->email)->first();
-        if ($profileUser) {
-            $dbProfile = $profileUser->only([
-                'hrId',
-                'email',
-                'lastname',
-                'firstname',
-                'middlename',
-                'extname',
-                'avatar',
-                'job_title',
-                'role',
-                'fullname',
-            ]);
-            $hrid = $profileUser->hrId;
-        }
-    }
-
-    if ($hrid !== null) {
-        $tables = [
-            'tbl_emp_official_info' => fn () => DB::table('tbl_emp_official_info')->where('hrid', $hrid)->first(),
-            'tbl_emp_personal_info' => fn () => DB::table('tbl_emp_personal_info')->where('hrid', $hrid)->first(),
-            'tbl_emp_contact_info' => fn () => DB::table('tbl_emp_contact_info')->where('hrid', $hrid)->first(),
-            'tbl_emp_family_info' => fn () => DB::table('tbl_emp_family_info')->where('hrid', $hrid)->get(),
-            'tbl_emp_education_info' => fn () => DB::table('tbl_emp_education_info')->where('hrid', $hrid)->get(),
-            'tbl_emp_work_experience_info' => fn () => DB::table('tbl_emp_work_experience_info')->where('hrid', $hrid)->get(),
-            'tbl_emp_civil_service_info' => fn () => DB::table('tbl_emp_civil_service_info')->where('hrid', $hrid)->get(),
-            'tbl_emp_service_record' => fn () => DB::table('tbl_emp_service_record')->where('hrid', $hrid)->get(),
-            'tbl_leave_history' => fn () => DB::table('tbl_leave_history')->where('hrid', $hrid)->get(),
-            'tbl_document' => fn () => DB::table('tbl_document')->where('hrid', $hrid)->get(),
-            'tbl_emp_training' => fn () => DB::table('tbl_emp_training')->where('hrid', $hrid)->get(),
-            'tbl_awards' => fn () => DB::table('tbl_awards')->where('hrid', $hrid)->get(),
-            'tbl_performance' => fn () => DB::table('tbl_performance')->where('hrid', $hrid)->get(),
-            'tbl_researches' => fn () => DB::table('tbl_researches')->where('hrid', $hrid)->get(),
-            'tbl_expertise' => fn () => DB::table('tbl_expertise')->where('hrid', $hrid)->get(),
-            'tbl_affiliation' => fn () => DB::table('tbl_affiliation')->where('hrid', $hrid)->get(),
-        ];
-        foreach ($tables as $table => $query) {
-            if (! Schema::hasTable($table)) {
-                continue;
-            }
-            try {
-                $result = $query();
-                if ($result instanceof \Illuminate\Support\Collection) {
-                    $result = $result->all();
-                } elseif (is_object($result)) {
-                    $result = json_decode(json_encode($result), true);
-                }
-                switch ($table) {
-                    case 'tbl_emp_official_info': $officialInfo = $result;
-                        break;
-                    case 'tbl_emp_personal_info': $personalInfo = $result;
-                        break;
-                    case 'tbl_emp_contact_info': $contactInfo = $result;
-                        break;
-                    case 'tbl_emp_family_info': $family = $result;
-                        break;
-                    case 'tbl_emp_education_info': $education = $result;
-                        break;
-                    case 'tbl_emp_work_experience_info': $workExperience = $result;
-                        break;
-                    case 'tbl_emp_civil_service_info': $eligibility = $result;
-                        break;
-                    case 'tbl_emp_service_record': $serviceRecord = $result;
-                        break;
-                    case 'tbl_leave_history': $leaveHistory = $result;
-                        break;
-                    case 'tbl_document': $documents = $result;
-                        break;
-                    case 'tbl_emp_training': $training = $result;
-                        break;
-                    case 'tbl_awards': $awards = $result;
-                        break;
-                    case 'tbl_performance': $performance = $result;
-                        break;
-                    case 'tbl_researches': $researches = $result;
-                        break;
-                    case 'tbl_expertise': $expertise = $result;
-                        break;
-                    case 'tbl_affiliation': $affiliation = $result;
-                        break;
-                }
-            } catch (\Throwable $e) {
-                // skip if table missing or query fails
-            }
-        }
-    }
-
-    // Fallback: when employee tables have no row, show at least profile (tbl_user) or auth user data so sections aren't empty
-    $profileArray = $dbProfile
-        ? json_decode(json_encode($dbProfile), true)
-        : ($authUser ? $authUser->only(['hrId', 'email', 'lastname', 'firstname', 'middlename', 'extname', 'avatar', 'job_title', 'role', 'fullname']) : null);
-    if ($profileArray !== null) {
-        if ($officialInfo === null) {
-            $officialInfo = [
-                'hrid' => $profileArray['hrId'] ?? $authUser?->hrId ?? null,
-                'employee_id' => null,
-                'firstname' => $profileArray['firstname'] ?? null,
-                'middlename' => $profileArray['middlename'] ?? null,
-                'lastname' => $profileArray['lastname'] ?? null,
-                'extension' => $profileArray['extname'] ?? null,
-                'email' => $profileArray['email'] ?? null,
-                'job_title' => $profileArray['job_title'] ?? null,
-                'role' => $profileArray['role'] ?? null,
-            ];
-        }
-        if ($personalInfo === null) {
-            $personalInfo = [
-                'firstname' => $profileArray['firstname'] ?? null,
-                'middlename' => $profileArray['middlename'] ?? null,
-                'lastname' => $profileArray['lastname'] ?? null,
-            ];
-        }
-        if ($contactInfo === null) {
-            $contactInfo = [
-                'email' => $profileArray['email'] ?? null,
-            ];
-        }
-    }
-
-    return Inertia::render('MyDetails', [
-        'profile' => $profileArray ?? ($dbProfile ? json_decode(json_encode($dbProfile), true) : null),
-        'officialInfo' => $officialInfo,
-        'personalInfo' => $personalInfo,
-        'contactInfo' => $contactInfo,
-        'family' => $family,
-        'education' => $education,
-        'workExperience' => $workExperience,
-        'eligibility' => $eligibility,
-        'serviceRecord' => $serviceRecord,
-        'leaveHistory' => $leaveHistory,
-        'documents' => $documents,
-        'training' => $training,
-        'awards' => $awards,
-        'performance' => $performance,
-        'researches' => $researches,
-        'expertise' => $expertise,
-        'affiliation' => $affiliation,
-    ]);
-})->middleware(['auth', 'verified'])->name('my-details');
+Route::get('request-status/my-leave', [MyLeaveController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('request-status.my-leave');
+Route::get('api/request-status/my-leave/datatables', [MyLeaveController::class, 'datatables'])
+    ->middleware(['auth'])
+    ->name('api.request-status.my-leave.datatables');
+Route::delete('request-status/my-leave/{id}', [MyLeaveController::class, 'cancel'])
+    ->middleware(['auth', 'verified'])
+    ->name('request-status.my-leave.cancel');
 
 Route::get('my-details', [MyDetailsController::class, 'show'])
     ->middleware(['auth', 'verified'])
@@ -330,12 +197,26 @@ Route::get('my-details/pds-export', [MyDetailsController::class, 'exportPdsExcel
     ->middleware(['auth', 'verified'])
     ->name('my-details.export-pds');
 
+Route::post('my-details/education', [MyDetailsController::class, 'updateEducation'])
+    ->middleware(['auth', 'verified'])
+    ->name('my-details.education.store');
+
 Route::get('utilities', function () {
     return Inertia::render('Utilities');
 })->middleware(['auth', 'verified'])->name('utilities');
-Route::get('utilities/employee-list', function () {
-    return Inertia::render('Utilities/EmployeeList');
-})->middleware(['auth', 'verified'])->name('utilities.employee-list');
+Route::get('utilities/employee-list', [App\Http\Controllers\Utilities\EmployeeListController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('utilities.employee-list');
+Route::get('api/utilities/employee-list/datatables', [App\Http\Controllers\Utilities\EmployeeListController::class, 'datatables'])
+    ->middleware(['auth', 'verified'])
+    ->name('api.utilities.employee-list.datatables');
+Route::post('api/utilities/employee-list', [App\Http\Controllers\Utilities\EmployeeListController::class, 'store'])
+    ->middleware(['auth', 'verified'])
+    ->name('api.utilities.employee-list.store');
+Route::delete('api/utilities/employee-list/{employee}', [App\Http\Controllers\Utilities\EmployeeListController::class, 'destroy'])
+    ->middleware(['auth', 'verified'])
+    ->name('api.utilities.employee-list.destroy')
+    ->where('employee', '[0-9]+');
 Route::get('utilities/user-list', [UserListController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('utilities.user-list');
@@ -451,9 +332,18 @@ Route::get('api/utilities/activity-log/datatables', [ActivityLogController::clas
 Route::get('utilities/survey-management', function () {
     return Inertia::render('Utilities/SurveyManagement');
 })->middleware(['auth', 'verified'])->name('utilities.survey-management');
-Route::get('utilities/pop-up-management', function () {
-    return Inertia::render('Utilities/PopUpManagement');
-})->middleware(['auth', 'verified'])->name('utilities.pop-up-management');
+Route::get('utilities/pop-up-management', [PopupMessageController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('utilities.pop-up-management');
+Route::post('utilities/pop-up-management', [PopupMessageController::class, 'store'])
+    ->middleware(['auth', 'verified'])
+    ->name('utilities.pop-up-management.store');
+Route::put('utilities/pop-up-management/{popupMessage}', [PopupMessageController::class, 'update'])
+    ->middleware(['auth', 'verified'])
+    ->name('utilities.pop-up-management.update');
+Route::delete('utilities/pop-up-management/{popupMessage}', [PopupMessageController::class, 'destroy'])
+    ->middleware(['auth', 'verified'])
+    ->name('utilities.pop-up-management.destroy');
 Route::get('utilities/leave-types', [LeaveTypeController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('utilities.leave-types.index');

@@ -539,12 +539,21 @@ const refreshLeaveTypes = () => {
     router.reload({ only: ['leaveTypes'] });
 };
 
+const refreshLeaveSummaryOnRealtimeUpdate = (payload: any) => {
+    const authHrid = Number((authUser.value as Record<string, unknown> | undefined)?.hrId ?? 0);
+    const employeeHrid = Number(payload?.employeeHrid ?? 0);
+    if (authHrid > 0 && employeeHrid === authHrid) {
+        router.reload({ only: ['mandatoryLeaveSummary'] });
+    }
+};
+
 const reverbEnabled = import.meta.env.VITE_REVERB_ENABLED !== 'false';
 
 onMounted(() => {
     if (reverbEnabled) {
         try {
             echo().channel('leave-types').listen('.LeaveTypeUpdated', refreshLeaveTypes);
+            echo().channel('leave-requests').listen('.LeaveRequestUpdated', refreshLeaveSummaryOnRealtimeUpdate);
         } catch {
             // Reverb not connected; real-time updates disabled
         }
@@ -555,6 +564,7 @@ onBeforeUnmount(() => {
     if (reverbEnabled) {
         try {
             echo().channel('leave-types').stopListening('LeaveTypeUpdated');
+            echo().channel('leave-requests').stopListening('LeaveRequestUpdated');
         } catch {
             // ignore
         }
@@ -665,7 +675,7 @@ onBeforeUnmount(() => {
                                 </label>
                             </div>
 
-                            <label>
+                            <label v-if="selectedLeaveType !== '- Select Leave Type -'">
                                 Reason for {{ selectedLeaveType }}
                                 <div class="flex flex-wrap mt-2" :class="selectedLeaveType === 'Study Leave' || selectedLeaveType === 'Others' ? 'gap-3' : 'gap-12'">
                                     <!-- Sick Leave -->
@@ -1022,7 +1032,7 @@ onBeforeUnmount(() => {
 .left-form textarea,
 .date-readonly {
     border-radius: 0.7rem;
-    border: 1px solid hsl(var(--input));
+    border: 1.5px solid hsl(var(--muted-foreground) / 0.45);
     background: hsl(var(--card));
     color: hsl(var(--foreground));
     font-size: 0.94rem;
@@ -1101,7 +1111,7 @@ onBeforeUnmount(() => {
     grid-template-columns: 1fr auto;
     align-items: center;
     gap: 0.55rem;
-    border: 1px solid hsl(var(--border));
+    border: 1.5px solid hsl(var(--muted-foreground) / 0.45);
     background: hsl(var(--card));
     border-radius: 0.7rem;
     padding: 0.5rem 0.6rem;
@@ -1162,7 +1172,7 @@ onBeforeUnmount(() => {
 }
 
 .calendar-box {
-    border: 1px solid hsl(var(--border));
+    border: 1.5px solid hsl(var(--muted-foreground) / 0.45);
     border-radius: 0.8rem;
     background: hsl(var(--card));
     padding: 0.7rem;
@@ -1302,7 +1312,7 @@ onBeforeUnmount(() => {
 
 .employee-details-card .info-readonly {
     border-radius: 0.7rem;
-    border: 1px solid hsl(var(--input));
+    border: 1.5px solid hsl(var(--muted-foreground) / 0.45);
     background: hsl(var(--card));
     color: hsl(var(--foreground));
     font-size: 0.92rem;
