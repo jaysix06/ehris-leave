@@ -140,7 +140,8 @@ class PdsC2Handler
             $is = $dom->createElementNS($ns, 'is');
             $t = $dom->createElementNS($ns, 't');
             $t->setAttributeNS('http://www.w3.org/XML/1998/namespace', 'xml:space', 'preserve');
-            $t->appendChild($dom->createTextNode($this->sanitizeForXml((string) $value)));
+            $cellText = $this->sanitizeForXml((string) $value);
+            $t->appendChild($dom->createTextNode($cellText !== '' ? $cellText : ' '));
             $is->appendChild($t);
             $cellNode->appendChild($is);
         }
@@ -149,10 +150,37 @@ class PdsC2Handler
     }
 
     /**
-     * Strip XML-invalid control characters so Excel can open the workbook without "problem with some content".
+     * Keep only XML 1.0 allowed characters so Microsoft Excel 2016 opens the workbook without
+     * "problem with some content". Same logic as PdsExportHandler::sanitizeForXml.
      */
     private function sanitizeForXml(string $s): string
     {
-        return preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F]/u', '', $s);
+        $s = $s ?? '';
+        $result = preg_replace_callback('/./u', function (array $m): string {
+            $char = $m[0];
+            $byte = strlen($char) === 1 ? ord($char) : null;
+            if ($byte !== null) {
+                if ($byte === 0x09 || $byte === 0x0A || $byte === 0x0D || ($byte >= 0x20 && $byte <= 0x7F)) {
+                    return $char;
+                }
+
+                return '';
+            }
+            $codepoint = unpack('N', mb_convert_encoding($char, 'UCS-4BE', 'UTF-8'));
+            $cp = $codepoint ? $codepoint[1] : 0;
+            if ($cp >= 0x80 && $cp <= 0xD7FF) {
+                return $char;
+            }
+            if ($cp >= 0xE000 && $cp <= 0xFFFD) {
+                return $char;
+            }
+            if ($cp >= 0x10000 && $cp <= 0x10FFFF) {
+                return $char;
+            }
+
+            return '';
+        }, $s);
+
+        return $result ?? $s;
     }
 }

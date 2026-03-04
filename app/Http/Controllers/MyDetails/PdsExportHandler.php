@@ -270,11 +270,39 @@ class PdsExportHandler
     }
 
     /**
-     * Strip XML-invalid control characters so Excel can open the workbook without "problem with some content".
+     * Keep only XML 1.0 allowed characters so Microsoft Excel 2016 opens the workbook without
+     * "problem with some content". WPS and other apps may accept more; Excel is strict.
+     * Allowed: tab, LF, CR, #x20-#xD7FF, #xE000-#xFFFD, and supplementary planes.
      */
     private function sanitizeForXml(string $s): string
     {
-        return preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F]/u', '', $s);
+        $s = $s ?? '';
+        $result = preg_replace_callback('/./u', function (array $m): string {
+            $char = $m[0];
+            $byte = strlen($char) === 1 ? ord($char) : null;
+            if ($byte !== null) {
+                if ($byte === 0x09 || $byte === 0x0A || $byte === 0x0D || ($byte >= 0x20 && $byte <= 0x7F)) {
+                    return $char;
+                }
+
+                return '';
+            }
+            $codepoint = unpack('N', mb_convert_encoding($char, 'UCS-4BE', 'UTF-8'));
+            $cp = $codepoint ? $codepoint[1] : 0;
+            if ($cp >= 0x80 && $cp <= 0xD7FF) {
+                return $char;
+            }
+            if ($cp >= 0xE000 && $cp <= 0xFFFD) {
+                return $char;
+            }
+            if ($cp >= 0x10000 && $cp <= 0x10FFFF) {
+                return $char;
+            }
+
+            return '';
+        }, $s);
+
+        return $result ?? $s;
     }
 
     /**
@@ -523,30 +551,10 @@ class PdsExportHandler
         $educationStyleIndex = $this->getEducationRowStyleIndex($sheetXml);
         $educationEndRow = 54 + $educationRowCount - 1;
 
-        // D:E:F right edge (F–G): use a border whose "right" = G's "left" so the line appears at F–G not G–H.
-        // G:H:I right edge (I–J): use J's border on G.
-        $stylesPath = $extractRoot.'/xl/styles.xml';
-        if ($educationStyleMap !== null && is_file($stylesPath)) {
-            if (isset($educationStyleMap['D'], $educationStyleMap['G'])) {
-                $educationStyleMap['D'] = [
-                    $this->cloneXfWithBorderRightFromSourceLeft($stylesPath, $educationStyleMap['D'][0], $educationStyleMap['G'][0]),
-                    $this->cloneXfWithBorderRightFromSourceLeft($stylesPath, $educationStyleMap['D'][1], $educationStyleMap['G'][1]),
-                ];
-            }
-            // G:H:I right edge (I–J): use a border whose "right" = J's "left" so the line appears at I–J.
-            if (isset($educationStyleMap['G'], $educationStyleMap['J'])) {
-                $educationStyleMap['G'] = [
-                    $this->cloneXfWithBorderRightFromSourceLeft($stylesPath, $educationStyleMap['G'][0], $educationStyleMap['J'][0]),
-                    $this->cloneXfWithBorderRightFromSourceLeft($stylesPath, $educationStyleMap['G'][1], $educationStyleMap['J'][1]),
-                ];
-            }
-        }
-
+        // Keep styles.xml untouched for Excel 2016 compatibility.
+        // We still apply existing template style indexes to cells, but avoid cloning/creating
+        // additional xf/border records that can trigger style-part repair in older Excel.
         $fullBoxStyleForRow59 = null;
-        if (is_file($stylesPath)) {
-            $lastRowXfForBottom = ($educationStyleMap !== null && isset($educationStyleMap['D'][1])) ? $educationStyleMap['D'][1] : null;
-            $fullBoxStyleForRow59 = $this->ensureFullBoxBorderStyle($stylesPath, $lastRowXfForBottom);
-        }
 
         $updatedSheetXml = $this->setWorksheetCells(
             $sheetXml,
@@ -570,15 +578,11 @@ class PdsExportHandler
         }
         $levelStyleForMerge = ($educationStyleMap !== null && isset($educationStyleMap['B'])) ? $educationStyleMap['B'][0] : $educationStyleIndex;
         if ($hasMerges) {
-            $stylesPath = $extractRoot.'/xl/styles.xml';
-            if (is_file($stylesPath)) {
-                $mergedLevelStyleIndex = $levelStyleForMerge !== null
-                    ? $this->ensureEducationStyleWithVerticalCenter($stylesPath, $levelStyleForMerge)
-                    : $this->ensureVerticalCenterCellStyle($stylesPath);
+            if ($levelStyleForMerge !== null) {
                 $updatedSheetXml = $this->setMergedLevelCellVerticalAlignment(
                     $updatedSheetXml,
                     $educationMergeGroups,
-                    $mergedLevelStyleIndex
+                    $levelStyleForMerge
                 );
             }
         }
@@ -644,6 +648,7 @@ class PdsExportHandler
                 $files[] = $file->getPathname();
             }
         }
+        $files = $this->sortFilesForOoxmlZip($files, $extractRoot);
 
         $outputZip = $this->initPclZip($outputPath);
         $createResult = $outputZip->create(
@@ -660,6 +665,47 @@ class PdsExportHandler
         @rmdir($tempRoot);
 
         return $outputPath;
+    }
+
+    /**
+     * Sort file list so the repacked xlsx follows OOXML convention: [Content_Types].xml first,
+     * then _rels/.rels, then the rest. Improves consistent opening in Excel 2016 vs 2022+.
+     *
+     * @param  array<int, string>  $files  Full paths to files under $extractRoot
+     * @return array<int, string>
+     */
+    private function sortFilesForOoxmlZip(array $files, string $extractRoot): array
+    {
+        $extractRoot = rtrim(str_replace('\\', '/', $extractRoot), '/');
+        usort($files, function (string $a, string $b) use ($extractRoot): int {
+            $relA = str_replace('\\', '/', $a);
+            $relA = $extractRoot !== '' && str_starts_with($relA, $extractRoot.'/')
+                ? substr($relA, strlen($extractRoot) + 1)
+                : $relA;
+            $relB = str_replace('\\', '/', $b);
+            $relB = $extractRoot !== '' && str_starts_with($relB, $extractRoot.'/')
+                ? substr($relB, strlen($extractRoot) + 1)
+                : $relB;
+            $priority = function (string $r): int {
+                if ($r === '[Content_Types].xml') {
+                    return 0;
+                }
+                if ($r === '_rels/.rels') {
+                    return 1;
+                }
+
+                return 2;
+            };
+            $pa = $priority($relA);
+            $pb = $priority($relB);
+            if ($pa !== $pb) {
+                return $pa <=> $pb;
+            }
+
+            return strcmp($relA, $relB);
+        });
+
+        return $files;
     }
 
     private function initPclZip(string $archivePath): \PclZip
@@ -1005,7 +1051,8 @@ class PdsExportHandler
             $is = $dom->createElementNS($ns, 'is');
             $t = $dom->createElementNS($ns, 't');
             $t->setAttributeNS('http://www.w3.org/XML/1998/namespace', 'xml:space', 'preserve');
-            $t->appendChild($dom->createTextNode($this->sanitizeForXml((string) $value)));
+            $cellText = $this->sanitizeForXml((string) $value);
+            $t->appendChild($dom->createTextNode($cellText !== '' ? $cellText : ' '));
             $is->appendChild($t);
             $cellNode->appendChild($is);
         }
@@ -1057,10 +1104,15 @@ class PdsExportHandler
             }
         }
 
+        $existingRefs = $this->deduplicateMergeCells($xpath, $mergeCells);
         foreach ($ranges as $ref) {
+            if (isset($existingRefs[$ref])) {
+                continue;
+            }
             $mergeCell = $dom->createElementNS($docNs, 'mergeCell');
             $mergeCell->setAttribute('ref', $ref);
             $mergeCells->appendChild($mergeCell);
+            $existingRefs[$ref] = true;
         }
 
         $mergeCellCount = $xpath->query("*[local-name()='mergeCell']", $mergeCells)->length;
@@ -1111,10 +1163,15 @@ class PdsExportHandler
             }
         }
 
+        $existingRefs = $this->deduplicateMergeCells($xpath, $mergeCells);
         foreach ($ranges as $ref) {
+            if (isset($existingRefs[$ref])) {
+                continue;
+            }
             $mergeCell = $dom->createElementNS($docNs, 'mergeCell');
             $mergeCell->setAttribute('ref', $ref);
             $mergeCells->appendChild($mergeCell);
+            $existingRefs[$ref] = true;
         }
 
         $mergeCellCount = $xpath->query("*[local-name()='mergeCell']", $mergeCells)->length;
@@ -1238,16 +1295,50 @@ class PdsExportHandler
             }
         }
 
+        $existingRefs = $this->deduplicateMergeCells($xpath, $mergeCells);
         foreach ($ranges as $ref) {
+            if (isset($existingRefs[$ref])) {
+                continue;
+            }
             $mergeCell = $dom->createElementNS($docNs, 'mergeCell');
             $mergeCell->setAttribute('ref', $ref);
             $mergeCells->appendChild($mergeCell);
+            $existingRefs[$ref] = true;
         }
 
         $mergeCellCount = $xpath->query("*[local-name()='mergeCell']", $mergeCells)->length;
         $mergeCells->setAttribute('count', (string) $mergeCellCount);
 
         return $dom->saveXML() ?: $worksheetXml;
+    }
+
+    /**
+     * @return array<string, bool>
+     */
+    private function deduplicateMergeCells(\DOMXPath $xpath, \DOMElement $mergeCells): array
+    {
+        $seen = [];
+        $toRemove = [];
+        foreach ($xpath->query("*[local-name()='mergeCell']", $mergeCells) as $mergeCell) {
+            if (! $mergeCell instanceof \DOMElement) {
+                continue;
+            }
+            $ref = $mergeCell->getAttribute('ref');
+            if ($ref === '') {
+                continue;
+            }
+            if (isset($seen[$ref])) {
+                $toRemove[] = $mergeCell;
+
+                continue;
+            }
+            $seen[$ref] = true;
+        }
+        foreach ($toRemove as $node) {
+            $mergeCells->removeChild($node);
+        }
+
+        return $seen;
     }
 
     private function ensureEducationStyleWithVerticalCenter(string $stylesPath, int $educationStyleIndex): int
@@ -1732,7 +1823,8 @@ class PdsExportHandler
             }
 
             $formControl->setAttribute('checked', $shouldCheck ? '1' : '0');
-            file_put_contents($ctrlPropPath, $ctrlPropDom->saveXML() ?: $ctrlPropXml);
+            $ctrlOut = $ctrlPropDom->saveXML() ?: $ctrlPropXml;
+            file_put_contents($ctrlPropPath, $this->ensureXmlDeclarationHasEncoding($ctrlOut));
         }
     }
 
@@ -1847,7 +1939,9 @@ class PdsExportHandler
         $dom = new \DOMDocument('1.0', 'UTF-8');
         $dom->preserveWhiteSpace = true;
         $dom->formatOutput = false;
-        $dom->loadXML($vmlXml);
+        if (! @$dom->loadXML($vmlXml)) {
+            return $vmlXml;
+        }
 
         $xpath = new \DOMXPath($dom);
         $xpath->registerNamespace('v', 'urn:schemas-microsoft-com:vml');
@@ -1893,7 +1987,21 @@ class PdsExportHandler
             }
         }
 
-        return $dom->saveXML() ?: $vmlXml;
+        $out = $dom->saveXML() ?: $vmlXml;
+
+        return $this->ensureXmlDeclarationHasEncoding($out);
+    }
+
+    /**
+     * Ensure XML declaration includes encoding="UTF-8" so Excel 2016 opens the part without "problem with some content".
+     */
+    private function ensureXmlDeclarationHasEncoding(string $xml): string
+    {
+        if (str_starts_with($xml, '<?xml ') && ! str_contains(substr($xml, 0, 80), 'encoding=')) {
+            $xml = preg_replace('/^<\?xml\s+version="1\.0"\s*\?>/', '<?xml version="1.0" encoding="UTF-8"?>', $xml, 1);
+        }
+
+        return $xml;
     }
 
     private function detectCheckboxLabelKey(string $label): ?string
