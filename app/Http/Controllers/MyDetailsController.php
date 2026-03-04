@@ -349,6 +349,8 @@ class MyDetailsController extends Controller
         $outputPath = $handler->export($templatePath, $data);
         $filename = 'PDS_'.$hrid.'_'.now()->format('Ymd_His').'.xlsx';
 
+        // Only the temporary export file (and its temp dir) is removed after streaming.
+        // The PDS template file (e.g. PDS.xlsx) is never modified or deleted.
         return response()->streamDownload(function () use ($outputPath): void {
             readfile($outputPath);
             @unlink($outputPath);
