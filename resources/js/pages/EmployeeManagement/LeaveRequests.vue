@@ -3,11 +3,21 @@ import { Head, router, usePage } from '@inertiajs/vue3';
 import { echo } from '@laravel/echo-vue';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { toast } from 'vue3-toastify';
+import AppModal from '@/components/AppModal.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { DataTable, type DataTableColumn } from '@/components/DataTable';
 import type { BreadcrumbItem } from '@/types';
 
 const pageTitle = 'Employee Management - Leave Requests';
+const props = withDefaults(defineProps<{
+    accessDenied?: boolean;
+    deniedMessage?: string | null;
+    redirectTo?: string | null;
+}>(), {
+    accessDenied: false,
+    deniedMessage: null,
+    redirectTo: null,
+});
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -69,6 +79,7 @@ const selectedLeaveId = ref<number | null>(null);
 const remarks = ref('');
 const processing = ref(false);
 const dataTableRef = ref<InstanceType<typeof DataTable> | null>(null);
+const showAccessDeniedModal = ref(false);
 const page = usePage();
 const reverbEnabled = import.meta.env.VITE_REVERB_ENABLED !== 'false';
 const authHrid = computed(() => {
@@ -139,6 +150,11 @@ const handleLeaveRequestUpdated = (payload: any) => {
 };
 
 onMounted(() => {
+    if (props.accessDenied) {
+        showAccessDeniedModal.value = true;
+        return;
+    }
+
     if (!reverbEnabled) return;
     try {
         echo().channel('leave-requests').listen('.LeaveRequestUpdated', handleLeaveRequestUpdated);
@@ -148,6 +164,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+    if (props.accessDenied) return;
     if (!reverbEnabled) return;
     try {
         echo().channel('leave-requests').stopListening('LeaveRequestUpdated');
@@ -155,6 +172,17 @@ onBeforeUnmount(() => {
         // ignore
     }
 });
+
+function acknowledgeAccessDenied() {
+    showAccessDeniedModal.value = false;
+    router.visit(props.redirectTo || '/dashboard');
+}
+
+function updateDecisionModal(value: boolean) {
+    if (!value) {
+        closeDecisionModal();
+    }
+}
 </script>
 
 <template>
@@ -169,6 +197,7 @@ onBeforeUnmount(() => {
 
                 <div class="rounded-md border overflow-x-auto w-full">
                     <DataTable
+                        v-if="!props.accessDenied"
                         ref="dataTableRef"
                         :columns="columns"
                         ajax-url="/api/employee-management/leave-requests/datatables"
@@ -179,53 +208,65 @@ onBeforeUnmount(() => {
                         :cell-renderers="cellRenderers"
                         :on-row-click="onRowClick"
                     />
+                    <div v-else class="access-denied-message">
+                        <p>{{ props.deniedMessage || 'Access denied.' }}</p>
+                    </div>
                 </div>
             </section>
         </div>
 
-        <Teleport to="body">
-            <Transition name="fade">
-                <div
-                    v-if="selectedDecision && selectedLeaveId !== null"
-                    class="decision-overlay"
-                    @click.self="closeDecisionModal"
+        <AppModal
+            v-model="showAccessDeniedModal"
+            title="Access Denied"
+            tone="disapprove"
+            :close-on-backdrop="false"
+            :persistent="true"
+        >
+            <p class="decision-prompt">
+                {{ props.deniedMessage || 'Only reporting managers can view this page.' }}
+            </p>
+            <template #actions>
+                <button
+                    type="button"
+                    class="btn-disapprove"
+                    @click="acknowledgeAccessDenied"
                 >
-                    <div class="decision-card">
-                        <div class="decision-header" :class="selectedDecision === 'approve' ? 'header-approve' : 'header-disapprove'">
-                            <h4>
-                                {{ selectedDecision === 'approve' ? 'Approve' : 'Disapprove' }}
-                                Leave Request #{{ selectedLeaveId }}
-                            </h4>
-                        </div>
-                        <div class="decision-body">
-                            <p class="decision-prompt">
-                                Are you sure you want to <strong>{{ selectedDecision }}</strong> this leave request?
-                            </p>
-                            <label for="decision-remarks">Remarks</label>
-                            <textarea
-                                id="decision-remarks"
-                                v-model="remarks"
-                                rows="3"
-                                placeholder="Add remarks (optional)"
-                            />
-                            <div class="decision-actions">
-                                <button type="button" class="btn-cancel" :disabled="processing" @click="closeDecisionModal">
-                                    Cancel
-                                </button>
-                                <button
-                                    type="button"
-                                    :class="selectedDecision === 'approve' ? 'btn-approve' : 'btn-disapprove'"
-                                    :disabled="processing"
-                                    @click="submitDecision"
-                                >
-                                    {{ processing ? 'Saving...' : (selectedDecision === 'approve' ? 'Approve' : 'Disapprove') }}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </Transition>
-        </Teleport>
+                    Go Back
+                </button>
+            </template>
+        </AppModal>
+
+        <AppModal
+            :model-value="selectedDecision !== null && selectedLeaveId !== null"
+            :title="`${selectedDecision === 'approve' ? 'Approve' : 'Disapprove'} Leave Request #${selectedLeaveId ?? ''}`"
+            :tone="selectedDecision === 'approve' ? 'approve' : 'disapprove'"
+            @update:model-value="updateDecisionModal"
+        >
+            <p class="decision-prompt">
+                Are you sure you want to <strong>{{ selectedDecision }}</strong> this leave request?
+            </p>
+            <label for="decision-remarks" class="decision-remarks-label">Remarks</label>
+            <textarea
+                id="decision-remarks"
+                class="decision-remarks-input"
+                v-model="remarks"
+                rows="3"
+                placeholder="Add remarks (optional)"
+            />
+            <template #actions>
+                <button type="button" class="btn-cancel" :disabled="processing" @click="closeDecisionModal">
+                    Cancel
+                </button>
+                <button
+                    type="button"
+                    :class="selectedDecision === 'approve' ? 'btn-approve' : 'btn-disapprove'"
+                    :disabled="processing"
+                    @click="submitDecision"
+                >
+                    {{ processing ? 'Saving...' : (selectedDecision === 'approve' ? 'Approve' : 'Disapprove') }}
+                </button>
+            </template>
+        </AppModal>
     </AppLayout>
 </template>
 
@@ -237,6 +278,12 @@ onBeforeUnmount(() => {
     padding: 1rem 1.5rem;
 }
 
+.access-denied-message {
+    padding: 1rem;
+    color: hsl(var(--muted-foreground));
+    font-size: 0.9rem;
+}
+
 @media (min-width: 768px) {
     .leave-requests-page {
         padding: 1.5rem 2rem;
@@ -245,69 +292,6 @@ onBeforeUnmount(() => {
 </style>
 
 <style>
-.decision-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 200;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: hsl(0 0% 0% / 0.55);
-    backdrop-filter: blur(4px);
-}
-
-.decision-card {
-    width: 100%;
-    max-width: 480px;
-    border-radius: 1rem;
-    border: 1px solid hsl(var(--border));
-    background: #fff;
-    overflow: hidden;
-    box-shadow: 0 8px 30px hsl(0 0% 0% / 0.2);
-}
-
-.dark .decision-card {
-    background: hsl(223 24% 14%);
-}
-
-.decision-header {
-    padding: 1.1rem 1.5rem;
-    border-bottom: 1px solid hsl(var(--border));
-}
-
-.decision-header h4 {
-    margin: 0;
-    font-size: 1.1rem;
-    font-weight: 800;
-}
-
-.decision-header.header-approve {
-    background: hsl(160 60% 45% / 0.08);
-    border-bottom-color: hsl(160 60% 45% / 0.15);
-}
-
-.decision-header.header-approve h4 {
-    color: hsl(160 60% 30%);
-}
-
-.decision-header.header-disapprove {
-    background: hsl(0 72% 51% / 0.08);
-    border-bottom-color: hsl(0 72% 51% / 0.15);
-}
-
-.decision-header.header-disapprove h4 {
-    color: hsl(0 72% 51%);
-}
-
-.decision-body {
-    padding: 1.25rem 1.5rem 1.5rem;
-    background: #fff;
-}
-
-.dark .decision-body {
-    background: hsl(223 24% 14%);
-}
-
 .decision-prompt {
     margin: 0 0 1rem;
     font-size: 0.875rem;
@@ -315,7 +299,7 @@ onBeforeUnmount(() => {
     line-height: 1.5;
 }
 
-.decision-body label {
+.decision-remarks-label {
     display: block;
     margin-bottom: 0.45rem;
     font-size: 0.82rem;
@@ -323,7 +307,7 @@ onBeforeUnmount(() => {
     color: hsl(var(--muted-foreground));
 }
 
-.decision-body textarea {
+.decision-remarks-input {
     width: 100%;
     resize: vertical;
     border: 1.5px solid hsl(var(--muted-foreground) / 0.3);
@@ -335,16 +319,9 @@ onBeforeUnmount(() => {
     color: hsl(var(--foreground));
 }
 
-.decision-body textarea:focus {
+.decision-remarks-input:focus {
     outline: none;
     border-color: hsl(var(--primary));
-}
-
-.decision-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 0.6rem;
-    margin-top: 1.25rem;
 }
 
 .btn-cancel,
@@ -391,15 +368,5 @@ onBeforeUnmount(() => {
 .btn-disapprove:disabled {
     opacity: 0.65;
     cursor: not-allowed;
-}
-
-.fade-enter-active,
-.fade-leave-active {
-    transition: opacity 0.15s ease;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-    opacity: 0;
 }
 </style>
