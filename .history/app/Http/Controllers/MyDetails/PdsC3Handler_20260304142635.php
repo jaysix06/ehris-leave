@@ -10,7 +10,7 @@ class PdsC3Handler
 {
     private const VOLUNTARY_WORK_START_ROW = 6;
 
-    private const VOLUNTARY_WORK_MAX_ROWS = 12;
+    private const VOLUNTARY_WORK_MAX_ROWS = 6;
 
     private const LEARNING_AND_DEVELOPMENT_START_ROW = 18;
 
