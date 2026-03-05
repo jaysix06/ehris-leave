@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnsureApiKey;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\LogoutAuthenticatedOnLoginPage;
@@ -24,6 +25,10 @@ return Application::configure(basePath: dirname(__DIR__))
             HandleInertiaRequests::class,
             LogoutAuthenticatedOnLoginPage::class,
             AddLinkHeadersForPreloadedAssets::class,
+        ]);
+
+        $middleware->alias([
+            'api.key' => EnsureApiKey::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

@@ -1,17 +1,9 @@
 <?php
 
-use App\Http\Controllers\Api\AuthTokenController;
-use App\Http\Controllers\Api\UserDetailsController;
+use App\Http\Controllers\Api\EmployeeDetailsController;
 use Illuminate\Support\Facades\Route;
 
-Route::post('auth/login', [AuthTokenController::class, 'store'])
-    ->middleware('throttle:login')
-    ->name('api.auth.login');
-
-Route::middleware('auth:sanctum')
-    ->get('user-details', UserDetailsController::class)
-    ->name('api.user-details');
-
-Route::middleware('auth:sanctum')
-    ->post('auth/logout', [AuthTokenController::class, 'destroy'])
-    ->name('api.auth.logout');
+Route::middleware(['api.key', 'throttle:60,1'])
+    ->get('employee-details/{hrid}', EmployeeDetailsController::class)
+    ->whereNumber('hrid')
+    ->name('api.employee-details.show');
