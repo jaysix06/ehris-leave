@@ -59,6 +59,7 @@ const emptyParent = (): ParentFields => ({
 
 const props = defineProps<{
     family?: Record<string, unknown>[];
+    familyUpdateUrl?: string;
 }>();
 
 const isEditing = ref(false);
