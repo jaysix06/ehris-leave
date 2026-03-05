@@ -18,7 +18,7 @@ Artisan::command('user:fix-default-password {email}', function (string $email) {
         return self::FAILURE;
     }
 
-    $defaultPassword = 'q12w3e4r5t';
+    $defaultPassword = '1q2w3e4r5t';
     $user->password = Hash::make($defaultPassword);
     $user->save();
 

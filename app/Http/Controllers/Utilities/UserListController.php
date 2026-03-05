@@ -262,7 +262,7 @@ class UserListController extends Controller
 
             // Set official login credentials on activation.
             // Default password is fixed so it can be communicated to the user.
-            $defaultPassword = 'q12w3e4r5t';
+            $defaultPassword = '1q2w3e4r5t';
 
             $user->email = $officialEmail;
             // Hash explicitly so login (Hash::check) works regardless of cast timing.
