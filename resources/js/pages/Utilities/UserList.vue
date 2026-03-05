@@ -144,6 +144,9 @@ const userColumns: DataTableColumn[] = [
         data: null,
         orderable: false,
         searchable: false,
+        width: '4rem',
+        thClass: 'text-center',
+        tdClass: 'text-center',
         render: (_data: unknown, type: string, _row: unknown, meta: { row?: number; settings?: { _iDisplayStart?: number } }) => {
             if (type !== 'display' && type !== 'type') return '';
             const start = meta?.settings?._iDisplayStart ?? 0;
@@ -151,7 +154,7 @@ const userColumns: DataTableColumn[] = [
             return String(start + row + 1);
         },
     },
-    { key: 'hrid', label: 'HRID', width: '6rem', data: 'hrid' },
+    { key: 'hrid', label: 'HRID', width: '6rem', data: 'hrid', thClass: 'text-center', tdClass: 'text-center' },
     { key: 'email', label: 'Email', width: '12rem', data: 'email' },
     { key: 'name', label: 'Name', width: '14rem', data: 'name' },
     { key: 'role', label: 'Role', width: '8rem', data: 'role' },
@@ -161,6 +164,8 @@ const userColumns: DataTableColumn[] = [
         label: 'Status',
         width: '8rem',
         data: 'active',
+        thClass: 'text-center',
+        tdClass: 'text-center',
         render: (data: unknown) => {
             const active = data === true || data === '1';
             const cls = active ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-700 border-slate-200';
@@ -175,6 +180,8 @@ const userColumns: DataTableColumn[] = [
         orderable: false,
         searchable: false,
         width: '12rem',
+        thClass: 'text-center',
+        tdClass: 'text-center',
         render: (_data: unknown, type: string, row: { _raw?: UserRow } & Record<string, unknown>) => {
             if (type !== 'display' && type !== 'type') return '';
             const r = (row._raw || row) as UserRow;
@@ -520,6 +527,7 @@ onBeforeUnmount(() => {
                         :loading="state.isActionLoading"
                         empty-message="No users found."
                         :per-page-options="[10, 25, 50, 100]"
+                        :default-order="[0, 'desc']"
                     />
                 </section>
             </div>
@@ -657,5 +665,16 @@ onBeforeUnmount(() => {
 <style scoped>
 .ehris-user-list-actions :deep(.ehris-btn) {
     min-width: 2rem;
+}
+
+/* Data table alignment */
+:deep(section .data-table-wrapper table.dataTable thead th.text-center),
+:deep(section .data-table-wrapper table.dataTable tbody td.text-center) {
+    text-align: center;
+}
+
+:deep(section .data-table-wrapper table.dataTable thead th),
+:deep(section .data-table-wrapper table.dataTable tbody td) {
+    vertical-align: middle;
 }
 </style>

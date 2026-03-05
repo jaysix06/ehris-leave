@@ -86,6 +86,10 @@ class UserListController extends Controller
         $orderColumnIndex = (int) $request->input('order.0.column', 0);
         $orderDir = $request->input('order.0.dir', 'desc') === 'asc' ? 'asc' : 'desc';
 
+        // Default: newest users first (by userId desc)
+        $columns = ['id', 'hrid', 'email', 'name', 'role', 'office', 'active', 'actions'];
+        $orderColumn = $columns[$orderColumnIndex] ?? 'id';
+
         $baseQuery = DB::table('tbl_user as u')
             ->leftJoin('tbl_department as d', 'u.department_id', '=', 'd.department_id')
             ->select([
@@ -108,43 +112,51 @@ class UserListController extends Controller
 
         $totalRecords = DB::table('tbl_user')->count();
 
+        $searchCallback = function ($q) use ($searchValue) {
+            $q->where('u.email', 'like', '%'.$searchValue.'%')
+                ->orWhere('u.personal_email', 'like', '%'.$searchValue.'%')
+                ->orWhere('u.lastname', 'like', '%'.$searchValue.'%')
+                ->orWhere('u.firstname', 'like', '%'.$searchValue.'%')
+                ->orWhere('u.middlename', 'like', '%'.$searchValue.'%')
+                ->orWhere('u.extname', 'like', '%'.$searchValue.'%')
+                ->orWhere('u.fullname', 'like', '%'.$searchValue.'%')
+                ->orWhere('u.role', 'like', '%'.$searchValue.'%')
+                ->orWhere('u.job_title', 'like', '%'.$searchValue.'%')
+                ->orWhere('d.department_name', 'like', '%'.$searchValue.'%')
+                ->orWhere('u.hrid', 'like', '%'.$searchValue.'%');
+        };
+
         $query = clone $baseQuery;
         if ($searchValue !== '') {
-            $query->where(function ($q) use ($searchValue) {
-                $q->where('u.email', 'like', '%'.$searchValue.'%')
-                    ->orWhere('u.lastname', 'like', '%'.$searchValue.'%')
-                    ->orWhere('u.firstname', 'like', '%'.$searchValue.'%')
-                    ->orWhere('u.middlename', 'like', '%'.$searchValue.'%')
-                    ->orWhere('u.fullname', 'like', '%'.$searchValue.'%')
-                    ->orWhere('u.role', 'like', '%'.$searchValue.'%')
-                    ->orWhere('d.department_name', 'like', '%'.$searchValue.'%')
-                    ->orWhere('u.hrid', 'like', '%'.$searchValue.'%');
-            });
+            $query->where($searchCallback);
+            $searchLower = strtolower($searchValue);
+            if (str_contains($searchLower, 'inactive') || str_contains($searchLower, 'new')) {
+                $query->where('u.active', 0);
+            } elseif (str_contains($searchLower, 'active')) {
+                $query->where('u.active', 1);
+            }
         }
         $filteredRecords = $query->count();
 
-        $columns = ['id', 'hrid', 'email', 'name', 'role', 'office', 'active', 'actions'];
-        $orderColumn = $columns[$orderColumnIndex] ?? 'id';
         if ($orderColumn === 'name') {
             $baseQuery->orderBy('u.firstname', $orderDir)->orderBy('u.lastname', $orderDir);
+        } elseif ($orderColumn === 'id') {
+            $baseQuery->orderBy('u.userId', $orderDir);
         } elseif ($orderColumn !== 'actions') {
-            $dbCol = $orderColumn === 'id' ? 'u.userId' : ($orderColumn === 'office' ? 'd.department_name' : 'u.'.$orderColumn);
+            $dbCol = $orderColumn === 'office' ? 'd.department_name' : 'u.'.$orderColumn;
             $baseQuery->orderBy($dbCol, $orderDir);
         } else {
             $baseQuery->orderByDesc('u.date_created')->orderByDesc('u.userId');
         }
 
         if ($searchValue !== '') {
-            $baseQuery->where(function ($q) use ($searchValue) {
-                $q->where('u.email', 'like', '%'.$searchValue.'%')
-                    ->orWhere('u.lastname', 'like', '%'.$searchValue.'%')
-                    ->orWhere('u.firstname', 'like', '%'.$searchValue.'%')
-                    ->orWhere('u.middlename', 'like', '%'.$searchValue.'%')
-                    ->orWhere('u.fullname', 'like', '%'.$searchValue.'%')
-                    ->orWhere('u.role', 'like', '%'.$searchValue.'%')
-                    ->orWhere('d.department_name', 'like', '%'.$searchValue.'%')
-                    ->orWhere('u.hrid', 'like', '%'.$searchValue.'%');
-            });
+            $baseQuery->where($searchCallback);
+            $searchLower = strtolower($searchValue);
+            if (str_contains($searchLower, 'inactive') || str_contains($searchLower, 'new')) {
+                $baseQuery->where('u.active', 0);
+            } elseif (str_contains($searchLower, 'active')) {
+                $baseQuery->where('u.active', 1);
+            }
         }
 
         $length = $length > 0 ? $length : 10;
