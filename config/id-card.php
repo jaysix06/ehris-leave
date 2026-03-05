@@ -64,6 +64,8 @@ return [
         // Add more: 'Trainee' => 'TRAINEE.png', etc.
     ],
 
+    'name_ttf_font' => env('ID_CARD_NAME_TTF_FONT', null),
+
     /*
     |--------------------------------------------------------------------------
     | Map job title (or role) to template filename (job_shorten)
