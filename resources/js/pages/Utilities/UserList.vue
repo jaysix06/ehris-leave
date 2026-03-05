@@ -69,9 +69,26 @@ const state = reactive<{
     isActionLoading: false,
 });
 
+const getCookieValue = (name: string): string => {
+    const all = typeof document !== 'undefined' ? document.cookie : '';
+    const parts = all.split(';').map((p) => p.trim());
+    const hit = parts.find((p) => p.startsWith(`${name}=`));
+    if (!hit) return '';
+    return hit.substring(name.length + 1);
+};
+
 const getCsrfToken = (): string => {
     const meta = document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement | null;
-    return meta?.content ?? '';
+    if (meta?.content) return meta.content;
+
+    // Laravel sets XSRF-TOKEN cookie; it is URL-encoded
+    const cookie = getCookieValue('XSRF-TOKEN');
+    if (!cookie) return '';
+    try {
+        return decodeURIComponent(cookie);
+    } catch {
+        return cookie;
+    }
 };
 
 const getStatusUpdateUrl = (userId: number): string => {
@@ -287,6 +304,7 @@ const saveUserEdits = async () => {
                 'Content-Type': 'application/json',
                 'X-Requested-With': 'XMLHttpRequest',
                 'X-CSRF-TOKEN': getCsrfToken(),
+                'X-XSRF-TOKEN': getCsrfToken(),
             },
             credentials: 'same-origin',
             body: JSON.stringify(payload),
@@ -332,6 +350,7 @@ const deleteUser = async (userId: number, displayNameLabel: string) => {
                 Accept: 'application/json',
                 'X-Requested-With': 'XMLHttpRequest',
                 'X-CSRF-TOKEN': getCsrfToken(),
+                'X-XSRF-TOKEN': getCsrfToken(),
             },
             credentials: 'same-origin',
         });
@@ -371,6 +390,7 @@ const updateStatus = async (userId: number, active: boolean, displayNameLabel: s
                 'Content-Type': 'application/json',
                 'X-Requested-With': 'XMLHttpRequest',
                 'X-CSRF-TOKEN': getCsrfToken(),
+                'X-XSRF-TOKEN': getCsrfToken(),
             },
             credentials: 'same-origin',
             body: JSON.stringify({ active }),

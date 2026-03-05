@@ -2,15 +2,15 @@
 
 Hello {{ $data['name'] }},
 
-Your account has been activated by the administrator. You can now sign in using your registered email address.
+Your account has been activated. Use the credentials below to sign in, then change your password after your first login.
 
-Account details:
-- Email: {{ $data['email'] }}
+Your login credentials:
+- Official DepEd email (login): {{ $data['official_email'] }}
+- Default password: {{ $data['default_password'] }}
 - HRID: {{ $data['hrid'] ?? '—' }}
 - Activated: {{ $data['activated_at'] }}
 
-Sign in:
-{{ $data['sign_in_url'] }}
+Sign in: {{ $data['sign_in_url'] }}
 
-If you did not request this account, please contact your system administrator.
+Please change your password after your first login. If you did not request this account, contact your system administrator.
 

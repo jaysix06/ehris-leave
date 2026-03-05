@@ -16,7 +16,7 @@
                 Your account is now active
             </div>
             <div style="font-size:14px;line-height:1.6;color:#52525b;margin-top:8px;">
-                Your registration has been reviewed and approved. You may now sign in.
+                Your registration has been reviewed and approved. Use the credentials below to sign in, then change your password after your first login.
             </div>
         </td>
     </tr>
@@ -24,7 +24,7 @@
     <tr>
         <td style="background:#ffffff;border:1px solid #e4e4e7;border-radius:12px;padding:20px;">
             <div style="font-size:14px;color:#18181b;font-weight:700;margin-bottom:10px;">
-                Account details
+                Your login credentials
             </div>
 
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
@@ -33,8 +33,12 @@
                     <td style="padding:10px 0;border-top:1px solid #f4f4f5;color:#18181b;font-size:13px;font-weight:600;">{{ $data['name'] }}</td>
                 </tr>
                 <tr>
-                    <td style="padding:10px 0;border-top:1px solid #f4f4f5;color:#71717a;font-size:13px;">Email</td>
-                    <td style="padding:10px 0;border-top:1px solid #f4f4f5;color:#18181b;font-size:13px;font-weight:600;">{{ $data['email'] }}</td>
+                    <td style="padding:10px 0;border-top:1px solid #f4f4f5;color:#71717a;font-size:13px;">Official DepEd email (login)</td>
+                    <td style="padding:10px 0;border-top:1px solid #f4f4f5;color:#18181b;font-size:13px;font-weight:600;">{{ $data['official_email'] }}</td>
+                </tr>
+                <tr>
+                    <td style="padding:10px 0;border-top:1px solid #f4f4f5;color:#71717a;font-size:13px;">Default password</td>
+                    <td style="padding:10px 0;border-top:1px solid #f4f4f5;color:#18181b;font-size:13px;font-weight:600;">{{ $data['default_password'] }}</td>
                 </tr>
                 <tr>
                     <td style="padding:10px 0;border-top:1px solid #f4f4f5;color:#71717a;font-size:13px;">HRID</td>
@@ -52,7 +56,7 @@
                     Sign in to {{ $appName }}
                 </a>
                 <div style="font-size:12px;color:#71717a;margin-top:10px;line-height:1.5;">
-                    If you did not request this account, please contact your system administrator.
+                    Please change your password after your first login. If you did not request this account, contact your system administrator.
                 </div>
             </div>
         </td>

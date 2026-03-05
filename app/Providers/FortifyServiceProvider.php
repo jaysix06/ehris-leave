@@ -7,8 +7,11 @@ use App\Actions\Fortify\ResetUserPassword;
 use App\Models\BusinessUnit;
 use App\Models\Department;
 use App\Models\EmploymentStatus;
+use App\Models\User;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
@@ -32,6 +35,7 @@ class FortifyServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureActions();
+        $this->configureAuthentication();
         $this->configureViews();
         $this->configureRateLimiting();
     }
@@ -43,6 +47,59 @@ class FortifyServiceProvider extends ServiceProvider
     {
         Fortify::resetUserPasswordsUsing(ResetUserPassword::class);
         Fortify::createUsersUsing(CreateNewUser::class);
+    }
+
+    /**
+     * Configure authentication to support the activation flow.
+     *
+     * - Users should log in using their official DepEd email after activation.
+     * - During transition/debugging, allow matching either `email` (official)
+     *   or `personal_email` (registration email), but still require password match.
+     * - Inactive users are handled by the custom LoginResponse (shows pending message).
+     */
+    private function configureAuthentication(): void
+    {
+        Fortify::authenticateUsing(function (Request $request) {
+            $rawEmail = (string) $request->input('email', '');
+            $email = Str::lower(trim($rawEmail));
+            $password = (string) $request->input('password', '');
+
+            if ($email === '' || $password === '') {
+                Log::info('[Auth] Missing email/password', [
+                    'email' => $email,
+                ]);
+                return null;
+            }
+
+            $user = User::query()
+                ->whereRaw('LOWER(TRIM(email)) = ?', [$email])
+                ->orWhereRaw('LOWER(TRIM(personal_email)) = ?', [$email])
+                ->first();
+
+            if (! $user || ! is_string($user->password) || $user->password === '') {
+                Log::info('[Auth] User not found or no password', [
+                    'email' => $email,
+                    'found' => (bool) $user,
+                    'userId' => $user?->getKey(),
+                    'active' => $user?->active,
+                    'has_password' => $user ? (is_string($user->password) && $user->password !== '') : false,
+                    'db_email' => $user?->email,
+                    'db_personal_email' => $user?->personal_email,
+                ]);
+                return null;
+            }
+
+            $ok = Hash::check($password, $user->password);
+            Log::info('[Auth] Password check', [
+                'email' => $email,
+                'userId' => $user->getKey(),
+                'active' => (bool) $user->active,
+                'ok' => $ok,
+                'hash_prefix' => substr($user->password, 0, 7),
+            ]);
+
+            return $ok ? $user : null;
+        });
     }
 
     /**

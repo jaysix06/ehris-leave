@@ -9,7 +9,9 @@ use App\Services\ActivityLogService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
@@ -34,6 +36,7 @@ class UserListController extends Controller
                 'u.userId as id',
                 'u.hrid as hrid',
                 'u.email',
+                'u.personal_email',
                 'u.lastname',
                 'u.firstname',
                 'u.middlename',
@@ -89,6 +92,7 @@ class UserListController extends Controller
                 'u.userId as id',
                 'u.hrid as hrid',
                 'u.email',
+                'u.personal_email',
                 'u.lastname',
                 'u.firstname',
                 'u.middlename',
@@ -154,14 +158,17 @@ class UserListController extends Controller
                 $row->extname,
             ]))) ?: ($row->fullname ?? $row->email ?? '—');
 
+            $active = (bool) $row->active;
+            $displayEmail = $active ? ($row->email ?? '—') : ($row->personal_email ?? $row->email ?? '—');
+
             return [
                 'id' => $row->id,
                 'hrid' => $row->hrid ?? '—',
-                'email' => $row->email ?? '—',
+                'email' => $displayEmail,
                 'name' => $name,
                 'role' => $row->role ?? '—',
                 'office' => $row->office ?? '—',
-                'active' => (bool) $row->active,
+                'active' => $active,
                 '_raw' => $row,
             ];
         });
@@ -241,34 +248,53 @@ class UserListController extends Controller
             $user->hrId = $user->getKey();
         }
 
-        // When an account is activated, treat it as "email verified"
-        if (! $wasActive && $user->active && $user->email_verified_at === null) {
-            $user->email_verified_at = now();
+        // When an account is activated, generate official DepEd login and notify user
+        if (! $wasActive && $user->active) {
+            if ($user->email_verified_at === null) {
+                $user->email_verified_at = now();
+            }
+
+            // Generate official DepEd email: (firstname+lastname)@deped.gov.ph
+            $first = trim((string) ($user->firstname ?? ''));
+            $last = trim((string) ($user->lastname ?? ''));
+            $local = Str::lower(preg_replace('/[^a-z0-9]/i', '', $first.$last) ?: 'user'.$user->getKey());
+            $officialEmail = $local.'@deped.gov.ph';
+
+            // Set official login credentials on activation.
+            // Default password is fixed so it can be communicated to the user.
+            $defaultPassword = 'q12w3e4r5t';
+
+            $user->email = $officialEmail;
+            // Let the model's `hashed` cast hash this consistently.
+            $user->password = $defaultPassword;
+            $user->save();
+
+            $recipient = $user->personal_email ?? $user->email;
+            if ($recipient) {
+                try {
+                    Mail::to($recipient)->send(
+                        new AccountActivatedMail([
+                            'name' => (string) ($user->fullname ?? $user->name ?? 'User'),
+                            'official_email' => $officialEmail,
+                            'default_password' => $defaultPassword,
+                            'hrid' => $user->hrId ? (int) $user->hrId : null,
+                            'activated_at' => now()->format('Y-m-d H:i'),
+                            'sign_in_url' => url('/login'),
+                        ]),
+                    );
+                } catch (\Throwable $e) {
+                    // Swallow mail errors so that activation still succeeds
+                }
+            }
+        } else {
+            $user->save();
         }
 
-        $user->save();
-
         // Log the status update
-        $status = $user->active ? 'activated' : 'deactivated';
         ActivityLogService::logUpdate(
             'User',
             "Updated user: {$user->email}"
         );
-
-        // If account has just been activated, notify the user via email
-        if (! $wasActive && $user->active && $user->email) {
-            try {
-                Mail::to($user->email)->send(new AccountActivatedMail([
-                    'name' => (string) ($user->fullname ?? $user->name ?? $user->email ?? 'User'),
-                    'email' => (string) $user->email,
-                    'hrid' => $user->hrId ? (int) $user->hrId : null,
-                    'activated_at' => now()->format('Y-m-d H:i'),
-                    'sign_in_url' => url('/login'),
-                ]));
-            } catch (\Throwable $e) {
-                // Swallow mail errors so that activation still succeeds
-            }
-        }
 
         return response()->json([
             'id' => $user->getKey(),

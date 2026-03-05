@@ -13,6 +13,7 @@ use App\Http\Controllers\Utilities\ReportingManagerController;
 use App\Http\Controllers\Utilities\UserListController;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
@@ -198,6 +199,9 @@ Route::get('api/utilities/departments', [UserListController::class, 'departments
     ->name('utilities.departments');
 Route::patch('api/utilities/users/{user}/status', [UserListController::class, 'updateStatus'])
     ->middleware(['auth'])
+    // Use token-based auth (session "auth" only) for this JSON endpoint to
+    // avoid CSRF 419 errors when called via fetch/DataTables.
+    ->withoutMiddleware([ValidateCsrfToken::class])
     ->name('utilities.user-list.update-status');
 Route::patch('api/utilities/users/{user}', [UserListController::class, 'update'])
     ->middleware(['auth'])
