@@ -265,8 +265,8 @@ class UserListController extends Controller
             $defaultPassword = 'q12w3e4r5t';
 
             $user->email = $officialEmail;
-            // Let the model's `hashed` cast hash this consistently.
-            $user->password = $defaultPassword;
+            // Hash explicitly so login (Hash::check) works regardless of cast timing.
+            $user->password = Hash::make($defaultPassword);
             $user->save();
 
             $recipient = $user->personal_email ?? $user->email;

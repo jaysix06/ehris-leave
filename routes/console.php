@@ -1,9 +1,32 @@
 <?php
 
+use App\Models\User;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+
+Artisan::command('user:fix-default-password {email}', function (string $email) {
+    $user = User::query()
+        ->where('email', '=', $email)
+        ->orWhere('personal_email', '=', $email)
+        ->first();
+
+    if (! $user) {
+        $this->error("User not found for email: {$email}");
+
+        return self::FAILURE;
+    }
+
+    $defaultPassword = 'q12w3e4r5t';
+    $user->password = Hash::make($defaultPassword);
+    $user->save();
+
+    $this->info("Password set to default activation password for: {$user->email}");
+    $this->warn('User should change password after first login.');
+
+    return self::SUCCESS;
+})->purpose('Set a user\'s password to the default activation password (for users who could not log in after activation)');
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
