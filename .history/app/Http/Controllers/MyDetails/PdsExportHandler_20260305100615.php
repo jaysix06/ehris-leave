@@ -92,11 +92,13 @@ class PdsExportHandler
         }
 
         foreach (['L11', 'G37', 'G44'] as $extCell) {
-            if (! array_key_exists($extCell, $cellMap)) {
+            if (!array_key_exists($extCell, $cellMap)) {
                 continue;
             }
+        
             $label = 'NAME EXTENSION (JR., SR)';
-            $cellMap[$extCell] = str_pad($label, 70, ' ', STR_PAD_RIGHT).$cellMap[$extCell];
+            // Pads the label with spaces on the right side up to 70 characters
+            $cellMap[$extCell] = str_pad($label, 70, ' ', STR_PAD_RIGHT) . $cellMap[$extCell];
         }
 
         foreach ($children->take(12)->values() as $index => $child) {
@@ -177,7 +179,43 @@ class PdsExportHandler
 
     public function resolvePdsTemplatePath(): ?string
     {
-        return (new PdsTemplatePathResolver)->resolve();
+        $projectTemplate = base_path('PDS.xlsx');
+        if (is_file($projectTemplate)) {
+            return $projectTemplate;
+        }
+
+        $envPath = (string) env('PDS_TEMPLATE_PATH', '');
+        if ($envPath !== '' && is_file($envPath)) {
+            return $envPath;
+        }
+
+        $userProfile = (string) env('USERPROFILE', '');
+        $downloadsCandidates = [];
+        if ($userProfile !== '') {
+            $downloadsCandidates = [
+                $userProfile.'\\Downloads\\ANNEX-H-1-CS-Form-No.-212-Revised-2025-Personal-Data-Sheet (1).xlsx',
+                $userProfile.'\\Downloads\\ANNEX-H-1-CS-Form-No.-212-Revised-2025-Personal-Data-Sheet.xlsx',
+                $userProfile.'\\Downloads\\deped-pds-template.xlsx',
+            ];
+        }
+
+        $candidates = [
+            storage_path('app/templates/ANNEX-H-1-CS-Form-No.-212-Revised-2025-Personal-Data-Sheet (1).xlsx'),
+            storage_path('app/templates/ANNEX-H-1-CS-Form-No.-212-Revised-2025-Personal-Data-Sheet.xlsx'),
+            storage_path('app/templates/deped-pds-template.xlsx'),
+            storage_path('app/templates/DEPED-PDS.xlsx'),
+            public_path('templates/deped-pds-template.xlsx'),
+            public_path('deped-pds-template.xlsx'),
+            ...$downloadsCandidates,
+        ];
+
+        foreach ($candidates as $path) {
+            if (is_file($path)) {
+                return $path;
+            }
+        }
+
+        return null;
     }
 
     private function formatDate(mixed $value): ?string
@@ -809,7 +847,7 @@ class PdsExportHandler
         $dom = new \DOMDocument('1.0', 'UTF-8');
         $dom->preserveWhiteSpace = false;
         $dom->formatOutput = false;
-        if (! $this->safelyLoadXml($dom, $worksheetXml)) {
+        if (! @$dom->loadXML($worksheetXml)) {
             return null;
         }
 
@@ -866,7 +904,7 @@ class PdsExportHandler
         $dom = new \DOMDocument('1.0', 'UTF-8');
         $dom->preserveWhiteSpace = false;
         $dom->formatOutput = false;
-        if (! $this->safelyLoadXml($dom, $worksheetXml)) {
+        if (! @$dom->loadXML($worksheetXml)) {
             return null;
         }
 
@@ -903,7 +941,7 @@ class PdsExportHandler
         $dom = new \DOMDocument('1.0', 'UTF-8');
         $dom->preserveWhiteSpace = false;
         $dom->formatOutput = false;
-        if (! $this->safelyLoadXml($dom, $worksheetXml)) {
+        if (! @$dom->loadXML($worksheetXml)) {
             return $worksheetXml;
         }
 
@@ -985,7 +1023,7 @@ class PdsExportHandler
         $dom = new \DOMDocument('1.0', 'UTF-8');
         $dom->preserveWhiteSpace = false;
         $dom->formatOutput = false;
-        if (! $this->safelyLoadXml($dom, $worksheetXml)) {
+        if (! @$dom->loadXML($worksheetXml)) {
             return $worksheetXml;
         }
 
@@ -1112,7 +1150,7 @@ class PdsExportHandler
         $dom = new \DOMDocument('1.0', 'UTF-8');
         $dom->preserveWhiteSpace = false;
         $dom->formatOutput = false;
-        if (! $this->safelyLoadXml($dom, $worksheetXml)) {
+        if (! @$dom->loadXML($worksheetXml)) {
             return $worksheetXml;
         }
 
@@ -1171,7 +1209,7 @@ class PdsExportHandler
         $dom = new \DOMDocument('1.0', 'UTF-8');
         $dom->preserveWhiteSpace = false;
         $dom->formatOutput = false;
-        if (! $this->safelyLoadXml($dom, $worksheetXml)) {
+        if (! @$dom->loadXML($worksheetXml)) {
             return $worksheetXml;
         }
 
@@ -1227,7 +1265,7 @@ class PdsExportHandler
         $dom = new \DOMDocument('1.0', 'UTF-8');
         $dom->preserveWhiteSpace = false;
         $dom->formatOutput = false;
-        if (! $this->safelyLoadXml($dom, $worksheetXml)) {
+        if (! @$dom->loadXML($worksheetXml)) {
             return $worksheetXml;
         }
 
@@ -1303,7 +1341,7 @@ class PdsExportHandler
         $dom = new \DOMDocument('1.0', 'UTF-8');
         $dom->preserveWhiteSpace = false;
         $dom->formatOutput = false;
-        if (! $this->safelyLoadXml($dom, $worksheetXml)) {
+        if (! @$dom->loadXML($worksheetXml)) {
             return $worksheetXml;
         }
 
@@ -1385,7 +1423,7 @@ class PdsExportHandler
         $dom = new \DOMDocument('1.0', 'UTF-8');
         $dom->preserveWhiteSpace = false;
         $dom->formatOutput = false;
-        if (! $this->safelyLoadXml($dom, $xml)) {
+        if (! @$dom->loadXML($xml)) {
             return $educationStyleIndex;
         }
 
@@ -1432,7 +1470,7 @@ class PdsExportHandler
         $dom = new \DOMDocument('1.0', 'UTF-8');
         $dom->preserveWhiteSpace = false;
         $dom->formatOutput = false;
-        if (! $this->safelyLoadXml($dom, $xml)) {
+        if (! @$dom->loadXML($xml)) {
             return 0;
         }
 
@@ -1494,7 +1532,7 @@ class PdsExportHandler
         $dom = new \DOMDocument('1.0', 'UTF-8');
         $dom->preserveWhiteSpace = false;
         $dom->formatOutput = false;
-        if (! $this->safelyLoadXml($dom, $xml)) {
+        if (! @$dom->loadXML($xml)) {
             return 0;
         }
 
@@ -1575,7 +1613,7 @@ class PdsExportHandler
         $dom = new \DOMDocument('1.0', 'UTF-8');
         $dom->preserveWhiteSpace = false;
         $dom->formatOutput = false;
-        if (! $this->safelyLoadXml($dom, $xml)) {
+        if (! @$dom->loadXML($xml)) {
             return $baseXfIndex;
         }
 
@@ -1649,7 +1687,7 @@ class PdsExportHandler
         $dom = new \DOMDocument('1.0', 'UTF-8');
         $dom->preserveWhiteSpace = false;
         $dom->formatOutput = false;
-        if (! $this->safelyLoadXml($dom, $xml)) {
+        if (! @$dom->loadXML($xml)) {
             return $baseXfIndex;
         }
 
@@ -2155,7 +2193,7 @@ class PdsExportHandler
         $dom = new \DOMDocument('1.0', 'UTF-8');
         $dom->preserveWhiteSpace = true;
         $dom->formatOutput = false;
-        if (! $this->safelyLoadXml($dom, $vmlXml)) {
+        if (! @$dom->loadXML($vmlXml)) {
             return $vmlXml;
         }
 
@@ -2321,19 +2359,6 @@ class PdsExportHandler
         }
 
         return null;
-    }
-
-    private function safelyLoadXml(\DOMDocument $dom, string $xml): bool
-    {
-        $previous = libxml_use_internal_errors(true);
-        libxml_clear_errors();
-
-        $loaded = $dom->loadXML($xml);
-
-        libxml_clear_errors();
-        libxml_use_internal_errors($previous);
-
-        return $loaded;
     }
 
     private function deleteDirectory(string $directory): void
