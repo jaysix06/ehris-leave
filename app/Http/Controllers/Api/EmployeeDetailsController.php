@@ -10,23 +10,41 @@ use Illuminate\Support\Facades\Schema;
 
 class EmployeeDetailsController extends Controller
 {
+    public function index(Request $request): JsonResponse
+    {
+        if (! Schema::hasTable('tbl_user')) {
+            return response()->json([
+                'data' => [],
+                'meta' => [
+                    'count' => 0,
+                ],
+            ]);
+        }
+
+        $users = DB::table('tbl_user')
+            ->select($this->userDetailsFields())
+            ->orderBy('hrId')
+            ->get()
+            ->map(function ($row) {
+                return [
+                    'userDetails' => $row,
+                ];
+            })
+            ->values();
+
+        return response()->json([
+            'data' => $users,
+            'meta' => [
+                'count' => $users->count(),
+            ],
+        ]);
+    }
+
     public function __invoke(Request $request, int $hrid): JsonResponse
     {
         $userDetails = Schema::hasTable('tbl_user')
             ? DB::table('tbl_user')
-                ->select([
-                    'userId',
-                    'hrId',
-                    'email',
-                    'lastname',
-                    'firstname',
-                    'middlename',
-                    'extname',
-                    'avatar',
-                    'job_title',
-                    'role',
-                    'fullname',
-                ])
+                ->select($this->userDetailsFields())
                 ->where('hrId', $hrid)
                 ->first()
             : null;
@@ -42,5 +60,25 @@ class EmployeeDetailsController extends Controller
                 'userDetails' => $userDetails,
             ],
         ]);
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function userDetailsFields(): array
+    {
+        return [
+            'userId',
+            'hrId',
+            'email',
+            'lastname',
+            'firstname',
+            'middlename',
+            'extname',
+            'avatar',
+            'job_title',
+            'role',
+            'fullname',
+        ];
     }
 }
