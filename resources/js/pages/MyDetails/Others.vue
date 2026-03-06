@@ -15,6 +15,7 @@ defineProps<{
     performance?: Record<string, unknown>[];
     researches?: Record<string, unknown>[];
     expertise?: Record<string, unknown>[];
+    affiliation?: Record<string, unknown>[];
 }>();
 
 const accordionOpen = ref<Record<string, boolean>>({
@@ -25,6 +26,7 @@ const accordionOpen = ref<Record<string, boolean>>({
     performance: false,
     researches: false,
     expertise: false,
+    affiliation: false,
 });
 
 function toggleAccordion(key: string) {
@@ -317,6 +319,35 @@ function toggleAccordion(key: string) {
                     </li>
                 </ul>
                 <p v-else class="ehris-muted">No expertise on file.</p>
+            </div>
+        </div>
+
+        <!-- AFFILIATION -->
+        <div class="ehris-accordion-item">
+            <button
+                type="button"
+                class="ehris-accordion-header"
+                :aria-expanded="accordionOpen.affiliation"
+                @click="toggleAccordion('affiliation')"
+            >
+                <h3>Membership in Association/Organization</h3>
+                <div class="ehris-accordion-actions">
+                    <button type="button" class="ehris-edit-btn" aria-label="Edit affiliation" @click.stop>
+                        <Pencil class="size-4" />
+                    </button>
+                    <ChevronDown
+                        class="ehris-accordion-chevron"
+                        :class="{ 'ehris-accordion-chevron-open': accordionOpen.affiliation }"
+                    />
+                </div>
+            </button>
+            <div v-show="accordionOpen.affiliation" class="ehris-accordion-content">
+                <ul class="ehris-stacked-list" v-if="affiliation && affiliation.length">
+                    <li v-for="(item, i) in affiliation" :key="i">
+                        {{ val(item.affiliation ?? item.organization ?? item.org_name) }}
+                    </li>
+                </ul>
+                <p v-else class="ehris-muted">No memberships on file.</p>
             </div>
         </div>
     </div>

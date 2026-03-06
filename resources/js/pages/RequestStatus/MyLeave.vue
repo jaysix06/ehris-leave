@@ -3,6 +3,7 @@ import { Head, router, usePage } from '@inertiajs/vue3';
 import { echo } from '@laravel/echo-vue';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { toast } from 'vue3-toastify';
+import AppModal from '@/components/AppModal.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { DataTable, type DataTableColumn } from '@/components/DataTable';
 import { requestStatus } from '@/routes';
@@ -164,25 +165,18 @@ onBeforeUnmount(() => {
             </section>
         </div>
 
-        <!-- Cancel confirmation overlay -->
-        <Teleport to="body">
-            <Transition name="fade">
-                <div v-if="confirmId !== null" class="confirm-overlay" @click.self="dismissConfirm">
-                    <div class="confirm-card">
-                        <div class="confirm-header">
-                            <h4>Cancel Leave Request</h4>
-                        </div>
-                        <div class="confirm-body">
-                            <p>Are you sure you want to cancel this leave request? This action cannot be undone.</p>
-                            <div class="confirm-actions">
-                                <button type="button" class="confirm-dismiss" @click="dismissConfirm">Keep</button>
-                                <button type="button" class="confirm-delete" @click="executeCancel">Yes, Cancel</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </Transition>
-        </Teleport>
+        <AppModal
+            :model-value="confirmId !== null"
+            title="Cancel Leave Request"
+            tone="disapprove"
+            @update:model-value="dismissConfirm"
+        >
+            <p class="confirm-copy">Are you sure you want to cancel this leave request? This action cannot be undone.</p>
+            <template #actions>
+                <button type="button" class="confirm-dismiss" @click="dismissConfirm">Keep</button>
+                <button type="button" class="confirm-delete" @click="executeCancel">Yes, Cancel</button>
+            </template>
+        </AppModal>
     </AppLayout>
 </template>
 
@@ -202,65 +196,11 @@ onBeforeUnmount(() => {
 </style>
 
 <style>
-.confirm-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 200;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: hsl(0 0% 0% / 0.55);
-    backdrop-filter: blur(4px);
-}
-
-.confirm-card {
-    width: 100%;
-    max-width: 400px;
-    border-radius: 1rem;
-    border: 1px solid hsl(var(--border));
-    background: #fff;
-    overflow: hidden;
-    box-shadow: 0 8px 30px hsl(0 0% 0% / 0.2);
-}
-
-.dark .confirm-card {
-    background: hsl(223 24% 14%);
-}
-
-.confirm-header {
-    background: hsl(0 72% 51% / 0.08);
-    border-bottom: 1px solid hsl(0 72% 51% / 0.15);
-    padding: 1.1rem 1.5rem;
-}
-
-.confirm-header h4 {
-    margin: 0;
-    font-size: 1.1rem;
-    font-weight: 800;
-    color: hsl(0 72% 51%);
-}
-
-.confirm-body {
-    padding: 1.25rem 1.5rem 1.5rem;
-    background: #fff;
-}
-
-.dark .confirm-body {
-    background: hsl(223 24% 14%);
-}
-
-.confirm-body p {
+.confirm-copy {
     margin: 0;
     font-size: 0.875rem;
     color: hsl(var(--muted-foreground));
     line-height: 1.5;
-}
-
-.confirm-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 0.5rem;
-    margin-top: 1.25rem;
 }
 
 .confirm-dismiss,
@@ -290,15 +230,5 @@ onBeforeUnmount(() => {
 
 .confirm-delete:hover {
     background: hsl(0 72% 45%);
-}
-
-.fade-enter-active,
-.fade-leave-active {
-    transition: opacity 0.15s ease;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-    opacity: 0;
 }
 </style>

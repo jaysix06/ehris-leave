@@ -339,13 +339,16 @@ const pageCards: PageCard[] = [
                 >
                     <button
                         type="button"
-                        class="absolute right-4 top-4 text-muted-foreground hover:text-foreground"
+                        class="absolute right-2 top-2 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-background/95 text-muted-foreground shadow-lg transition-all hover:bg-destructive hover:text-destructive-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
                         @click="dismissPopup(popup.id)"
+                        aria-label="Close popup"
                     >
-                        <X class="h-5 w-5" />
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
                     </button>
 
-                    <div class="pr-8">
+                    <div class="pr-12">
                         <p class="text-lg font-semibold text-foreground">{{ popup.message }}</p>
 
                         <div v-if="popup.link" class="mt-4">

@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -17,17 +16,29 @@ class LeaveRequestsController extends Controller
 {
     private const LEAVE_TABLE = 'tbl_leave_applications';
 
-    public function index(Request $request): Response|RedirectResponse
+    public function index(Request $request): Response
     {
         $hrid = $this->resolveHrid($request->user());
 
         if (! $this->isReportingManager($hrid)) {
-            return redirect()->back()->withErrors([
-                'leave_requests' => 'Access denied. Only reporting managers can view leave requests.',
+            $previousUrl = url()->previous();
+            $currentUrl = $request->fullUrl();
+            $redirectTo = $previousUrl !== '' && $previousUrl !== $currentUrl
+                ? $previousUrl
+                : route('dashboard');
+
+            return Inertia::render('EmployeeManagement/LeaveRequests', [
+                'accessDenied' => true,
+                'deniedMessage' => 'Access denied. Only reporting managers can view leave requests.',
+                'redirectTo' => $redirectTo,
             ]);
         }
 
-        return Inertia::render('EmployeeManagement/LeaveRequests');
+        return Inertia::render('EmployeeManagement/LeaveRequests', [
+            'accessDenied' => false,
+            'deniedMessage' => null,
+            'redirectTo' => null,
+        ]);
     }
 
     public function datatables(Request $request): JsonResponse

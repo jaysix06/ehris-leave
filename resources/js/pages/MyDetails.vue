@@ -6,7 +6,6 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { BreadcrumbItem } from '@/types';
 import { useSidebar } from '@/components/ui/sidebar/utils';
-import Affiliation from '@/pages/MyDetails/Affiliation.vue';
 import EducationBackground from '@/pages/MyDetails/EducationBackground.vue';
 import Eligibility from '@/pages/MyDetails/Eligibility.vue';
 import FamilyBackground from '@/pages/MyDetails/FamilyBackground.vue';
@@ -14,6 +13,7 @@ import OfficialInfo from '@/pages/MyDetails/OfficialInfo.vue';
 import Others from '@/pages/MyDetails/Others.vue';
 import PersonalInfo from '@/pages/MyDetails/PersonalInfo.vue';
 import Training from '@/pages/MyDetails/Training.vue';
+import VoluntaryWork from '@/pages/MyDetails/VoluntaryWork.vue';
 import WorkExperience from '@/pages/MyDetails/WorkExperience.vue';
 
 const pageTitle = 'Employee';
@@ -34,7 +34,7 @@ const tabs = [
     'Education Background',
     'Eligibility',
     'Work Experience',
-    'Work Voluntary',
+    'Voluntary Work',
     'Training',
     'Others',
 ];
@@ -46,7 +46,7 @@ const sectionComponents = [
     EducationBackground,
     Eligibility,
     WorkExperience,
-    Affiliation,
+    VoluntaryWork,
     Training,
     Others,
 ] as const;
@@ -73,6 +73,7 @@ const props = defineProps<{
     personalInfo?: Record<string, unknown> | null;
     contactInfo?: Record<string, unknown> | null;
     family?: Record<string, unknown>[];
+    familyUpdateUrl?: string;
     education?: Record<string, unknown>[];
     educationUpdateUrl?: string;
     workExperience?: Record<string, unknown>[];
@@ -80,6 +81,7 @@ const props = defineProps<{
     serviceRecord?: Record<string, unknown>[];
     leaveHistory?: Record<string, unknown>[];
     documents?: Record<string, unknown>[];
+    voluntaryWork?: Record<string, unknown>[];
     training?: Record<string, unknown>[];
     awards?: Record<string, unknown>[];
     performance?: Record<string, unknown>[];
@@ -187,7 +189,7 @@ function sectionProps(index: number): Record<string, unknown> {
                 profile: props.profile,
             };
         case 2:
-            return { family: props.family };
+            return { family: props.family, familyUpdateUrl: props.familyUpdateUrl };
         case 3:
             return { education: props.education, educationUpdateUrl: props.educationUpdateUrl };
         case 4:
@@ -195,7 +197,7 @@ function sectionProps(index: number): Record<string, unknown> {
         case 5:
             return { workExperience: props.workExperience };
         case 6:
-            return { affiliation: props.affiliation };
+            return { voluntaryWork: props.voluntaryWork };
         case 7:
             return { training: props.training };
         case 8:
@@ -207,6 +209,7 @@ function sectionProps(index: number): Record<string, unknown> {
                 performance: props.performance,
                 researches: props.researches,
                 expertise: props.expertise,
+                affiliation: props.affiliation,
             };
         default:
             return {};
@@ -224,6 +227,7 @@ const myDetailsReloadProps = [
     'serviceRecord',
     'leaveHistory',
     'documents',
+    'voluntaryWork',
     'training',
     'awards',
     'performance',

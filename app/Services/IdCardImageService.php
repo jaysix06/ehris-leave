@@ -320,16 +320,11 @@ class IdCardImageService
         $departmentAbbrevBoldWeight = 4;
         // Vertical gap between LASTNAME and FIRSTNAME/MI lines.
         $nameLineGap = 115;
-        // Font path priority: config -> public/fonts -> Windows Arial.
-        $ttfFontPath = config('id-card.name_ttf_font');
-        if (! is_string($ttfFontPath) || trim($ttfFontPath) === '') {
-            $ttfFontPath = public_path('fonts/arial.ttf');
-        } elseif (! str_starts_with($ttfFontPath, '/') && ! preg_match('#^[A-Za-z]:#', $ttfFontPath)) {
-            $ttfFontPath = base_path($ttfFontPath);
-        }
-        if (! is_string($ttfFontPath) || ! File::isFile($ttfFontPath)) {
-            $windowsArial = 'C:\\Windows\\Fonts\\arial.ttf';
-            $ttfFontPath = File::isFile($windowsArial) ? $windowsArial : null;
+        // Always use the bundled Arial TTF from public/fonts for ID card printing.
+        $ttfFontPath = public_path('fonts/arial.ttf');
+        if (! File::isFile($ttfFontPath)) {
+            $upperCasePath = public_path('fonts/ARIAL.TTF');
+            $ttfFontPath = File::isFile($upperCasePath) ? $upperCasePath : null;
         }
 
         // Two cards side-by-side: template width is often 2× single card

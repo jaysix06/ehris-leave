@@ -237,42 +237,6 @@ class MyDetailsController extends Controller
                 $contact->permanent_barangay_name = $permanentBarangayName;
                 $contact->permanent_province_name = $permanentProvinceName;
             }
-
-            if (isset($data['officialInfo']) && $data['officialInfo'] instanceof EmpOfficialInfo) {
-                $official = $data['officialInfo'];
-                $managerHrid = null;
-
-                $rawReportingManager = trim((string) ($official->reporting_manager ?? ''));
-                if ($rawReportingManager !== '' && ctype_digit($rawReportingManager)) {
-                    $managerHrid = (int) $rawReportingManager;
-                }
-
-                // Fallback: infer manager HRID from department mapping table.
-                if ($managerHrid === null && ! empty($official->department_id) && Schema::hasTable('tbl_reporting_manager')) {
-                    $mappedHrid = DB::table('tbl_reporting_manager')
-                        ->whereRaw('CAST(department_id AS UNSIGNED) = ?', [(int) $official->department_id])
-                        ->value('manager_name');
-                    if ($mappedHrid !== null && ctype_digit((string) $mappedHrid)) {
-                        $managerHrid = (int) $mappedHrid;
-                    }
-                }
-
-                if ($managerHrid !== null) {
-                    $managerRow = DB::table('tbl_emp_official_info')
-                        ->select(['firstname', 'middlename', 'lastname', 'extension'])
-                        ->where('hrid', $managerHrid)
-                        ->first();
-
-                    if ($managerRow) {
-                        $official->reporting_manager = trim((string) implode(' ', array_filter([
-                            trim((string) ($managerRow->firstname ?? '')),
-                            trim((string) ($managerRow->middlename ?? '')),
-                            trim((string) ($managerRow->lastname ?? '')),
-                            trim((string) ($managerRow->extension ?? '')),
-                        ], fn ($part) => $part !== '')));
-                    }
-                }
-            }
         }
 
         return Inertia::render('MyDetails', array_merge(
