@@ -13,6 +13,7 @@ use App\Http\Controllers\Utilities\JobTitleMonthlySalaryController;
 use App\Http\Controllers\Utilities\LeaveTypeController;
 use App\Http\Controllers\Utilities\PopupMessageController;
 use App\Http\Controllers\Utilities\ReportingManagerController;
+use App\Http\Controllers\Utilities\SurveyManagementController;
 use App\Http\Controllers\Utilities\UserListController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -330,9 +331,18 @@ Route::get('/', function () {
     Route::get('api/utilities/activity-log/datatables', [ActivityLogController::class, 'datatables'])
         ->middleware(['auth', 'verified'])
         ->name('api.utilities.activity-log.datatables');
-    Route::get('utilities/survey-management', function () {
-        return Inertia::render('Utilities/SurveyManagement');
-    })->middleware(['auth', 'verified'])->name('utilities.survey-management');
+    Route::get('utilities/survey-management', [SurveyManagementController::class, 'index'])
+        ->middleware(['auth', 'verified'])->name('utilities.survey-management');
+    Route::post('utilities/survey-management', [SurveyManagementController::class, 'store'])
+        ->middleware(['auth', 'verified'])->name('utilities.survey-management.store');
+    Route::get('api/utilities/survey-management/datatables', [SurveyManagementController::class, 'datatables'])
+        ->middleware(['auth', 'verified'])->name('api.utilities.survey-management.datatables');
+    Route::get('api/utilities/survey-management/{id}', [SurveyManagementController::class, 'show'])
+        ->middleware(['auth', 'verified'])->name('api.utilities.survey-management.show');
+    Route::put('utilities/survey-management/{id}', [SurveyManagementController::class, 'update'])
+        ->middleware(['auth', 'verified'])->name('utilities.survey-management.update');
+    Route::delete('utilities/survey-management/{id}', [SurveyManagementController::class, 'destroy'])
+        ->middleware(['auth', 'verified'])->name('utilities.survey-management.destroy');
     Route::get('utilities/pop-up-management', [PopupMessageController::class, 'index'])
         ->middleware(['auth', 'verified'])
         ->name('utilities.pop-up-management');
