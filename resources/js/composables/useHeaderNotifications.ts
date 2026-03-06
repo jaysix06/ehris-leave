@@ -1,4 +1,4 @@
-import { usePage } from '@inertiajs/vue3';
+import { router, usePage } from '@inertiajs/vue3';
 import { echo } from '@laravel/echo-vue';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
@@ -13,16 +13,9 @@ export type HeaderNotification = {
     read: boolean;
 };
 
-type LeaveRequestRealtimePayload = {
-    leaveApplicationId?: number | string | null;
-    employeeHrid?: number | string | null;
-    rmAssigneeHrid?: number | string | null;
-    action?: string | null;
-    workflowStatus?: string | null;
-    employeeName?: string | null;
-    actorRole?: string | null;
-    actorHrid?: number | string | null;
-};
+const optimisticReadIds = ref<string[]>([]);
+let listenerRefCount = 0;
+let listenerAttached = false;
 
 const normalizeKind = (value: unknown): NotificationKind => {
     if (value === 'leave' || value === 'birthday' || value === 'general') return value;
@@ -50,21 +43,28 @@ const normalizeNotification = (value: unknown, index: number): HeaderNotificatio
     };
 };
 
+const csrfToken = () => {
+    if (typeof document === 'undefined') return '';
+    const token = document.querySelector('meta[name="csrf-token"]');
+    return token?.getAttribute('content') ?? '';
+};
+
+const refreshHeaderNotifications = () => {
+    router.reload({
+        only: ['headerNotifications'],
+        preserveScroll: true,
+        preserveState: true,
+    });
+};
+
 export const useHeaderNotifications = () => {
     const page = usePage();
     const reverbEnabled = import.meta.env.VITE_REVERB_ENABLED !== 'false';
-    const liveNotifications = ref<HeaderNotification[]>([]);
-
     const authHrid = computed(() => {
         const auth = (page.props as Record<string, unknown>).auth as Record<string, unknown> | undefined;
         const user = auth?.user as Record<string, unknown> | undefined;
         const parsed = Number(user?.hrId ?? 0);
         return Number.isFinite(parsed) ? parsed : 0;
-    });
-    const authRole = computed(() => {
-        const auth = (page.props as Record<string, unknown>).auth as Record<string, unknown> | undefined;
-        const user = auth?.user as Record<string, unknown> | undefined;
-        return String(user?.role ?? '').trim().toLowerCase();
     });
 
     const baseNotifications = computed<HeaderNotification[]>(() => {
@@ -74,131 +74,64 @@ export const useHeaderNotifications = () => {
 
         return raw
             .map((item, index) => normalizeNotification(item, index))
-            .filter((item): item is HeaderNotification => item !== null);
+            .filter((item): item is HeaderNotification => item !== null)
+            .slice(0, 20);
     });
 
     const notifications = computed<HeaderNotification[]>(() =>
-        [...liveNotifications.value, ...baseNotifications.value].slice(0, 8),
+        baseNotifications.value.map((item) => ({
+            ...item,
+            read: item.read || optimisticReadIds.value.includes(item.id),
+        })),
     );
 
     const unreadNotificationCount = computed(() =>
         notifications.value.filter((item) => !item.read).length,
     );
 
-    const pushRealtimeNotification = (
-        title: string,
-        description: string,
-        href = '/employee-management/leave-requests',
-    ) => {
-        liveNotifications.value = [
-            {
-                id: `rt-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-                title,
-                description,
-                kind: 'leave',
-                href,
-                read: false,
-            },
-            ...liveNotifications.value,
-        ].slice(0, 8);
-    };
+    const markNotificationAsRead = async (id: string) => {
+        const normalizedId = String(id ?? '').trim();
+        if (normalizedId === '' || optimisticReadIds.value.includes(normalizedId)) return;
 
-    const handleLeaveRequestUpdated = (payload: LeaveRequestRealtimePayload) => {
-        const action = String(payload?.action ?? '').toLowerCase();
-        const workflowStatus = String(payload?.workflowStatus ?? '').toLowerCase();
-        const rmAssigneeHrid = Number(payload?.rmAssigneeHrid ?? 0);
-        const employeeHrid = Number(payload?.employeeHrid ?? 0);
-        const actorHrid = Number(payload?.actorHrid ?? 0);
-        const actorRole = String(payload?.actorRole ?? '').trim().toLowerCase();
-        const leaveId = Number(payload?.leaveApplicationId ?? 0);
-        const leaveLabel = leaveId > 0 ? `#${leaveId}` : 'request';
-        const employeeNameRaw = String(payload?.employeeName ?? '').trim();
-        const employeeName = employeeNameRaw !== '' ? employeeNameRaw : 'An employee';
-        const isActor = authHrid.value > 0 && actorHrid > 0 && authHrid.value === actorHrid;
-        const isHrRole = authRole.value.includes('hr');
-        const isSdsRole = authRole.value.includes('sds');
+        optimisticReadIds.value = [normalizedId, ...optimisticReadIds.value].slice(0, 500);
 
-        if (action === 'submitted') {
-            if (authHrid.value > 0 && rmAssigneeHrid === authHrid.value && !isActor) {
-                pushRealtimeNotification(
-                    `${employeeName} filed a leave request`,
-                    `Leave ${leaveLabel} is waiting for your review.`,
-                );
-            }
-            return;
-        }
+        try {
+            const response = await fetch(`/notifications/${encodeURIComponent(normalizedId)}/read`, {
+                method: 'PATCH',
+                headers: {
+                    Accept: 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken(),
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: '{}',
+            });
 
-        if (action === 'approve') {
-            if (authHrid.value > 0 && employeeHrid === authHrid.value && !isActor) {
-                if (workflowStatus === 'pending_hr') {
-                    pushRealtimeNotification(
-                        `Your leave ${leaveLabel} was approved by RM`,
-                        'Your request was forwarded to HR for the next approval step.',
-                        '/request-status/my-leave',
-                    );
-                    return;
-                }
-                if (workflowStatus === 'pending_sds') {
-                    pushRealtimeNotification(
-                        `Your leave ${leaveLabel} was approved by HR`,
-                        'Your request was forwarded to SDS for final approval.',
-                        '/request-status/my-leave',
-                    );
-                    return;
-                }
-                if (workflowStatus === 'approved') {
-                    pushRealtimeNotification(
-                        `Your leave ${leaveLabel} is approved`,
-                        'Your leave request completed all approval stages.',
-                        '/request-status/my-leave',
-                    );
-                    return;
-                }
+            if (!response.ok) {
+                throw new Error(`Failed to mark notification as read (${response.status})`);
             }
 
-            if (workflowStatus === 'pending_hr' && isHrRole && actorRole === 'rm' && !isActor) {
-                pushRealtimeNotification(
-                    `${employeeName} leave ${leaveLabel} is ready for HR approval`,
-                    'A new leave request has reached the HR approval stage.',
-                );
-                return;
-            }
-
-            if (workflowStatus === 'pending_sds' && isSdsRole && actorRole === 'hr' && !isActor) {
-                pushRealtimeNotification(
-                    `${employeeName} leave ${leaveLabel} is ready for SDS approval`,
-                    'A new leave request has reached the SDS approval stage.',
-                );
-            }
-            return;
-        }
-
-        if (action === 'disapprove') {
-            if (authHrid.value > 0 && employeeHrid === authHrid.value && !isActor) {
-                const by = actorRole === 'rm' ? 'RM' : actorRole === 'hr' ? 'HR' : actorRole === 'sds' ? 'SDS' : 'approver';
-                pushRealtimeNotification(
-                    `Your leave ${leaveLabel} was disapproved`,
-                    `Your request was disapproved by ${by}.`,
-                    '/request-status/my-leave',
-                );
-            }
-            return;
-        }
-
-        if (action === 'cancelled') {
-            if (authHrid.value > 0 && rmAssigneeHrid === authHrid.value && !isActor) {
-                pushRealtimeNotification(
-                    `${employeeName} cancelled leave ${leaveLabel}`,
-                    'The leave request assigned to you was cancelled by the employee.',
-                );
-            }
+            refreshHeaderNotifications();
+        } catch {
+            // Keep optimistic state to avoid badge jitter; server sync will happen on next navigation.
         }
     };
 
     onMounted(() => {
         if (!reverbEnabled) return;
+        listenerRefCount += 1;
+        if (listenerAttached) return;
+
         try {
-            echo().channel('leave-requests').listen('.LeaveRequestUpdated', handleLeaveRequestUpdated);
+            echo().channel('leave-requests').listen('.LeaveRequestUpdated', refreshHeaderNotifications);
+            echo().channel('leave-types').listen('.LeaveTypeUpdated', refreshHeaderNotifications);
+            echo().channel('my-details').listen('.MyDetailsUpdated', (payload: { hrid?: number | string }) => {
+                const payloadHrid = Number(payload?.hrid ?? 0);
+                if (authHrid.value > 0 && payloadHrid === authHrid.value) {
+                    refreshHeaderNotifications();
+                }
+            });
+            listenerAttached = true;
         } catch {
             // Reverb not connected; real-time updates disabled
         }
@@ -206,8 +139,14 @@ export const useHeaderNotifications = () => {
 
     onBeforeUnmount(() => {
         if (!reverbEnabled) return;
+        listenerRefCount = Math.max(0, listenerRefCount - 1);
+        if (listenerRefCount > 0 || !listenerAttached) return;
+
         try {
             echo().channel('leave-requests').stopListening('LeaveRequestUpdated');
+            echo().channel('leave-types').stopListening('LeaveTypeUpdated');
+            echo().channel('my-details').stopListening('MyDetailsUpdated');
+            listenerAttached = false;
         } catch {
             // ignore
         }
@@ -216,5 +155,6 @@ export const useHeaderNotifications = () => {
     return {
         notifications,
         unreadNotificationCount,
+        markNotificationAsRead,
     };
 };

@@ -24,6 +24,7 @@ use App\Models\LeaveHistory;
 use App\Models\Performance;
 use App\Models\Researches;
 use App\Models\User;
+use App\Services\LeaveWorkflowNotificationService;
 use Carbon\CarbonImmutable;
 use Illuminate\Auth\Notifications\VerifyEmail;
 use Illuminate\Database\Eloquent\Model;
@@ -130,6 +131,7 @@ class AppServiceProvider extends ServiceProvider
             return;
         }
 
+        app(LeaveWorkflowNotificationService::class)->notifyMyDetailsUpdated($hrid);
         MyDetailsUpdated::dispatch($hrid);
     }
 

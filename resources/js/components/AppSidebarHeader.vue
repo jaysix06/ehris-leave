@@ -12,7 +12,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { SidebarTrigger } from '@/components/ui/sidebar';
-import { type NotificationKind, useHeaderNotifications } from '@/composables/useHeaderNotifications';
+import { type HeaderNotification, type NotificationKind, useHeaderNotifications } from '@/composables/useHeaderNotifications';
 import { useInitials } from '@/composables/useInitials';
 import { logout } from '@/routes';
 import type { BreadcrumbItem } from '@/types';
@@ -57,7 +57,14 @@ const currentTitle = computed(() => {
     return props.breadcrumbs[props.breadcrumbs.length - 1].title;
 });
 
-const { notifications, unreadNotificationCount } = useHeaderNotifications();
+const { notifications, unreadNotificationCount, markNotificationAsRead } = useHeaderNotifications();
+
+const onNotificationClick = (event: MouseEvent, notification: HeaderNotification) => {
+    markNotificationAsRead(notification.id);
+    if (!notification.href) {
+        event.preventDefault();
+    }
+};
 
 const notificationIconByKind = (kind: NotificationKind) => {
     if (kind === 'leave') return CircleCheck;
@@ -112,6 +119,7 @@ const notificationIconByKind = (kind: NotificationKind) => {
                                 :key="notification.id"
                                 :href="notification.href ?? '#'"
                                 class="flex items-start gap-3 rounded-md px-2 py-2 hover:bg-muted"
+                                @click="onNotificationClick($event, notification)"
                             >
                                 <component
                                     :is="notificationIconByKind(notification.kind)"

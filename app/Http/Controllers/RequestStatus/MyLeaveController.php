@@ -5,6 +5,7 @@ namespace App\Http\Controllers\RequestStatus;
 use App\Events\LeaveRequestUpdated;
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\LeaveWorkflowNotificationService;
 use App\Services\ActivityLogService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -17,6 +18,11 @@ use Inertia\Response;
 class MyLeaveController extends Controller
 {
     private const LEAVE_TABLE = 'tbl_leave_applications';
+
+    public function __construct(
+        private readonly LeaveWorkflowNotificationService $leaveWorkflowNotificationService,
+    ) {
+    }
 
     public function index(): Response
     {
@@ -157,6 +163,12 @@ class MyLeaveController extends Controller
             'Leave Request',
             "Cancelled Leave Request #{$id} - {$leaveType} ({$leaveDays} days, starting {$startDate})",
             $request->user()?->userId ?? null,
+        );
+
+        $this->leaveWorkflowNotificationService->notifyCancelled(
+            isset($leave->leave_application_id) ? (int) $leave->leave_application_id : $id,
+            isset($leave->rm_assignee_hrid) ? (int) $leave->rm_assignee_hrid : null,
+            trim((string) ($request->user()?->name ?? '')) ?: null,
         );
 
         LeaveRequestUpdated::dispatch(

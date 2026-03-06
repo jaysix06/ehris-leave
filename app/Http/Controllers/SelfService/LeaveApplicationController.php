@@ -9,6 +9,7 @@ use App\Models\EmpOfficialInfo;
 use App\Models\LeaveType;
 use App\Models\Office;
 use App\Models\User;
+use App\Services\LeaveWorkflowNotificationService;
 use App\Services\ActivityLogService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -31,6 +32,11 @@ class LeaveApplicationController extends Controller
     private const WORKFLOW_APPROVED = 'approved';
 
     private const WORKFLOW_DISAPPROVED = 'disapproved';
+
+    public function __construct(
+        private readonly LeaveWorkflowNotificationService $leaveWorkflowNotificationService,
+    ) {
+    }
 
     public function show(Request $request)
     {
@@ -839,6 +845,13 @@ class LeaveApplicationController extends Controller
             $authUser->userId ?? null,
         );
 
+        $this->leaveWorkflowNotificationService->notifySubmitted(
+            $leaveId > 0 ? $leaveId : null,
+            $hrid > 0 ? $hrid : null,
+            $rmAssigneeHrid,
+            $employeeDisplayName !== '' ? $employeeDisplayName : null,
+        );
+
         LeaveRequestUpdated::dispatch(
             $leaveId > 0 ? $leaveId : null,
             $hrid > 0 ? $hrid : null,
@@ -986,6 +999,17 @@ class LeaveApplicationController extends Controller
             'Leave Request',
             $activityDetails,
             $authUser->userId ?? null,
+        );
+
+        $this->leaveWorkflowNotificationService->notifyDecision(
+            isset($leave->leave_application_id) ? (int) $leave->leave_application_id : $id,
+            $employeeHrid,
+            isset($leave->rm_assignee_hrid) ? (int) $leave->rm_assignee_hrid : null,
+            $decision,
+            (string) ($updates['workflow_status'] ?? $leave->workflow_status ?? ''),
+            $employeeName,
+            $actorRole,
+            $authHrid > 0 ? $authHrid : null,
         );
 
         LeaveRequestUpdated::dispatch(

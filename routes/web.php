@@ -4,6 +4,7 @@ use App\Http\Controllers\Auth\PasswordResetOtpController;
 use App\Http\Controllers\EmployeeManagement\IdCardPrintingController;
 use App\Http\Controllers\EmployeeManagement\LeaveRequestsController;
 use App\Http\Controllers\MyDetailsController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\RequestStatus\MyLeaveController;
 use App\Http\Controllers\SelfService\IdCardController;
 use App\Http\Controllers\SelfService\LeaveApplicationController;
@@ -192,6 +193,9 @@ Route::get('/', function () {
     Route::delete('request-status/my-leave/{id}', [MyLeaveController::class, 'cancel'])
         ->middleware(['auth', 'verified'])
         ->name('request-status.my-leave.cancel');
+    Route::patch('notifications/{id}/read', [NotificationController::class, 'markAsRead'])
+        ->middleware(['auth', 'verified'])
+        ->name('notifications.read');
 
     Route::get('my-details', [MyDetailsController::class, 'show'])
         ->middleware(['auth', 'verified'])

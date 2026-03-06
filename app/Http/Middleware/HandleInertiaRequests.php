@@ -36,8 +36,29 @@ class HandleInertiaRequests extends Middleware
      */
     public function share(Request $request): array
     {
+        $headerNotifications = [];
         $surveyCategoriesWithSurveys = [];
         if ($request->user()) {
+            $headerNotifications = $request->user()
+                ->notifications()
+                ->latest()
+                ->limit(20)
+                ->get()
+                ->map(function ($notification) {
+                    $data = is_array($notification->data) ? $notification->data : [];
+
+                    return [
+                        'id' => (string) $notification->id,
+                        'title' => (string) ($data['title'] ?? 'Notification'),
+                        'description' => (string) ($data['description'] ?? ''),
+                        'kind' => (string) ($data['kind'] ?? 'general'),
+                        'href' => isset($data['href']) && is_string($data['href']) && trim($data['href']) !== '' ? $data['href'] : null,
+                        'read' => $notification->read_at !== null,
+                    ];
+                })
+                ->values()
+                ->all();
+
             $surveyCategoriesWithSurveys = SurveySet::query()
                 ->whereIn('category', ['GAD', 'PRAISE', 'PASS'])
                 ->distinct()
@@ -54,6 +75,7 @@ class HandleInertiaRequests extends Middleware
                 'user' => $request->user(),
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
+            'headerNotifications' => $headerNotifications,
             'surveyCategoriesWithSurveys' => $surveyCategoriesWithSurveys,
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),
