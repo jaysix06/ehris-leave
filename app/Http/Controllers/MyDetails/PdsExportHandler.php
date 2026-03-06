@@ -161,6 +161,13 @@ class PdsExportHandler
             fn ($value) => $this->formatDate($value),
             fn ($value) => $this->pdsValue($value)
         );
+        $c4Handler = new PdsC4Handler;
+        $c4CellMap = $c4Handler->buildCellMap(
+            $personalInfo,
+            fn ($value) => $this->formatDate($value),
+            fn ($value) => $this->pdsValue($value)
+        );
+        $c4CheckStates = $c4Handler->buildControlCheckStates($personalInfo);
 
         return $this->populateTemplateWorkbook(
             $templatePath,
@@ -171,7 +178,9 @@ class PdsExportHandler
             [],
             count($educationRows),
             $c2CellMap,
-            $c3CellMap
+            $c3CellMap,
+            $c4CellMap,
+            $c4CheckStates
         );
     }
 
@@ -508,6 +517,8 @@ class PdsExportHandler
      * @param  array<string, array{start: int, end: int}>  $educationMergeGroups
      * @param  array<string, string>  $c2CellMap
      * @param  array<string, string>  $c3CellMap
+     * @param  array<string, string>  $c4CellMap
+     * @param  array<string, bool>  $c4CheckStates
      */
     private function populateTemplateWorkbook(
         string $templatePath,
@@ -518,7 +529,9 @@ class PdsExportHandler
         array $educationMergeGroups = [],
         int $educationRowCount = 5,
         array $c2CellMap = [],
-        array $c3CellMap = []
+        array $c3CellMap = [],
+        array $c4CellMap = [],
+        array $c4CheckStates = []
     ): string {
         if (! class_exists('PclZip')) {
             require_once base_path('vendor/phpoffice/phpexcel/Classes/PHPExcel/Shared/PCLZip/pclzip.lib.php');
@@ -604,13 +617,13 @@ class PdsExportHandler
             }
         }
 
-        $updatedSheetXml = $this->setSheetControlChecks(
-            $updatedSheetXml,
+        $c1CheckStates = $this->buildControlCheckStates(
             $gender,
             $civilStatus,
             (string) ($cellMap['I13'] ?? ''),
             (string) ($cellMap['I16'] ?? '')
         );
+        $updatedSheetXml = $this->setSheetControlChecksFromStates($updatedSheetXml, $c1CheckStates);
         file_put_contents($sheetXmlPath, $updatedSheetXml);
 
         if ($c2CellMap !== []) {
@@ -635,6 +648,44 @@ class PdsExportHandler
                 }
             }
         }
+        if ($c4CellMap !== [] || $c4CheckStates !== []) {
+            $sheet4EntryPath = $this->resolveWorksheetEntryPath($workbookXml, $relsXml, 'C4');
+            if ($sheet4EntryPath !== null) {
+                $sheet4Path = $extractRoot.'/'.$sheet4EntryPath;
+                if (is_file($sheet4Path)) {
+                    $sheet4Xml = file_get_contents($sheet4Path) ?: '';
+                    if ($c4CellMap !== []) {
+                        $sheet4Xml = (new PdsC4Handler)->applyCellMapToWorksheetXml($sheet4Xml, $c4CellMap);
+                    }
+                    if ($c4CheckStates !== []) {
+                        $sheet4Xml = $this->setSheetControlChecksFromStates($sheet4Xml, $c4CheckStates);
+                    }
+                    file_put_contents($sheet4Path, $sheet4Xml);
+
+                    if ($c4CheckStates !== []) {
+                        $sheet4RelsPath = dirname($sheet4Path).'/_rels/'.basename($sheet4Path).'.rels';
+                        if (is_file($sheet4RelsPath)) {
+                            $sheet4RelsXml = file_get_contents($sheet4RelsPath) ?: '';
+                            $this->setCtrlPropCheckboxes(
+                                $sheet4RelsXml,
+                                dirname($sheet4Path),
+                                $sheet4Xml,
+                                $c4CheckStates
+                            );
+                            $sheet4VmlPaths = $this->resolveVmlPaths($sheet4RelsXml, dirname($sheet4Path));
+                            foreach ($sheet4VmlPaths as $vmlPath) {
+                                if (! is_file($vmlPath)) {
+                                    continue;
+                                }
+                                $vmlXml = file_get_contents($vmlPath) ?: '';
+                                $updatedVmlXml = $this->setVmlCheckboxesByControlNames($vmlXml, $c4CheckStates);
+                                file_put_contents($vmlPath, $updatedVmlXml);
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         $worksheetRelsPath = dirname($sheetXmlPath).'/_rels/'.basename($sheetXmlPath).'.rels';
         if (is_file($worksheetRelsPath)) {
@@ -643,12 +694,7 @@ class PdsExportHandler
                 $worksheetRelsXml,
                 dirname($sheetXmlPath),
                 $updatedSheetXml,
-                $this->buildControlCheckStates(
-                    $gender,
-                    $civilStatus,
-                    (string) ($cellMap['I13'] ?? ''),
-                    (string) ($cellMap['I16'] ?? '')
-                )
+                $c1CheckStates
             );
             $this->setCountryDropDownSelection(
                 $worksheetRelsXml,
@@ -1741,15 +1787,25 @@ class PdsExportHandler
         string $citizenship,
         string $dualCitizenship
     ): string {
+        $checkStates = $this->buildControlCheckStates($gender, $civilStatus, $citizenship, $dualCitizenship);
+
+        return $this->setSheetControlChecksFromStates($worksheetXml, $checkStates);
+    }
+
+    /**
+     * @param  array<string, bool>  $checkStates
+     */
+    private function setSheetControlChecksFromStates(string $worksheetXml, array $checkStates): string
+    {
         $dom = new \DOMDocument('1.0', 'UTF-8');
         $dom->preserveWhiteSpace = false;
         $dom->formatOutput = false;
-        $dom->loadXML($worksheetXml);
+        if (! $this->safelyLoadXml($dom, $worksheetXml)) {
+            return $worksheetXml;
+        }
 
         $xpath = new \DOMXPath($dom);
         $xpath->registerNamespace('s', 'http://schemas.openxmlformats.org/spreadsheetml/2006/main');
-
-        $checkStates = $this->buildControlCheckStates($gender, $civilStatus, $citizenship, $dualCitizenship);
 
         $controlNodes = $xpath->query('//*[local-name()="control"]');
         foreach ($controlNodes as $controlNode) {
@@ -2199,6 +2255,68 @@ class PdsExportHandler
             }
 
             if (! $shouldCheck && $checkedNode) {
+                $clientData->removeChild($checkedNode);
+            }
+        }
+
+        $out = $dom->saveXML() ?: $vmlXml;
+
+        return $this->ensureXmlDeclarationHasEncoding($out);
+    }
+
+    /**
+     * @param  array<string, bool>  $checkStates
+     */
+    private function setVmlCheckboxesByControlNames(string $vmlXml, array $checkStates): string
+    {
+        if ($checkStates === []) {
+            return $vmlXml;
+        }
+
+        $dom = new \DOMDocument('1.0', 'UTF-8');
+        $dom->preserveWhiteSpace = true;
+        $dom->formatOutput = false;
+        if (! $this->safelyLoadXml($dom, $vmlXml)) {
+            return $vmlXml;
+        }
+
+        $xpath = new \DOMXPath($dom);
+        $xpath->registerNamespace('v', 'urn:schemas-microsoft-com:vml');
+        $xpath->registerNamespace('x', 'urn:schemas-microsoft-com:office:excel');
+
+        $shapes = $xpath->query('//v:shape[x:ClientData[@ObjectType="Checkbox"]]');
+        foreach ($shapes as $shape) {
+            if (! $shape instanceof \DOMElement) {
+                continue;
+            }
+
+            $shapeId = $shape->getAttribute('id');
+            if (! str_starts_with($shapeId, 'Check_x0020_Box_x0020_')) {
+                continue;
+            }
+
+            $controlName = str_replace('_x0020_', ' ', $shapeId);
+            if (! array_key_exists($controlName, $checkStates)) {
+                continue;
+            }
+
+            $clientData = $xpath->query('x:ClientData[@ObjectType="Checkbox"]', $shape)->item(0);
+            if (! $clientData instanceof \DOMElement) {
+                continue;
+            }
+
+            $checkedNode = $xpath->query('x:Checked', $clientData)->item(0);
+            $shouldCheck = (bool) $checkStates[$controlName];
+            if ($shouldCheck && ! $checkedNode) {
+                $checkedElement = $dom->createElementNS('urn:schemas-microsoft-com:office:excel', 'x:Checked');
+                $checkedElement->appendChild($dom->createTextNode('1'));
+                $clientData->appendChild($checkedElement);
+            } elseif ($shouldCheck && $checkedNode instanceof \DOMElement) {
+                while ($checkedNode->firstChild) {
+                    $checkedNode->removeChild($checkedNode->firstChild);
+                }
+                $checkedNode->appendChild($dom->createTextNode('1'));
+            } elseif (! $shouldCheck && $checkedNode) {
                 $clientData->removeChild($checkedNode);
             }
         }
