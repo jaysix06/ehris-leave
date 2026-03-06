@@ -121,7 +121,7 @@ const currentTitle = computed(() => {
                             </button>
                         </Link>
                         <div class="flex gap-3">
-                            <Link href="/my-profile" class="flex-1">
+                            <Link href="/settings/profile" class="flex-1">
                                 <button
                                     type="button"
                                     class="flex w-full items-center justify-center rounded-md border border-input bg-background px-3 py-2 text-sm font-medium hover:bg-muted"
