@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { Link } from '@inertiajs/vue3';
+import { Link, usePage } from '@inertiajs/vue3';
+import { computed } from 'vue';
 import { LayoutGrid, ChartColumnBig, ChartLine, UsersRound, UserRoundCog, FileClock, BookUser, Wrench, NotepadText, FileText } from 'lucide-vue-next';
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
@@ -26,7 +27,27 @@ import reportsRoutes from '@/routes/reports';
 import utilitiesRoutes from '@/routes/utilities';
 import leaveTypesRoutes from '@/routes/utilities/leave-types';
 
-const mainNavItems: NavItem[] = [
+const page = usePage();
+const surveyCategoriesWithSurveys = computed(() => {
+    const cats = (page.props.surveyCategoriesWithSurveys as string[] | undefined) ?? [];
+    return Array.isArray(cats) ? cats : [];
+});
+
+const mainNavItems = computed<NavItem[]>(() => {
+    const surveyChildren: NavItem[] = surveyCategoriesWithSurveys.value.map((category) => ({
+        title: category,
+        href: surveyRoutes.gad({ query: { category } }),
+    }));
+    if (surveyCategoriesWithSurveys.value.length > 0) {
+        surveyChildren.push({ title: 'All', href: surveyRoutes.gad() });
+    }
+    const surveyItem: NavItem = {
+        title: 'Survey',
+        icon: NotepadText,
+        children: surveyChildren,
+    };
+
+    const items: NavItem[] = [
     {
         title: 'Dashboard',
         href: dashboard(),
@@ -197,16 +218,7 @@ const mainNavItems: NavItem[] = [
             },
         ],
     },
-    {
-        title: 'Survey',
-        icon: NotepadText,
-        children: [
-            {
-                title: 'GAD',
-                href: surveyRoutes.gad(),
-            },
-        ],
-    },
+    ...(surveyCategoriesWithSurveys.value.length > 0 ? [surveyItem] : []),
     {
         title: 'Reports',
         icon: FileText,
@@ -218,6 +230,8 @@ const mainNavItems: NavItem[] = [
         ],
     },
 ];
+    return items;
+});
 
 const footerNavItems: NavItem[] = [
     // {

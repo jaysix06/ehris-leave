@@ -13,6 +13,7 @@ use App\Http\Controllers\Utilities\JobTitleMonthlySalaryController;
 use App\Http\Controllers\Utilities\LeaveTypeController;
 use App\Http\Controllers\Utilities\PopupMessageController;
 use App\Http\Controllers\Utilities\ReportingManagerController;
+use App\Http\Controllers\SurveyController;
 use App\Http\Controllers\Utilities\SurveyManagementController;
 use App\Http\Controllers\Utilities\UserListController;
 use Illuminate\Http\Request;
@@ -375,9 +376,12 @@ Route::get('/', function () {
     Route::get('survey', function () {
         return Inertia::render('Survey');
     })->middleware(['auth', 'verified'])->name('survey');
-    Route::get('survey/gad', function () {
-        return Inertia::render('Survey/Gad');
-    })->middleware(['auth', 'verified'])->name('survey.gad');
+    Route::get('survey/gad', [SurveyController::class, 'gad'])
+        ->middleware(['auth', 'verified'])->name('survey.gad');
+    Route::get('survey/gad/{id}/answer', [SurveyController::class, 'showAnswer'])
+        ->middleware(['auth', 'verified'])->name('survey.gad.answer');
+    Route::post('survey/gad/answer', [SurveyController::class, 'storeAnswer'])
+        ->middleware(['auth', 'verified'])->name('survey.gad.answer.store');
 
     Route::get('api/reports/employee-listing', [App\Http\Controllers\Reports\EmployeeListingController::class, 'api'])
         ->middleware(['auth', 'verified'])

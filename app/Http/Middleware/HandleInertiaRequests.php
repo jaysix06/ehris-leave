@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\SurveySet;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -35,6 +36,17 @@ class HandleInertiaRequests extends Middleware
      */
     public function share(Request $request): array
     {
+        $surveyCategoriesWithSurveys = [];
+        if ($request->user()) {
+            $surveyCategoriesWithSurveys = SurveySet::query()
+                ->whereIn('category', ['GAD', 'PRAISE', 'PASS'])
+                ->distinct()
+                ->pluck('category')
+                ->filter()
+                ->values()
+                ->toArray();
+        }
+
         return [
             ...parent::share($request),
             'name' => config('app.name'),
@@ -42,6 +54,12 @@ class HandleInertiaRequests extends Middleware
                 'user' => $request->user(),
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
+            'surveyCategoriesWithSurveys' => $surveyCategoriesWithSurveys,
+            'flash' => [
+                'success' => fn () => $request->session()->get('success'),
+                'error' => fn () => $request->session()->get('error'),
+                'errors' => fn () => $request->session()->get('errors') ? $request->session()->get('errors')->getBag('default')->getMessages() : [],
+            ],
         ];
     }
 }
