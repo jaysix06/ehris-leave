@@ -56,7 +56,7 @@ defineProps<{
                         <div class="ehris-pds-personal-row"><dt>NAME EXTENSION (JR., SR.)</dt><dd>{{ val(officialInfo?.extension ?? profile?.extname) }}</dd></div>
                         <div class="ehris-pds-personal-row"><dt>DATE OF BIRTH</dt><dd>{{ val(personalInfo?.dob) }}</dd></div>
                         <div class="ehris-pds-personal-row"><dt>PLACE OF BIRTH</dt><dd>{{ val(personalInfo?.pob) }}</dd></div>
-                        <div class="ehris-pds-personal-row"><dt>SEX AT BIRTH</dt><dd>{{ val(personalInfo?.gender) }}</dd></div>
+                        <div class="ehris-pds-personal-row"><dt>GENDER</dt><dd>{{ val(personalInfo?.gender) }}</dd></div>
                         <div class="ehris-pds-personal-row"><dt>CIVIL STATUS</dt><dd>{{ val(personalInfo?.civil_stat) }}</dd></div>
                         <div class="ehris-pds-personal-row"><dt>HEIGHT (m)</dt><dd>{{ val(personalInfo?.height) }}</dd></div>
                         <div class="ehris-pds-personal-row"><dt>WEIGHT (kg)</dt><dd>{{ val(personalInfo?.weight) }}</dd></div>
