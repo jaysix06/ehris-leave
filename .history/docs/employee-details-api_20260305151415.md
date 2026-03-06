@@ -1,7 +1,6 @@
 # Employee Details API
 
-This API provides **read-only employee user details** from `tbl_user` using an API key.
-Only `GET` endpoints are exposed.
+This API provides **read-only employee details** using an API key.
 
 ## Base URLs
 
@@ -27,12 +26,6 @@ After changing `.env`, run:
 ```bash
 php artisan config:clear
 ```
-
-## Endpoint Rules
-
-- Authentication: `X-API-KEY` header is required
-- Methods allowed: `GET` only
-- Rate limit: `60` requests per minute per IP
 
 ## Endpoints
 
@@ -79,7 +72,7 @@ php artisan config:clear
 - **Path param:**
   - `hrid` (number) - employee HR ID
 
-## Responses
+## Response
 
 ### 200 OK
 
@@ -134,7 +127,7 @@ curl --request GET "http://127.0.0.1:8000/api/employee-details" \
 ```bash
 curl --request GET "http://127.0.0.1:8000/api/employee-details/1001001" \
   --header "Accept: application/json" \
-  --header "X-API-KEY: your-shared-api-key"
+  --header "X-API-KEY: 1q2w3e4r5t"
 ```
 
 ## Postman Quick Setup

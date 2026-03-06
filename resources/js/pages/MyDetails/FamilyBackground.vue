@@ -119,6 +119,10 @@ function familyName(item: Record<string, unknown>): string {
     return parts.map(String).join(' ').trim();
 }
 
+function relationOf(item: Record<string, unknown>): string {
+    return val(item.relationship).toLowerCase();
+}
+
 function buildFamilyPayload(): Record<string, unknown>[] {
     const out: Record<string, unknown>[] = [];
     const s = spouse.value;
@@ -238,8 +242,30 @@ watch(() => props.family, (next) => {
     }
 }, { immediate: true });
 
+const familyRows = computed(() => props.family ?? []);
+const spouseEntry = computed<Record<string, unknown> | null>(() => {
+    return familyRows.value.find((item) => relationOf(item) === 'spouse') ?? null;
+});
+const childrenEntries = computed<Record<string, unknown>[]>(() => {
+    return familyRows.value.filter((item) => {
+        const rel = relationOf(item);
+        return rel === 'child' || rel === 'children';
+    });
+});
+const fatherEntry = computed<Record<string, unknown> | null>(() => {
+    return familyRows.value.find((item) => relationOf(item) === 'father') ?? null;
+});
+const motherEntry = computed<Record<string, unknown> | null>(() => {
+    return familyRows.value.find((item) => relationOf(item) === 'mother') ?? null;
+});
+
 const canEdit = computed(() => Boolean(props.familyUpdateUrl));
-const hasFamily = computed(() => props.family && props.family.length > 0);
+const hasFamily = computed(() => Boolean(
+    spouseEntry.value
+    || childrenEntries.value.length > 0
+    || fatherEntry.value
+    || motherEntry.value
+));
 
 function displayVal(v: unknown): string {
     if (v == null || v === '') return '—';
@@ -262,6 +288,8 @@ onMounted(() => {
                 type="button"
                 class="ehris-btn-grade-subject"
                 aria-label="Edit family information"
+                :disabled="!canEdit"
+                @click="openEdit"
             >
                 <Pencil class="size-4" />
                 <span>Edit</span>
@@ -272,53 +300,60 @@ onMounted(() => {
         <template v-if="!isEditing">
             <template v-if="hasFamily">
                 <div class="ehris-pds-family-form ehris-pds-family-view">
+                    <div class="ehris-pds-family-view-grid">
                     <!-- 22. Spouse -->
-                    <div v-if="family && family.some((f) => String(f.relationship || '').toLowerCase() === 'spouse')" class="ehris-pds-section">
-                        <div class="ehris-pds-section-title">22. SPOUSE'S SURNAME</div>
+                    <div v-if="spouseEntry" class="ehris-pds-section ehris-pds-section--full">
+                        <div class="ehris-pds-section-title">
+                            <span class="ehris-pds-section-no">22.</span>
+                            <span>SPOUSE DETAILS</span>
+                        </div>
                         <template>
                             <div class="ehris-pds-row">
                                 <div class="ehris-pds-label">SPOUSE'S SURNAME</div>
-                                <div class="ehris-pds-value">{{ displayVal((family || []).find((f) => String(f.relationship || '').toLowerCase() === 'spouse')?.lastname) }}</div>
+                                <div class="ehris-pds-value">{{ displayVal(spouseEntry.lastname) }}</div>
                             </div>
                             <div class="ehris-pds-row">
                                 <div class="ehris-pds-label">FIRST NAME</div>
                                 <div class="ehris-pds-value ehris-pds-value-group">
-                                    {{ displayVal((family || []).find((f) => String(f.relationship || '').toLowerCase() === 'spouse')?.firstname) }}
+                                    {{ displayVal(spouseEntry.firstname) }}
                                     <span class="ehris-pds-label-inline">NAME EXTENSION (JR., SR.)</span>
-                                    {{ displayVal((family || []).find((f) => String(f.relationship || '').toLowerCase() === 'spouse')?.extension) }}
+                                    {{ displayVal(spouseEntry.extension) }}
                                 </div>
                             </div>
                             <div class="ehris-pds-row">
                                 <div class="ehris-pds-label">MIDDLE NAME</div>
-                                <div class="ehris-pds-value">{{ displayVal((family || []).find((f) => String(f.relationship || '').toLowerCase() === 'spouse')?.middlename) }}</div>
+                                <div class="ehris-pds-value">{{ displayVal(spouseEntry.middlename) }}</div>
                             </div>
                             <div class="ehris-pds-row">
                                 <div class="ehris-pds-label">OCCUPATION</div>
-                                <div class="ehris-pds-value">{{ displayVal((family || []).find((f) => String(f.relationship || '').toLowerCase() === 'spouse')?.occupation) }}</div>
+                                <div class="ehris-pds-value">{{ displayVal(spouseEntry.occupation) }}</div>
                             </div>
                             <div class="ehris-pds-row">
                                 <div class="ehris-pds-label">EMPLOYER/BUSINESS NAME</div>
-                                <div class="ehris-pds-value">{{ displayVal((family || []).find((f) => String(f.relationship || '').toLowerCase() === 'spouse')?.employer_name) }}</div>
+                                <div class="ehris-pds-value">{{ displayVal(spouseEntry.employer_name) }}</div>
                             </div>
                             <div class="ehris-pds-row">
                                 <div class="ehris-pds-label">BUSINESS ADDRESS</div>
-                                <div class="ehris-pds-value">{{ displayVal((family || []).find((f) => String(f.relationship || '').toLowerCase() === 'spouse')?.business_add) }}</div>
+                                <div class="ehris-pds-value">{{ displayVal(spouseEntry.business_add) }}</div>
                             </div>
                             <div class="ehris-pds-row">
                                 <div class="ehris-pds-label">TELEPHONE NO.</div>
-                                <div class="ehris-pds-value">{{ displayVal((family || []).find((f) => String(f.relationship || '').toLowerCase() === 'spouse')?.tel_num) }}</div>
+                                <div class="ehris-pds-value">{{ displayVal(spouseEntry.tel_num) }}</div>
                             </div>
                         </template>
                     </div>
 
                     <!-- 23. Children -->
-                    <div v-if="family && family.filter((f) => String(f.relationship || '').toLowerCase() === 'child').length" class="ehris-pds-section">
+                    <div v-if="childrenEntries.length > 0" class="ehris-pds-section ehris-pds-section--full">
                         <div class="ehris-pds-section-title ehris-pds-section-title-cols">
-                            <span>23. NAME OF CHILDREN (Write full name and list all)</span>
+                            <span class="ehris-pds-section-title-main">
+                                <span class="ehris-pds-section-no">23.</span>
+                                <span>NAME OF CHILDREN (Write full name and list all)</span>
+                            </span>
                             <span>DATE OF BIRTH (dd/mm/yyyy)</span>
                         </div>
                         <div
-                            v-for="(item, i) in (family || []).filter((f) => String(f.relationship || '').toLowerCase() === 'child')"
+                            v-for="(item, i) in childrenEntries"
                             :key="i"
                             class="ehris-pds-row ehris-pds-row-children"
                         >
@@ -328,41 +363,48 @@ onMounted(() => {
                     </div>
 
                     <!-- 24. Father -->
-                    <div v-if="family && family.find((f) => String(f.relationship || '').toLowerCase() === 'father')" class="ehris-pds-section">
-                        <div class="ehris-pds-section-title">24. FATHER'S SURNAME</div>
+                    <div v-if="fatherEntry" class="ehris-pds-section">
+                        <div class="ehris-pds-section-title">
+                            <span class="ehris-pds-section-no">24.</span>
+                            <span>FATHER'S DETAILS</span>
+                        </div>
                         <div class="ehris-pds-row">
                             <div class="ehris-pds-label">FATHER'S SURNAME</div>
-                            <div class="ehris-pds-value">{{ displayVal((family || []).find((f) => String(f.relationship || '').toLowerCase() === 'father')?.lastname) }}</div>
+                            <div class="ehris-pds-value">{{ displayVal(fatherEntry.lastname) }}</div>
                         </div>
                         <div class="ehris-pds-row">
                             <div class="ehris-pds-label">FIRST NAME</div>
                             <div class="ehris-pds-value ehris-pds-value-group">
-                                {{ displayVal((family || []).find((f) => String(f.relationship || '').toLowerCase() === 'father')?.firstname) }}
+                                {{ displayVal(fatherEntry.firstname) }}
                                 <span class="ehris-pds-label-inline">NAME EXTENSION (JR., SR.)</span>
-                                {{ displayVal((family || []).find((f) => String(f.relationship || '').toLowerCase() === 'father')?.extension) }}
+                                {{ displayVal(fatherEntry.extension) }}
                             </div>
                         </div>
                         <div class="ehris-pds-row">
                             <div class="ehris-pds-label">MIDDLE NAME</div>
-                            <div class="ehris-pds-value">{{ displayVal((family || []).find((f) => String(f.relationship || '').toLowerCase() === 'father')?.middlename) }}</div>
+                            <div class="ehris-pds-value">{{ displayVal(fatherEntry.middlename) }}</div>
                         </div>
                     </div>
 
                     <!-- 25. Mother -->
-                    <div v-if="family && family.find((f) => String(f.relationship || '').toLowerCase() === 'mother')" class="ehris-pds-section">
-                        <div class="ehris-pds-section-title">25. MOTHER'S MAIDEN NAME</div>
+                    <div v-if="motherEntry" class="ehris-pds-section">
+                        <div class="ehris-pds-section-title">
+                            <span class="ehris-pds-section-no">25.</span>
+                            <span>MOTHER'S MAIDEN NAME</span>
+                        </div>
                         <div class="ehris-pds-row">
                             <div class="ehris-pds-label">SURNAME</div>
-                            <div class="ehris-pds-value">{{ displayVal((family || []).find((f) => String(f.relationship || '').toLowerCase() === 'mother')?.lastname) }}</div>
+                            <div class="ehris-pds-value">{{ displayVal(motherEntry.lastname) }}</div>
                         </div>
                         <div class="ehris-pds-row">
                             <div class="ehris-pds-label">FIRST NAME</div>
-                            <div class="ehris-pds-value">{{ displayVal((family || []).find((f) => String(f.relationship || '').toLowerCase() === 'mother')?.firstname) }}</div>
+                            <div class="ehris-pds-value">{{ displayVal(motherEntry.firstname) }}</div>
                         </div>
                         <div class="ehris-pds-row">
                             <div class="ehris-pds-label">MIDDLE NAME</div>
-                            <div class="ehris-pds-value">{{ displayVal((family || []).find((f) => String(f.relationship || '').toLowerCase() === 'mother')?.middlename) }}</div>
+                            <div class="ehris-pds-value">{{ displayVal(motherEntry.middlename) }}</div>
                         </div>
+                    </div>
                     </div>
                 </div>
             </template>
@@ -555,10 +597,22 @@ onMounted(() => {
     width: 100%;
     font-size: 0.875rem;
 }
+.ehris-pds-family-view-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+    align-items: start;
+}
 .ehris-pds-section {
     margin-bottom: 1.25rem;
 }
+.ehris-pds-section--full {
+    grid-column: 1 / -1;
+}
 .ehris-pds-section-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
     background: hsl(var(--muted));
     color: hsl(var(--muted-foreground));
     font-weight: 600;
@@ -566,9 +620,19 @@ onMounted(() => {
     border: 1px solid hsl(var(--border));
     border-bottom: none;
 }
+.ehris-pds-section-no {
+    width: 2.25rem;
+    text-align: right;
+    flex: 0 0 2.25rem;
+}
 .ehris-pds-section-title-cols {
     display: grid;
     grid-template-columns: 1fr 140px;
+    gap: 0.5rem;
+}
+.ehris-pds-section-title-main {
+    display: flex;
+    align-items: center;
     gap: 0.5rem;
 }
 .ehris-pds-row {
@@ -675,6 +739,11 @@ onMounted(() => {
     color: hsl(var(--destructive));
     margin-top: 1rem;
     margin-bottom: 0.5rem;
+}
+@media (max-width: 960px) {
+    .ehris-pds-family-view-grid {
+        grid-template-columns: 1fr;
+    }
 }
 @media (max-width: 640px) {
     .ehris-pds-row {

@@ -3,9 +3,8 @@ import { Head, router, usePage } from '@inertiajs/vue3';
 import { echo } from '@laravel/echo-vue';
 import { Download, User } from 'lucide-vue-next';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import AppLayout from '@/layouts/AppLayout.vue';
-import type { BreadcrumbItem } from '@/types';
 import { useSidebar } from '@/components/ui/sidebar/utils';
+import AppLayout from '@/layouts/AppLayout.vue';
 import EducationBackground from '@/pages/MyDetails/EducationBackground.vue';
 import Eligibility from '@/pages/MyDetails/Eligibility.vue';
 import FamilyBackground from '@/pages/MyDetails/FamilyBackground.vue';
@@ -15,6 +14,7 @@ import PersonalInfo from '@/pages/MyDetails/PersonalInfo.vue';
 import Training from '@/pages/MyDetails/Training.vue';
 import VoluntaryWork from '@/pages/MyDetails/VoluntaryWork.vue';
 import WorkExperience from '@/pages/MyDetails/WorkExperience.vue';
+import type { BreadcrumbItem } from '@/types';
 
 const pageTitle = 'Employee';
 
@@ -97,7 +97,7 @@ const authUser = computed(() => page.props.auth.user);
 let sidebarContext: ReturnType<typeof useSidebar> | null = null;
 try {
     sidebarContext = useSidebar();
-} catch (error) {
+} catch {
     console.debug('[MyDetails] Sidebar context not available');
 }
 
