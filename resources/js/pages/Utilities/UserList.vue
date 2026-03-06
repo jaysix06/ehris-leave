@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { Head } from '@inertiajs/vue3';
-import { computed, onBeforeUnmount, onMounted, reactive } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import utilitiesRoutes from '@/routes/utilities';
 import type { BreadcrumbItem } from '@/types';
 import { Button } from '@/components/ui/button';
+import { DataTable, type DataTableColumn } from '@/components/DataTable';
 import {
     Dialog,
     DialogContent,
@@ -46,56 +47,61 @@ type UserRow = {
     department_id: number | null;
 };
 
-type PaginatedResponse<T> = {
-    data: T[];
-    current_page: number;
-    last_page: number;
-    per_page: number;
-    total: number;
-    from: number | null;
-    to: number | null;
-    links: Array<{ url: string | null; label: string; active: boolean }>;
-};
-
 type DepartmentOption = {
     id: number;
     name: string;
 };
 
+const dataTableWrapperRef = ref<HTMLElement | null>(null);
+const refreshTrigger = ref(0);
+
 const state = reactive<{
-    table: PaginatedResponse<UserRow> | null;
-    isLoading: boolean;
-    search: string;
-    perPage: number;
-    page: number;
     error: string | null;
     statusMessage: string | null;
     departments: DepartmentOption[];
     isDepartmentsLoading: boolean;
+    isActionLoading: boolean;
 }>({
-    table: null,
-    isLoading: false,
-    search: '',
-    perPage: 10,
-    page: 1,
     error: null,
     statusMessage: null,
     departments: [],
     isDepartmentsLoading: false,
+    isActionLoading: false,
 });
 
-const hasData = computed(() => (state.table?.data?.length ?? 0) > 0);
+const getCookieValue = (name: string): string => {
+    const all = typeof document !== 'undefined' ? document.cookie : '';
+    const parts = all.split(';').map((p) => p.trim());
+    const hit = parts.find((p) => p.startsWith(`${name}=`));
+    if (!hit) return '';
+    return hit.substring(name.length + 1);
+};
 
-const apiBase = computed(() => {
-    const base = (utilitiesRoutes?.userList?.api?.() as { url: string } | undefined)?.url;
-    return base ?? '/api/utilities/users';
-});
-
-const departmentsApiUrl = computed(() => '/api/utilities/departments');
-
-const csrfToken = (): string => {
+const getCsrfToken = (): string => {
     const meta = document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement | null;
-    return meta?.content ?? '';
+    if (meta?.content) return meta.content;
+
+    // Laravel sets XSRF-TOKEN cookie; it is URL-encoded
+    const cookie = getCookieValue('XSRF-TOKEN');
+    if (!cookie) return '';
+    try {
+        return decodeURIComponent(cookie);
+    } catch {
+        return cookie;
+    }
+};
+
+const getStatusUpdateUrl = (userId: number): string => {
+    const base = (utilitiesRoutes?.userList?.updateStatus?.(userId) as { url: string } | undefined)?.url;
+    if (base) {
+        try {
+            const u = new URL(base, window.location.origin);
+            return u.toString();
+        } catch {
+            return `${window.location.origin}/api/utilities/users/${userId}/status`;
+        }
+    }
+    return `${window.location.origin}/api/utilities/users/${userId}/status`;
 };
 
 const normalizeNullableText = (value: unknown): string => {
@@ -109,76 +115,6 @@ const toNullIfBlank = (value: string): string | null => {
     return trimmed === '' ? null : trimmed;
 };
 
-const fetchUsers = async (pageUrl?: string | null) => {
-    state.isLoading = true;
-    state.error = null;
-
-    try {
-        let url: string;
-
-        if (pageUrl) {
-            const tmp = new URL(pageUrl, window.location.origin);
-            tmp.pathname = apiBase.value;
-            state.page = Number(tmp.searchParams.get('page') ?? '1') || 1;
-            url = tmp.toString();
-        } else {
-            const params = new URLSearchParams();
-            if (state.search.trim() !== '') {
-                params.append('search', state.search.trim());
-            }
-            params.append('per_page', String(state.perPage));
-            params.append('page', String(state.page));
-            url = `${apiBase.value}?${params.toString()}`;
-        }
-
-        const response = await fetch(url, {
-            method: 'GET',
-            headers: {
-                Accept: 'application/json',
-                'X-Requested-With': 'XMLHttpRequest',
-            },
-            credentials: 'same-origin',
-        });
-
-        if (!response.ok) {
-            throw new Error(`Failed to load users (HTTP ${response.status})`);
-        }
-
-        const data = (await response.json()) as PaginatedResponse<UserRow>;
-        state.table = data;
-    } catch (error: unknown) {
-        console.error(error);
-        state.error = 'Unable to load users. Please try again.';
-        void Swal.fire({
-            icon: 'error',
-            title: 'Failed to load users',
-            text: state.error ?? undefined,
-        });
-    } finally {
-        state.isLoading = false;
-    }
-};
-
-const refresh = () => fetchUsers();
-
-const onSearch = () => {
-    state.page = 1;
-    fetchUsers();
-};
-
-const onChangePerPage = (perPage: number) => {
-    state.perPage = perPage;
-    state.page = 1;
-    fetchUsers();
-};
-
-const onChangePage = (link: { url: string | null; label: string; active: boolean }) => {
-    if (!link.url || !state.table || link.active) return;
-    const cleaned = link.label.replace(/&laquo;|&raquo;|&lsaquo;|&rsaquo;/g, '').trim().toLowerCase();
-    if (cleaned === '') return;
-    fetchUsers(link.url);
-};
-
 const buildNameFromParts = (row: {
     firstname: string | null;
     middlename: string | null;
@@ -190,20 +126,78 @@ const buildNameFromParts = (row: {
     const parts = [row.firstname, row.middlename, row.lastname, row.extname]
         .filter((p) => typeof p === 'string' && p.trim() !== '')
         .map((p) => (p ?? '').trim());
-    if (parts.length > 0) {
-        return parts.join(' ');
-    }
-    if (row.fullname && row.fullname.trim() !== '') {
-        return row.fullname;
-    }
+    if (parts.length > 0) return parts.join(' ');
+    if (row.fullname && row.fullname.trim() !== '') return row.fullname;
     return row.email ?? '';
 };
 
 const displayName = (row: UserRow): string => buildNameFromParts(row);
 
-const statusLabel = (row: UserRow): string => (row.active ? 'Active' : 'Inactive');
-const statusClass = (row: UserRow): string =>
-    row.active ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-700 border-slate-200';
+const getAjaxParams = computed(() => () => ({
+    _refresh: String(refreshTrigger.value),
+}));
+
+const userColumns: DataTableColumn[] = [
+    {
+        key: 'no',
+        label: 'No.',
+        data: null,
+        orderable: false,
+        searchable: false,
+        width: '4rem',
+        thClass: 'text-center',
+        tdClass: 'text-center',
+        render: (_data: unknown, type: string, _row: unknown, meta: { row?: number; settings?: { _iDisplayStart?: number } }) => {
+            if (type !== 'display' && type !== 'type') return '';
+            const start = meta?.settings?._iDisplayStart ?? 0;
+            const row = meta?.row ?? 0;
+            return String(start + row + 1);
+        },
+    },
+    { key: 'hrid', label: 'HRID', width: '6rem', data: 'hrid', thClass: 'text-center', tdClass: 'text-center' },
+    { key: 'email', label: 'Email', width: '12rem', data: 'email' },
+    { key: 'name', label: 'Name', width: '14rem', data: 'name' },
+    { key: 'role', label: 'Role', width: '8rem', data: 'role' },
+    { key: 'office', label: 'Office/School', width: '12rem', data: 'office' },
+    {
+        key: 'active',
+        label: 'Status',
+        width: '8rem',
+        data: 'active',
+        thClass: 'text-center',
+        tdClass: 'text-center',
+        render: (data: unknown) => {
+            const active = data === true || data === '1';
+            const cls = active ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-700 border-slate-200';
+            const label = active ? 'Active' : 'Inactive';
+            return `<span class="inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${cls}">${label}</span>`;
+        },
+    },
+    {
+        key: 'actions',
+        label: 'Actions',
+        data: null,
+        orderable: false,
+        searchable: false,
+        width: '12rem',
+        thClass: 'text-center',
+        tdClass: 'text-center',
+        render: (_data: unknown, type: string, row: { _raw?: UserRow } & Record<string, unknown>) => {
+            if (type !== 'display' && type !== 'type') return '';
+            const r = (row._raw || row) as UserRow;
+            const id = r.id;
+            const active = r.active;
+            const esc = (s: string | number) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+            return `
+                <div class="ehris-user-list-actions flex flex-wrap items-center justify-end gap-1">
+                    <button type="button" class="ehris-btn ehris-btn-edit inline-flex size-8 items-center justify-center rounded-md border border-input bg-background hover:bg-muted" data-user-list-action="edit" data-user-id="${esc(id)}" title="Edit"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></button>
+                    <button type="button" class="ehris-btn ehris-btn-refresh inline-flex size-8 items-center justify-center rounded-md border border-input bg-background hover:bg-muted" data-user-list-action="refresh" data-user-id="${esc(id)}" title="Refresh row"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg></button>
+                    ${!active ? `<button type="button" class="ehris-btn ehris-btn-activate inline-flex size-8 items-center justify-center rounded-md bg-emerald-600 text-white hover:bg-emerald-700" data-user-list-action="activate" data-user-id="${esc(id)}" title="Activate"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg></button>` : `<button type="button" class="ehris-btn ehris-btn-deactivate inline-flex size-8 items-center justify-center rounded-md bg-amber-500 text-white hover:bg-amber-600" data-user-list-action="deactivate" data-user-id="${esc(id)}" title="Deactivate"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>`}
+                    <button type="button" class="ehris-btn ehris-btn-delete inline-flex size-8 items-center justify-center rounded-md border border-destructive/50 text-destructive hover:bg-destructive hover:text-destructive-foreground" data-user-list-action="delete" data-user-id="${esc(id)}" title="Delete"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg></button>
+                </div>`;
+        },
+    },
+];
 
 const editState = reactive<{
     isOpen: boolean;
@@ -254,6 +248,30 @@ const openEditModal = (row: UserRow) => {
     editState.isOpen = true;
 };
 
+const fetchUserForEdit = async (userId: number) => {
+    state.isActionLoading = true;
+    state.error = null;
+    try {
+        const url =
+            (utilitiesRoutes?.userList?.show?.(userId) as { url: string } | undefined)?.url ??
+            `${window.location.origin}/api/utilities/users/${userId}`;
+        const res = await fetch(url, {
+            method: 'GET',
+            headers: { Accept: 'application/json' },
+            credentials: 'same-origin',
+        });
+        if (!res.ok) throw new Error(`Failed to load user (HTTP ${res.status})`);
+        const row = (await res.json()) as UserRow;
+        openEditModal(row);
+    } catch (e) {
+        console.error(e);
+        state.error = 'Could not load user details.';
+        void Swal.fire({ icon: 'error', title: 'Error', text: state.error });
+    } finally {
+        state.isActionLoading = false;
+    }
+};
+
 const closeEditModal = () => {
     if (editState.isSaving) return;
     editState.isOpen = false;
@@ -261,284 +279,201 @@ const closeEditModal = () => {
 
 const saveUserEdits = async () => {
     if (!editState.userId) return;
-
     editState.isSaving = true;
     state.error = null;
     state.statusMessage = null;
-
     try {
         const url =
             (utilitiesRoutes?.userList?.update?.(editState.userId) as { url: string } | undefined)?.url ??
-            `/api/utilities/users/${editState.userId}`;
-
+            `${window.location.origin}/api/utilities/users/${editState.userId}`;
         const payload = {
             email: toNullIfBlank(editState.form.email),
             lastname: toNullIfBlank(editState.form.lastname),
             firstname: toNullIfBlank(editState.form.firstname),
             middlename: toNullIfBlank(editState.form.middlename),
             extname: toNullIfBlank(editState.form.extname),
-            fullname: toNullIfBlank(
-                buildNameFromParts({
-                    firstname: editState.form.firstname,
-                    middlename: editState.form.middlename,
-                    lastname: editState.form.lastname,
-                    extname: editState.form.extname,
-                    fullname: null,
-                    email: null,
-                }),
-            ),
+            fullname: toNullIfBlank(buildNameFromParts({
+                firstname: editState.form.firstname,
+                middlename: editState.form.middlename,
+                lastname: editState.form.lastname,
+                extname: editState.form.extname,
+                fullname: null,
+                email: null,
+            })),
             role: toNullIfBlank(editState.form.role),
             job_title: toNullIfBlank(editState.form.job_title),
             department_id: editState.form.department_id,
         };
-
         const response = await fetch(url, {
             method: 'PATCH',
             headers: {
                 Accept: 'application/json',
                 'Content-Type': 'application/json',
                 'X-Requested-With': 'XMLHttpRequest',
-                'X-CSRF-TOKEN': csrfToken(),
+                'X-CSRF-TOKEN': getCsrfToken(),
+                'X-XSRF-TOKEN': getCsrfToken(),
             },
             credentials: 'same-origin',
             body: JSON.stringify(payload),
         });
-
         if (!response.ok) {
-            const maybeJson = (await response.json().catch(() => null)) as unknown;
-            const message =
-                maybeJson &&
-                typeof maybeJson === 'object' &&
-                'message' in maybeJson &&
-                typeof (maybeJson as { message?: unknown }).message === 'string'
-                    ? (maybeJson as { message: string }).message
-                    : `Failed to update user (HTTP ${response.status})`;
-            throw new Error(message);
+            const maybeJson = (await response.json().catch(() => null)) as { message?: string } | null;
+            throw new Error(maybeJson?.message ?? `Failed to update user (HTTP ${response.status})`);
         }
-
-        const data = (await response.json()) as Partial<UserRow> & { id: number; office?: string | null; hrid?: number | null };
-
-        if (state.table) {
-            const officeFromDept =
-                state.departments.find((d) => d.id === (data.department_id ?? editState.form.department_id ?? -1))?.name ?? null;
-
-            state.table.data = state.table.data.map((u) =>
-                u.id === data.id
-                    ? ({
-                          ...u,
-                          hrid: data.hrid ?? u.hrid,
-                          email: data.email ?? u.email,
-                          lastname: data.lastname ?? u.lastname,
-                          firstname: data.firstname ?? u.firstname,
-                          middlename: data.middlename ?? u.middlename,
-                          extname: data.extname ?? u.extname,
-                          fullname: data.fullname ?? u.fullname,
-                          job_title: data.job_title ?? u.job_title,
-                          role: data.role ?? u.role,
-                          department_id: data.department_id ?? u.department_id,
-                          office: data.office ?? officeFromDept ?? u.office,
-                      } as UserRow)
-                    : u,
-            );
-        }
-
         editState.isOpen = false;
         state.statusMessage = 'User details updated successfully.';
-        void Swal.fire({
-            icon: 'success',
-            title: 'User updated',
-            text: 'User details were updated successfully.',
-        });
+        refreshTrigger.value += 1;
+        void Swal.fire({ icon: 'success', title: 'User updated', text: 'User details were updated successfully.' });
     } catch (error: unknown) {
         console.error(error);
-        state.error = error instanceof Error ? error.message : 'Unable to update user details. Please try again.';
-        void Swal.fire({
-            icon: 'error',
-            title: 'Update failed',
-            text: state.error ?? undefined,
-        });
+        state.error = error instanceof Error ? error.message : 'Unable to update user details.';
+        void Swal.fire({ icon: 'error', title: 'Update failed', text: state.error ?? undefined });
     } finally {
         editState.isSaving = false;
     }
 };
 
-const deleteUser = async (row: UserRow) => {
+const deleteUser = async (userId: number, displayNameLabel: string) => {
     const result = await Swal.fire({
         icon: 'warning',
         title: 'Delete user?',
-        text: `${displayName(row)}${row.email ? ` (${row.email})` : ''}`,
+        text: displayNameLabel,
         showCancelButton: true,
         confirmButtonText: 'Yes, delete',
         cancelButtonText: 'Cancel',
         confirmButtonColor: '#dc2626',
     });
     if (!result.isConfirmed) return;
-
-    state.isLoading = true;
+    state.isActionLoading = true;
     state.error = null;
     state.statusMessage = null;
-
     try {
         const url =
-            (utilitiesRoutes?.userList?.destroy?.(row.id) as { url: string } | undefined)?.url ??
-            `/api/utilities/users/${row.id}`;
-
+            (utilitiesRoutes?.userList?.destroy?.(userId) as { url: string } | undefined)?.url ??
+            `${window.location.origin}/api/utilities/users/${userId}`;
         const response = await fetch(url, {
             method: 'DELETE',
             headers: {
                 Accept: 'application/json',
                 'X-Requested-With': 'XMLHttpRequest',
-                'X-CSRF-TOKEN': csrfToken(),
+                'X-CSRF-TOKEN': getCsrfToken(),
+                'X-XSRF-TOKEN': getCsrfToken(),
             },
             credentials: 'same-origin',
         });
-
-        if (!response.ok) {
-            throw new Error(`Failed to delete user (HTTP ${response.status})`);
-        }
-
-        // After deletion, refresh the table to keep pagination accurate.
-        await fetchUsers();
+        if (!response.ok) throw new Error(`Failed to delete user (HTTP ${response.status})`);
         state.statusMessage = 'User deleted successfully.';
-        void Swal.fire({
-            icon: 'success',
-            title: 'User deleted',
-            text: 'The user has been deleted.',
-        });
+        refreshTrigger.value += 1;
+        void Swal.fire({ icon: 'success', title: 'User deleted', text: 'The user has been deleted.' });
     } catch (error: unknown) {
         console.error(error);
-        state.error = 'Unable to delete user. Please try again.';
-        void Swal.fire({
-            icon: 'error',
-            title: 'Delete failed',
-            text: state.error ?? undefined,
-        });
+        state.error = 'Unable to delete user.';
+        void Swal.fire({ icon: 'error', title: 'Delete failed', text: state.error });
     } finally {
-        state.isLoading = false;
+        state.isActionLoading = false;
     }
 };
 
-const updateStatus = async (row: UserRow, active: boolean) => {
-    if (row.active === active) return;
-
-    const action = active ? 'activate' : 'deactivate';
+const updateStatus = async (userId: number, active: boolean, displayNameLabel: string) => {
     const result = await Swal.fire({
         icon: 'question',
         title: `${active ? 'Activate' : 'Deactivate'} user?`,
-        text: displayName(row),
+        text: displayNameLabel,
         showCancelButton: true,
         confirmButtonText: active ? 'Activate' : 'Deactivate',
         cancelButtonText: 'Cancel',
         confirmButtonColor: active ? '#059669' : '#f59e0b',
     });
     if (!result.isConfirmed) return;
-
-    state.isLoading = true;
+    state.isActionLoading = true;
     state.error = null;
     state.statusMessage = null;
-
     try {
-        const url =
-            (utilitiesRoutes?.userList?.updateStatus?.(row.id) as { url: string } | undefined)?.url ??
-            `/api/utilities/users/${row.id}/status`;
-
+        const url = getStatusUpdateUrl(userId);
         const response = await fetch(url, {
             method: 'PATCH',
             headers: {
                 Accept: 'application/json',
                 'Content-Type': 'application/json',
                 'X-Requested-With': 'XMLHttpRequest',
-                'X-CSRF-TOKEN': csrfToken(),
+                'X-CSRF-TOKEN': getCsrfToken(),
+                'X-XSRF-TOKEN': getCsrfToken(),
             },
             credentials: 'same-origin',
             body: JSON.stringify({ active }),
         });
-
         if (!response.ok) {
             throw new Error(`Failed to update status (HTTP ${response.status})`);
         }
-
-        const data = (await response.json()) as { id: number; active: boolean; hrid?: number | null };
-
-        if (state.table) {
-            state.table.data = state.table.data.map((u) =>
-                u.id === data.id
-                    ? ({
-                          ...u,
-                          active: data.active,
-                          hrid: data.hrid ?? u.hrid,
-                      } as UserRow)
-                    : u,
-            );
-        }
-
         state.statusMessage = active ? 'User activated successfully.' : 'User deactivated successfully.';
-        void Swal.fire({
-            icon: 'success',
-            title: active ? 'User activated' : 'User deactivated',
-            text: displayName(row),
-        });
+        refreshTrigger.value += 1;
+        void Swal.fire({ icon: 'success', title: active ? 'User activated' : 'User deactivated', text: displayNameLabel });
     } catch (error: unknown) {
         console.error(error);
         state.error = 'Unable to update user status. Please try again.';
-        void Swal.fire({
-            icon: 'error',
-            title: 'Status update failed',
-            text: state.error ?? undefined,
-        });
+        void Swal.fire({ icon: 'error', title: 'Status update failed', text: state.error ?? undefined });
     } finally {
-        state.isLoading = false;
+        state.isActionLoading = false;
+    }
+};
+
+const refreshTable = () => {
+    refreshTrigger.value += 1;
+};
+
+const handleTableAction = (e: Event) => {
+    const target = e.target as HTMLElement;
+    const btn = target.closest?.('[data-user-list-action]') as HTMLElement | null;
+    if (!btn || state.isActionLoading) return;
+    const action = btn.getAttribute('data-user-list-action');
+    const userIdStr = btn.getAttribute('data-user-id');
+    if (!action || !userIdStr) return;
+    const userId = Number(userIdStr);
+    if (!Number.isFinite(userId)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (action === 'edit') {
+        void fetchUserForEdit(userId);
+    } else if (action === 'refresh') {
+        refreshTable();
+    } else if (action === 'activate') {
+        void updateStatus(userId, true, `User #${userId}`);
+    } else if (action === 'deactivate') {
+        void updateStatus(userId, false, `User #${userId}`);
+    } else if (action === 'delete') {
+        void deleteUser(userId, `User #${userId}`);
     }
 };
 
 const fetchDepartments = async () => {
     if (state.isDepartmentsLoading) return;
     state.isDepartmentsLoading = true;
-
     try {
-        const response = await fetch(departmentsApiUrl.value, {
+        const response = await fetch(`${window.location.origin}/api/utilities/departments`, {
             method: 'GET',
-            headers: {
-                Accept: 'application/json',
-                'X-Requested-With': 'XMLHttpRequest',
-            },
+            headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
             credentials: 'same-origin',
         });
-
-        if (!response.ok) {
-            throw new Error(`Failed to load departments (HTTP ${response.status})`);
-        }
-
+        if (!response.ok) throw new Error(`Failed to load departments (HTTP ${response.status})`);
         const data = (await response.json()) as DepartmentOption[];
         state.departments = Array.isArray(data) ? data : [];
     } catch (error: unknown) {
         console.error(error);
-        // Non-blocking: user list still works without departments.
         state.departments = [];
     } finally {
         state.isDepartmentsLoading = false;
     }
 };
 
-let autoRefreshHandle: number | null = null;
-
 onMounted(() => {
-    fetchUsers();
     fetchDepartments();
-
-    // Lightweight "real-time" refresh: keep table in sync without manual reload.
-    autoRefreshHandle = window.setInterval(() => {
-        if (!state.isLoading) {
-            fetchUsers();
-        }
-    }, 30000); // every 30 seconds
+    nextTick(() => {
+        dataTableWrapperRef.value?.addEventListener('click', handleTableAction);
+    });
 });
 
 onBeforeUnmount(() => {
-    if (autoRefreshHandle !== null) {
-        window.clearInterval(autoRefreshHandle);
-        autoRefreshHandle = null;
-    }
+    dataTableWrapperRef.value?.removeEventListener('click', handleTableAction);
 });
 </script>
 
@@ -556,237 +491,44 @@ onBeforeUnmount(() => {
                             <span class="font-semibold">Inactive</span> until an administrator activates them.
                         </p>
                     </div>
+                    <div class="flex items-center gap-2">
+                        <TooltipProvider :delay-duration="0">
+                            <Tooltip>
+                                <TooltipTrigger as-child>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        :disabled="state.isActionLoading"
+                                        @click="refreshTable"
+                                    >
+                                        <RefreshCw class="mr-2 size-4" />
+                                        Refresh
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Reload the user list</TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                        <p v-if="state.statusMessage" class="text-sm text-emerald-600 dark:text-emerald-400">
+                            {{ state.statusMessage }}
+                        </p>
+                        <p v-if="state.error" class="text-sm text-destructive">
+                            {{ state.error }}
+                        </p>
+                    </div>
                 </header>
 
-                <section class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                    <div class="flex items-center gap-3">
-                        <label class="text-sm text-muted-foreground">Show</label>
-                        <select
-                            v-model.number="state.perPage"
-                            class="rounded-md border border-input bg-background px-2 py-1 text-sm"
-                            @change="onChangePerPage(state.perPage)"
-                        >
-                            <option :value="10">10</option>
-                            <option :value="25">25</option>
-                            <option :value="50">50</option>
-                            <option :value="100">100</option>
-                        </select>
-                        <span class="text-sm text-muted-foreground">entries</span>
-                    </div>
-
-                    <div class="flex items-center gap-2">
-                        <label class="text-sm text-muted-foreground" for="user-search">Search:</label>
-                        <input
-                            id="user-search"
-                            v-model="state.search"
-                            type="search"
-                            class="w-56 rounded-md border border-input bg-background px-3 py-1.5 text-sm"
-                            placeholder="Name, email, role, office"
-                            @keyup.enter="onSearch"
-                        />
-                        <button
-                            type="button"
-                            class="rounded-md border border-input bg-background px-3 py-1.5 text-sm"
-                            @click="onSearch"
-                        >
-                            Go
-                        </button>
-                        <button
-                            type="button"
-                            class="rounded-md border border-input bg-background px-3 py-1.5 text-sm"
-                            @click="
-                                () => {
-                                    state.search = '';
-                                    onSearch();
-                                }
-                            "
-                        >
-                            Clear
-                        </button>
-                    </div>
-                </section>
-
-                <section class="space-y-3">
-                    <div class="relative overflow-x-auto rounded-md border border-border bg-card">
-                        <TooltipProvider :delay-duration="0">
-                        <table class="min-w-full text-left text-sm">
-                            <thead class="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
-                                <tr>
-                                    <th class="px-3 py-2 border-b border-border">No.</th>
-                                    <th class="px-3 py-2 border-b border-border">HRID</th>
-                                    <th class="px-3 py-2 border-b border-border">Email</th>
-                                    <th class="px-3 py-2 border-b border-border">Name</th>
-                                    <th class="px-3 py-2 border-b border-border">Role</th>
-                                    <th class="px-3 py-2 border-b border-border">Office/School</th>
-                                    <th class="px-3 py-2 border-b border-border">Status</th>
-                                    <th class="px-3 py-2 border-b border-border text-right">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr v-if="state.isLoading && !hasData">
-                                    <td colspan="8" class="px-4 py-6 text-center text-muted-foreground">
-                                        Loading users...
-                                    </td>
-                                </tr>
-                                <tr v-else-if="!hasData">
-                                    <td colspan="8" class="px-4 py-6 text-center text-muted-foreground">
-                                        No users found.
-                                    </td>
-                                </tr>
-                                <tr
-                                    v-for="(row, index) in state.table?.data ?? []"
-                                    :key="row.id"
-                                    class="hover:bg-muted/40 transition-colors"
-                                >
-                                    <td class="px-3 py-2 border-b border-border align-middle">
-                                        {{ (state.table?.from ?? 0) + index }}
-                                    </td>
-                                    <td class="px-3 py-2 border-b border-border align-middle">
-                                        {{ row.hrid ?? '—' }}
-                                    </td>
-                                    <td class="px-3 py-2 border-b border-border align-middle">
-                                        <span class="font-medium">{{ row.email ?? '—' }}</span>
-                                    </td>
-                                    <td class="px-3 py-2 border-b border-border align-middle">
-                                        {{ displayName(row) }}
-                                        <div v-if="row.job_title" class="text-xs text-muted-foreground">
-                                            {{ row.job_title }}
-                                        </div>
-                                    </td>
-                                    <td class="px-3 py-2 border-b border-border align-middle">
-                                        {{ row.role ?? '—' }}
-                                    </td>
-                                    <td class="px-3 py-2 border-b border-border align-middle">
-                                        {{ row.office ?? '—' }}
-                                    </td>
-                                    <td class="px-3 py-2 border-b border-border align-middle">
-                                        <span
-                                            class="inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium"
-                                            :class="statusClass(row)"
-                                        >
-                                            {{ statusLabel(row) }}
-                                        </span>
-                                    </td>
-                                    <td class="px-3 py-2 border-b border-border align-middle">
-                                        <div class="flex items-center justify-end gap-2">
-                                            <Tooltip>
-                                                <TooltipTrigger as-child>
-                                                    <Button
-                                                        variant="outline"
-                                                        size="icon-sm"
-                                                        :disabled="state.isLoading"
-                                                        @click="openEditModal(row)"
-                                                    >
-                                                        <Pencil class="size-4" />
-                                                    </Button>
-                                                </TooltipTrigger>
-                                                <TooltipContent>Edit</TooltipContent>
-                                            </Tooltip>
-
-                                            <Tooltip>
-                                                <TooltipTrigger as-child>
-                                                    <Button
-                                                        variant="outline"
-                                                        size="icon-sm"
-                                                        :disabled="state.isLoading"
-                                                        @click="refresh"
-                                                    >
-                                                        <RefreshCw class="size-4" />
-                                                    </Button>
-                                                </TooltipTrigger>
-                                                <TooltipContent>Refresh</TooltipContent>
-                                            </Tooltip>
-
-                                            <Tooltip v-if="!row.active">
-                                                <TooltipTrigger as-child>
-                                                    <Button
-                                                        variant="default"
-                                                        size="icon-sm"
-                                                        class="bg-emerald-600 hover:bg-emerald-700"
-                                                        :disabled="state.isLoading"
-                                                        @click="updateStatus(row, true)"
-                                                    >
-                                                        <Check class="size-4" />
-                                                    </Button>
-                                                </TooltipTrigger>
-                                                <TooltipContent>Activate</TooltipContent>
-                                            </Tooltip>
-
-                                            <Tooltip v-else>
-                                                <TooltipTrigger as-child>
-                                                    <Button
-                                                        variant="secondary"
-                                                        size="icon-sm"
-                                                        class="bg-amber-500 text-white hover:bg-amber-600"
-                                                        :disabled="state.isLoading"
-                                                        @click="updateStatus(row, false)"
-                                                    >
-                                                        <X class="size-4" />
-                                                    </Button>
-                                                </TooltipTrigger>
-                                                <TooltipContent>Deactivate</TooltipContent>
-                                            </Tooltip>
-
-                                            <Tooltip>
-                                                <TooltipTrigger as-child>
-                                                    <Button
-                                                        variant="destructive"
-                                                        size="icon-sm"
-                                                        :disabled="state.isLoading"
-                                                        @click="deleteUser(row)"
-                                                    >
-                                                        <Trash2 class="size-4" />
-                                                    </Button>
-                                                </TooltipTrigger>
-                                                <TooltipContent>Delete</TooltipContent>
-                                            </Tooltip>
-                                        </div>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                        </TooltipProvider>
-
-                        <div
-                            v-if="state.isLoading && hasData"
-                            class="absolute inset-x-0 bottom-0 flex justify-center pb-2 text-xs text-muted-foreground"
-                        >
-                            Updating...
-                        </div>
-                    </div>
-
-                    <div
-                        v-if="state.table"
-                        class="flex flex-col gap-3 border-t border-border pt-3 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between"
-                    >
-                        <div>
-                            Showing
-                            <span class="font-semibold">{{ state.table.from ?? 0 }}</span>
-                            to
-                            <span class="font-semibold">{{ state.table.to ?? 0 }}</span>
-                            of
-                            <span class="font-semibold">{{ state.table.total }}</span>
-                            entries
-                        </div>
-
-                        <nav class="flex flex-wrap items-center gap-1">
-                            <button
-                                v-for="link in state.table.links"
-                                :key="link.label + (link.url ?? '')"
-                                type="button"
-                                class="min-w-[2.25rem] rounded-md border px-2 py-1 text-xs"
-                                :class="[
-                                    link.active
-                                        ? 'border-primary bg-primary text-primary-foreground'
-                                        : 'border-border bg-background text-foreground hover:bg-muted',
-                                    !link.url ? 'opacity-50 cursor-default' : '',
-                                ]"
-                                :disabled="!link.url || link.active || state.isLoading"
-                                @click="onChangePage(link)"
-                                v-html="link.label"
-                            />
-                        </nav>
-                    </div>
+                <section ref="dataTableWrapperRef" class="rounded-md border border-border bg-card overflow-x-auto">
+                    <DataTable
+                        :columns="userColumns"
+                        ajax-url="/api/utilities/users/datatables"
+                        :get-ajax-params="getAjaxParams"
+                        row-key="id"
+                        :loading="state.isActionLoading"
+                        empty-message="No users found."
+                        :per-page-options="[10, 25, 50, 100]"
+                        :default-order="[0, 'desc']"
+                    />
                 </section>
             </div>
         </div>
@@ -800,7 +542,7 @@ onBeforeUnmount(() => {
             <DialogHeader>
                 <DialogTitle>Edit user</DialogTitle>
                 <DialogDescription>
-                    Update the user’s details. Changes apply immediately after saving.
+                    Update the user's details. Changes apply immediately after saving.
                 </DialogDescription>
             </DialogHeader>
 
@@ -814,7 +556,6 @@ onBeforeUnmount(() => {
                         class="w-full rounded-md border border-input bg-muted px-3 py-2 text-sm text-muted-foreground"
                     />
                 </div>
-
                 <div class="space-y-1">
                     <label class="text-sm text-muted-foreground">Email</label>
                     <input
@@ -824,7 +565,6 @@ onBeforeUnmount(() => {
                         placeholder="name@example.com"
                     />
                 </div>
-
                 <div class="space-y-1">
                     <label class="text-sm text-muted-foreground">Last name</label>
                     <input
@@ -833,7 +573,6 @@ onBeforeUnmount(() => {
                         class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                     />
                 </div>
-
                 <div class="space-y-1">
                     <label class="text-sm text-muted-foreground">First name</label>
                     <input
@@ -842,7 +581,6 @@ onBeforeUnmount(() => {
                         class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                     />
                 </div>
-
                 <div class="space-y-1">
                     <label class="text-sm text-muted-foreground">Middle name</label>
                     <input
@@ -851,7 +589,6 @@ onBeforeUnmount(() => {
                         class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                     />
                 </div>
-
                 <div class="space-y-1">
                     <label class="text-sm text-muted-foreground">Extension</label>
                     <input
@@ -861,7 +598,6 @@ onBeforeUnmount(() => {
                         placeholder="Jr., Sr., III"
                     />
                 </div>
-
                 <div class="space-y-1 sm:col-span-2">
                     <label class="text-sm text-muted-foreground">Full name</label>
                     <input
@@ -880,7 +616,6 @@ onBeforeUnmount(() => {
                         class="w-full rounded-md border border-input bg-muted px-3 py-2 text-sm text-muted-foreground"
                     />
                 </div>
-
                 <div class="space-y-1">
                     <label class="text-sm text-muted-foreground">Role</label>
                     <input
@@ -889,7 +624,6 @@ onBeforeUnmount(() => {
                         class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                     />
                 </div>
-
                 <div class="space-y-1">
                     <label class="text-sm text-muted-foreground">Job title</label>
                     <input
@@ -898,7 +632,6 @@ onBeforeUnmount(() => {
                         class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                     />
                 </div>
-
                 <div class="space-y-1 sm:col-span-2">
                     <label class="text-sm text-muted-foreground">Office / School</label>
                     <select
@@ -914,12 +647,6 @@ onBeforeUnmount(() => {
                             {{ dept.name }}
                         </option>
                     </select>
-                    <p v-if="state.isDepartmentsLoading" class="text-xs text-muted-foreground">
-                        Loading offices...
-                    </p>
-                    <p v-else-if="state.departments.length === 0" class="text-xs text-muted-foreground">
-                        Offices list not available (you can still edit other fields).
-                    </p>
                 </div>
             </div>
 
@@ -934,3 +661,20 @@ onBeforeUnmount(() => {
         </DialogContent>
     </Dialog>
 </template>
+
+<style scoped>
+.ehris-user-list-actions :deep(.ehris-btn) {
+    min-width: 2rem;
+}
+
+/* Data table alignment */
+:deep(section .data-table-wrapper table.dataTable thead th.text-center),
+:deep(section .data-table-wrapper table.dataTable tbody td.text-center) {
+    text-align: center;
+}
+
+:deep(section .data-table-wrapper table.dataTable thead th),
+:deep(section .data-table-wrapper table.dataTable tbody td) {
+    vertical-align: middle;
+}
+</style>

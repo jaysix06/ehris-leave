@@ -827,6 +827,7 @@ class LeaveApplicationController extends Controller
         ];
 
         $leaveId = (int) DB::table(self::LEAVE_TABLE)->insertGetId($payload);
+        $employeeDisplayName = trim((string) ($nameSource !== '' ? $nameSource : ($authUser?->name ?? '')));
 
         LeaveRequestUpdated::dispatch(
             $leaveId > 0 ? $leaveId : null,
@@ -834,6 +835,9 @@ class LeaveApplicationController extends Controller
             $rmAssigneeHrid,
             'submitted',
             self::WORKFLOW_PENDING_RM,
+            $employeeDisplayName !== '' ? $employeeDisplayName : null,
+            'employee',
+            $hrid > 0 ? $hrid : null,
         );
 
         return back()->with('status', 'Leave application submitted.');
@@ -945,12 +949,21 @@ class LeaveApplicationController extends Controller
             ->where('leave_application_id', $id)
             ->update(array_merge($updates, ['updated_at' => $now]));
 
+        $employeeHrid = isset($leave->employee_hrid) ? (int) $leave->employee_hrid : null;
+        $employeeName = $this->resolveEmployeeName($employeeHrid);
+        $actorRole = str_contains($authRole, 'reporting manager')
+            ? 'rm'
+            : (str_contains($authRole, 'hr') ? 'hr' : (str_contains($authRole, 'sds') ? 'sds' : null));
+
         LeaveRequestUpdated::dispatch(
             isset($leave->leave_application_id) ? (int) $leave->leave_application_id : $id,
-            isset($leave->employee_hrid) ? (int) $leave->employee_hrid : null,
+            $employeeHrid,
             isset($leave->rm_assignee_hrid) ? (int) $leave->rm_assignee_hrid : null,
             $decision,
             (string) ($updates['workflow_status'] ?? $leave->workflow_status ?? ''),
+            $employeeName,
+            $actorRole,
+            $authHrid > 0 ? $authHrid : null,
         );
 
         return back();
@@ -1018,5 +1031,31 @@ class LeaveApplicationController extends Controller
         $fallbackHrid = (int) ($reportingRecord->hrid ?? 0);
 
         return $fallbackHrid > 0 ? $fallbackHrid : null;
+    }
+
+    private function resolveEmployeeName(?int $hrid): ?string
+    {
+        if ($hrid === null || $hrid <= 0 || ! Schema::hasTable('tbl_user')) {
+            return null;
+        }
+
+        $profile = User::query()
+            ->select(['fullname', 'firstname', 'middlename', 'lastname', 'extname'])
+            ->where('hrId', $hrid)
+            ->first();
+
+        $fullName = trim((string) ($profile?->fullname ?? ''));
+        if ($fullName !== '') {
+            return $fullName;
+        }
+
+        $parts = array_filter([
+            trim((string) ($profile?->firstname ?? '')),
+            trim((string) ($profile?->middlename ?? '')),
+            trim((string) ($profile?->lastname ?? '')),
+            trim((string) ($profile?->extname ?? '')),
+        ], static fn (string $part) => $part !== '');
+
+        return $parts !== [] ? implode(' ', $parts) : null;
     }
 }

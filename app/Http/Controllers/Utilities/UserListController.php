@@ -9,7 +9,9 @@ use App\Services\ActivityLogService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
@@ -34,6 +36,7 @@ class UserListController extends Controller
                 'u.userId as id',
                 'u.hrid as hrid',
                 'u.email',
+                'u.personal_email',
                 'u.lastname',
                 'u.firstname',
                 'u.middlename',
@@ -72,6 +75,125 @@ class UserListController extends Controller
     }
 
     /**
+     * API endpoint: DataTables server-side processing for User List.
+     */
+    public function datatables(Request $request)
+    {
+        $draw = (int) $request->get('draw', 1);
+        $start = (int) $request->get('start', 0);
+        $length = (int) $request->get('length', 10);
+        $searchValue = trim((string) $request->input('search.value', ''));
+        $orderColumnIndex = (int) $request->input('order.0.column', 0);
+        $orderDir = $request->input('order.0.dir', 'desc') === 'asc' ? 'asc' : 'desc';
+
+        // Default: newest users first (by userId desc)
+        $columns = ['id', 'hrid', 'email', 'name', 'role', 'office', 'active', 'actions'];
+        $orderColumn = $columns[$orderColumnIndex] ?? 'id';
+
+        $baseQuery = DB::table('tbl_user as u')
+            ->leftJoin('tbl_department as d', 'u.department_id', '=', 'd.department_id')
+            ->select([
+                'u.userId as id',
+                'u.hrid as hrid',
+                'u.email',
+                'u.personal_email',
+                'u.lastname',
+                'u.firstname',
+                'u.middlename',
+                'u.extname',
+                'u.fullname',
+                'u.job_title',
+                'u.role',
+                'u.active',
+                'u.date_created',
+                'u.department_id',
+                'd.department_name as office',
+            ]);
+
+        $totalRecords = DB::table('tbl_user')->count();
+
+        $searchCallback = function ($q) use ($searchValue) {
+            $q->where('u.email', 'like', '%'.$searchValue.'%')
+                ->orWhere('u.personal_email', 'like', '%'.$searchValue.'%')
+                ->orWhere('u.lastname', 'like', '%'.$searchValue.'%')
+                ->orWhere('u.firstname', 'like', '%'.$searchValue.'%')
+                ->orWhere('u.middlename', 'like', '%'.$searchValue.'%')
+                ->orWhere('u.extname', 'like', '%'.$searchValue.'%')
+                ->orWhere('u.fullname', 'like', '%'.$searchValue.'%')
+                ->orWhere('u.role', 'like', '%'.$searchValue.'%')
+                ->orWhere('u.job_title', 'like', '%'.$searchValue.'%')
+                ->orWhere('d.department_name', 'like', '%'.$searchValue.'%')
+                ->orWhere('u.hrid', 'like', '%'.$searchValue.'%');
+        };
+
+        $query = clone $baseQuery;
+        if ($searchValue !== '') {
+            $query->where($searchCallback);
+            $searchLower = strtolower($searchValue);
+            if (str_contains($searchLower, 'inactive') || str_contains($searchLower, 'new')) {
+                $query->where('u.active', 0);
+            } elseif (str_contains($searchLower, 'active')) {
+                $query->where('u.active', 1);
+            }
+        }
+        $filteredRecords = $query->count();
+
+        if ($orderColumn === 'name') {
+            $baseQuery->orderBy('u.firstname', $orderDir)->orderBy('u.lastname', $orderDir);
+        } elseif ($orderColumn === 'id') {
+            $baseQuery->orderBy('u.userId', $orderDir);
+        } elseif ($orderColumn !== 'actions') {
+            $dbCol = $orderColumn === 'office' ? 'd.department_name' : 'u.'.$orderColumn;
+            $baseQuery->orderBy($dbCol, $orderDir);
+        } else {
+            $baseQuery->orderByDesc('u.date_created')->orderByDesc('u.userId');
+        }
+
+        if ($searchValue !== '') {
+            $baseQuery->where($searchCallback);
+            $searchLower = strtolower($searchValue);
+            if (str_contains($searchLower, 'inactive') || str_contains($searchLower, 'new')) {
+                $baseQuery->where('u.active', 0);
+            } elseif (str_contains($searchLower, 'active')) {
+                $baseQuery->where('u.active', 1);
+            }
+        }
+
+        $length = $length > 0 ? $length : 10;
+        $users = $baseQuery->skip($start)->take($length)->get();
+
+        $data = $users->map(function ($row) {
+            $name = trim(implode(' ', array_filter([
+                $row->firstname,
+                $row->middlename,
+                $row->lastname,
+                $row->extname,
+            ]))) ?: ($row->fullname ?? $row->email ?? '—');
+
+            $active = (bool) $row->active;
+            $displayEmail = $active ? ($row->email ?? '—') : ($row->personal_email ?? $row->email ?? '—');
+
+            return [
+                'id' => $row->id,
+                'hrid' => $row->hrid ?? '—',
+                'email' => $displayEmail,
+                'name' => $name,
+                'role' => $row->role ?? '—',
+                'office' => $row->office ?? '—',
+                'active' => $active,
+                '_raw' => $row,
+            ];
+        });
+
+        return response()->json([
+            'draw' => $draw,
+            'recordsTotal' => $totalRecords,
+            'recordsFiltered' => $filteredRecords,
+            'data' => $data,
+        ]);
+    }
+
+    /**
      * API endpoint: departments list (for Office/School dropdown).
      */
     public function departments()
@@ -87,6 +209,36 @@ class UserListController extends Controller
             ->get();
 
         return response()->json($departments);
+    }
+
+    /**
+     * API endpoint: get a single user (for edit modal).
+     */
+    public function show(User $user)
+    {
+        $this->authorizeAdmin();
+
+        $row = DB::table('tbl_user as u')
+            ->leftJoin('tbl_department as d', 'u.department_id', '=', 'd.department_id')
+            ->where('u.userId', $user->getKey())
+            ->select([
+                'u.userId as id',
+                'u.hrid as hrid',
+                'u.email',
+                'u.lastname',
+                'u.firstname',
+                'u.middlename',
+                'u.extname',
+                'u.fullname',
+                'u.job_title',
+                'u.role',
+                'u.active',
+                'u.department_id',
+                'd.department_name as office',
+            ])
+            ->first();
+
+        return response()->json($row);
     }
 
     /**
@@ -108,34 +260,53 @@ class UserListController extends Controller
             $user->hrId = $user->getKey();
         }
 
-        // When an account is activated, treat it as "email verified"
-        if (! $wasActive && $user->active && $user->email_verified_at === null) {
-            $user->email_verified_at = now();
+        // When an account is activated, generate official DepEd login and notify user
+        if (! $wasActive && $user->active) {
+            if ($user->email_verified_at === null) {
+                $user->email_verified_at = now();
+            }
+
+            // Generate official DepEd email: (firstname+lastname)@deped.gov.ph
+            $first = trim((string) ($user->firstname ?? ''));
+            $last = trim((string) ($user->lastname ?? ''));
+            $local = Str::lower(preg_replace('/[^a-z0-9]/i', '', $first.$last) ?: 'user'.$user->getKey());
+            $officialEmail = $local.'@deped.gov.ph';
+
+            // Set official login credentials on activation.
+            // Default password is fixed so it can be communicated to the user.
+            $defaultPassword = '1q2w3e4r5t';
+
+            $user->email = $officialEmail;
+            // Hash explicitly so login (Hash::check) works regardless of cast timing.
+            $user->password = Hash::make($defaultPassword);
+            $user->save();
+
+            $recipient = $user->personal_email ?? $user->email;
+            if ($recipient) {
+                try {
+                    Mail::to($recipient)->send(
+                        new AccountActivatedMail([
+                            'name' => (string) ($user->fullname ?? $user->name ?? 'User'),
+                            'official_email' => $officialEmail,
+                            'default_password' => $defaultPassword,
+                            'hrid' => $user->hrId ? (int) $user->hrId : null,
+                            'activated_at' => now()->format('Y-m-d H:i'),
+                            'sign_in_url' => url('/login'),
+                        ]),
+                    );
+                } catch (\Throwable $e) {
+                    // Swallow mail errors so that activation still succeeds
+                }
+            }
+        } else {
+            $user->save();
         }
 
-        $user->save();
-
         // Log the status update
-        $status = $user->active ? 'activated' : 'deactivated';
         ActivityLogService::logUpdate(
             'User',
             "Updated user: {$user->email}"
         );
-
-        // If account has just been activated, notify the user via email
-        if (! $wasActive && $user->active && $user->email) {
-            try {
-                Mail::to($user->email)->send(new AccountActivatedMail([
-                    'name' => (string) ($user->fullname ?? $user->name ?? $user->email ?? 'User'),
-                    'email' => (string) $user->email,
-                    'hrid' => $user->hrId ? (int) $user->hrId : null,
-                    'activated_at' => now()->format('Y-m-d H:i'),
-                    'sign_in_url' => url('/login'),
-                ]));
-            } catch (\Throwable $e) {
-                // Swallow mail errors so that activation still succeeds
-            }
-        }
 
         return response()->json([
             'id' => $user->getKey(),

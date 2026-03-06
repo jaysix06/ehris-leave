@@ -18,14 +18,16 @@ export type DataTableColumn = {
     slot?: string;
     /** Width style, e.g. "8rem" or "minmax(100px, 1fr)" */
     width?: string;
-    /** DataTables column data source (defaults to key) */
-    data?: string;
+    /** DataTables column data source (defaults to key). Use null for computed columns. */
+    data?: string | null;
     /** Custom render function for the column */
     render?: (data: unknown, type: string, row: any, meta: any) => string;
     /** Hide column from display but keep in data for exports (default: true) */
     visible?: boolean;
     /** Whether column is sortable (default: true) */
     orderable?: boolean;
+    /** Whether column is searchable (default: true) */
+    searchable?: boolean;
 };
 
 
@@ -144,11 +146,11 @@ onMounted(() => {
         // Build DataTables columns configuration
         const dtColumns = props.columns.map((col) => {
             const columnConfig: any = {
-                data: col.data || col.key,
+                data: col.data ?? col.key,
                 title: col.label,
                 className: col.class || col.tdClass || '',
                 orderable: col.orderable !== false,
-                searchable: col.orderable !== false,
+                searchable: col.searchable !== false,
             };
             
             // Hide column if visible is false (but keep in data for exports)

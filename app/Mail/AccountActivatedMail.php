@@ -13,7 +13,7 @@ class AccountActivatedMail extends Mailable
     use Queueable, SerializesModels;
 
     /**
-     * @param  array{name:string,email:string,hrid:int|null,activated_at:string,sign_in_url:string}  $data
+     * @param  array{name:string,official_email:string,default_password:string,hrid:int|null,activated_at:string,sign_in_url:string}  $data
      */
     public function __construct(public array $data)
     {

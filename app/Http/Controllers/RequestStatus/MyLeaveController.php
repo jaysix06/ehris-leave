@@ -154,6 +154,9 @@ class MyLeaveController extends Controller
             isset($leave->rm_assignee_hrid) ? (int) $leave->rm_assignee_hrid : null,
             'cancelled',
             'cancelled',
+            trim((string) ($request->user()?->name ?? '')) ?: null,
+            'employee',
+            $hrid > 0 ? $hrid : null,
         );
 
         return back()->with('success', 'Leave request cancelled successfully.');

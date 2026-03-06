@@ -6,64 +6,73 @@
     <title>Account Activated</title>
 </head>
 <body style="margin:0;padding:24px;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#27272a;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:680px;margin:0 auto;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:420px;margin:0 auto;">
     <tr>
-        <td style="padding:0 0 14px;">
-            <div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#71717a;">
-                {{ $appName }}
-            </div>
-            <div style="font-size:26px;line-height:1.25;font-weight:800;color:#18181b;margin-top:6px;">
-                Your account is now active
-            </div>
-            <div style="font-size:14px;line-height:1.6;color:#52525b;margin-top:8px;">
-                Your registration has been reviewed and approved. You may now sign in.
-            </div>
-        </td>
-    </tr>
-
-    <tr>
-        <td style="background:#ffffff;border:1px solid #e4e4e7;border-radius:12px;padding:20px;">
-            <div style="font-size:14px;color:#18181b;font-weight:700;margin-bottom:10px;">
-                Account details
+        <td style="background:#ffffff;border:1px solid #e4e4e7;border-radius:16px;box-shadow:0 1px 3px rgba(0,0,0,.08);overflow:hidden;">
+            {{-- Logo (embedded so it displays inline, not as attachment) --}}
+            <div style="padding:20px 20px 0;text-align:center;">
+                <img
+                    src="{{ $message->embed(public_path('ehris.png')) }}"
+                    alt="{{ $appName }}"
+                    width="280"
+                    height="144"
+                    style="display:block;width:100%;max-width:280px;height:auto;margin:0 auto;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic;"
+                >
             </div>
 
-            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
-                <tr>
-                    <td style="padding:10px 0;border-top:1px solid #f4f4f5;color:#71717a;font-size:13px;width:160px;">Name</td>
-                    <td style="padding:10px 0;border-top:1px solid #f4f4f5;color:#18181b;font-size:13px;font-weight:600;">{{ $data['name'] }}</td>
-                </tr>
-                <tr>
-                    <td style="padding:10px 0;border-top:1px solid #f4f4f5;color:#71717a;font-size:13px;">Email</td>
-                    <td style="padding:10px 0;border-top:1px solid #f4f4f5;color:#18181b;font-size:13px;font-weight:600;">{{ $data['email'] }}</td>
-                </tr>
-                <tr>
-                    <td style="padding:10px 0;border-top:1px solid #f4f4f5;color:#71717a;font-size:13px;">HRID</td>
-                    <td style="padding:10px 0;border-top:1px solid #f4f4f5;color:#18181b;font-size:13px;font-weight:600;">{{ $data['hrid'] ?? '—' }}</td>
-                </tr>
-                <tr>
-                    <td style="padding:10px 0;border-top:1px solid #f4f4f5;color:#71717a;font-size:13px;">Activated</td>
-                    <td style="padding:10px 0;border-top:1px solid #f4f4f5;color:#18181b;font-size:13px;font-weight:600;">{{ $data['activated_at'] }}</td>
-                </tr>
-            </table>
+            <div style="padding:24px 24px 20px;">
+                <h1 style="margin:0 0 8px;font-size:22px;line-height:1.3;font-weight:600;color:#18181b;text-align:center;">
+                    Your account is now active
+                </h1>
+                <p style="margin:0 0 20px;font-size:14px;line-height:1.5;color:#52525b;text-align:center;">
+                    Your registration has been reviewed and approved. Use the credentials below to sign in, then change your password after your first login.
+                </p>
 
-            <div style="margin-top:16px;padding-top:16px;border-top:1px solid #f4f4f5;text-align:center;">
-                <a href="{{ $data['sign_in_url'] }}"
-                   style="display:inline-block;background:#0f766e;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:10px;font-size:14px;font-weight:700;">
-                    Sign in to {{ $appName }}
-                </a>
-                <div style="font-size:12px;color:#71717a;margin-top:10px;line-height:1.5;">
-                    If you did not request this account, please contact your system administrator.
+                <div style="font-size:14px;color:#18181b;font-weight:700;margin-bottom:12px;">
+                    Your login credentials
+                </div>
+
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+                    <tr>
+                        <td style="padding:10px 0;border-top:1px solid #f4f4f5;color:#71717a;font-size:13px;width:120px;">Name</td>
+                        <td style="padding:10px 0;border-top:1px solid #f4f4f5;color:#18181b;font-size:13px;font-weight:600;">{{ $data['name'] }}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding:10px 0;border-top:1px solid #f4f4f5;color:#71717a;font-size:13px;">Official DepEd email (login)</td>
+                        <td style="padding:10px 0;border-top:1px solid #f4f4f5;color:#18181b;font-size:13px;font-weight:600;">{{ $data['official_email'] }}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding:10px 0;border-top:1px solid #f4f4f5;color:#71717a;font-size:13px;">Default password</td>
+                        <td style="padding:10px 0;border-top:1px solid #f4f4f5;color:#18181b;font-size:13px;font-weight:600;">{{ $data['default_password'] }}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding:10px 0;border-top:1px solid #f4f4f5;color:#71717a;font-size:13px;">HRID</td>
+                        <td style="padding:10px 0;border-top:1px solid #f4f4f5;color:#18181b;font-size:13px;font-weight:600;">{{ $data['hrid'] ?? '—' }}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding:10px 0;border-top:1px solid #f4f4f5;color:#71717a;font-size:13px;">Activated</td>
+                        <td style="padding:10px 0;border-top:1px solid #f4f4f5;color:#18181b;font-size:13px;font-weight:600;">{{ $data['activated_at'] }}</td>
+                    </tr>
+                </table>
+
+                <div style="margin-top:20px;padding-top:20px;border-top:1px solid #f4f4f5;text-align:center;">
+                    <a href="{{ $data['sign_in_url'] }}"
+                       style="display:inline-block;background:#0f766e;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:10px;font-size:14px;font-weight:600;">
+                        Sign in to {{ $appName }}
+                    </a>
+                    <p style="font-size:12px;color:#71717a;margin:12px 0 0;line-height:1.5;">
+                        Please change your password after your first login. If you did not request this account, contact your system administrator.
+                    </p>
                 </div>
             </div>
         </td>
     </tr>
 
     <tr>
-        <td style="padding:14px 2px 0;color:#71717a;font-size:12px;line-height:1.6;">
+        <td style="padding:16px 8px 0;color:#71717a;font-size:12px;line-height:1.5;text-align:center;">
             This is an automated message from {{ $appName }}.
         </td>
     </tr>
 </table>
 </body>
 </html>
-

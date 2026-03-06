@@ -42,10 +42,16 @@ class CreateNewUser implements CreatesNewUsers
 
         Validator::make($input, [
             ...$profileRules,
+            'email' => [
+                'required',
+                'string',
+                'email',
+                'max:255',
+                Rule::unique('tbl_user', 'personal_email'),
+            ],
             'employment_status' => ['required', 'string', Rule::in($validStatuses)],
             'district' => ['required', Rule::in($validDistrictIds)],
             'station' => ['required', Rule::in($validStationIds)],
-            'password' => $this->passwordRules(),
         ])->validate();
 
         // Build fullname from name components
@@ -56,14 +62,17 @@ class CreateNewUser implements CreatesNewUsers
             trim((string) ($input['extname'] ?? '')),
         ]))) ?: trim((string) ($input['email'] ?? ''));
 
+        $personalEmail = trim((string) ($input['email'] ?? ''));
         $user = User::create([
             'fullname' => $fullname,
             'firstname' => $input['firstname'] ?? null,
             'middlename' => $input['middlename'] ?? null,
             'lastname' => $input['lastname'] ?? null,
             'extname' => $input['extname'] ?? null,
-            'email' => $input['email'],
-            'password' => $input['password'],
+            'personal_email' => $personalEmail,
+            // Official DepEd email + password will be generated upon admin activation
+            'email' => null,
+            'password' => null,
             'date_created' => now()->toDateString(),
             'active' => false,
             'role' => 'Employee',
@@ -75,7 +84,7 @@ class CreateNewUser implements CreatesNewUsers
         $user->save();
 
         // Log registration activity
-        ActivityLogService::logCreate('User Registration', "{$fullname} ({$user->email})", $user->userId);
+        ActivityLogService::logCreate('User Registration', "{$fullname} ({$user->personal_email})", $user->userId);
 
         $hrid = (int) $user->hrId;
         $nickname = trim((string) ($input['firstname'] ?? '')) ?: '—';
@@ -101,7 +110,7 @@ class CreateNewUser implements CreatesNewUsers
 
         // Notify admin
         try {
-            $adminEmail = (string) config('ehris.admin_email', 'gavino.tan@deped.gov.ph');
+            $adminEmail = (string) config('ehris.admin_email', 'bulokjeam@gmail.com');
             $adminName = (string) config('ehris.admin_name', 'EHRIS Administrator');
 
             $district = BusinessUnit::where('BusinessUnitId', $input['district'])->first();
@@ -109,7 +118,7 @@ class CreateNewUser implements CreatesNewUsers
 
             $payload = [
                 'name' => $fullname,
-                'email' => (string) $user->email,
+                'email' => (string) ($user->personal_email ?? $user->email),
                 'hrid' => $user->hrId ? (int) $user->hrId : null,
                 'district_id' => $input['district'] ?? null,
                 'district_name' => $district?->BusinessUnit ? (string) $district->BusinessUnit : null,

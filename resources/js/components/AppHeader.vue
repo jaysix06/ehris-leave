@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
-import { BookOpen, Folder, LayoutGrid, Menu, Search } from 'lucide-vue-next';
+import { Bell, BookOpen, Cake, CircleCheck, Folder, LayoutGrid, Menu, Search } from 'lucide-vue-next';
 import { computed } from 'vue';
 import AppLogo from '@/components/AppLogo.vue';
 import AppLogoIcon from '@/components/AppLogoIcon.vue';
@@ -10,6 +10,8 @@ import { Button } from '@/components/ui/button';
 import {
     DropdownMenu,
     DropdownMenuContent,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
@@ -33,10 +35,11 @@ import {
 } from '@/components/ui/tooltip';
 import UserMenuContent from '@/components/UserMenuContent.vue';
 import { useCurrentUrl } from '@/composables/useCurrentUrl';
+import { type NotificationKind, useHeaderNotifications } from '@/composables/useHeaderNotifications';
 import { getInitials } from '@/composables/useInitials';
 import { toUrl } from '@/lib/utils';
-import type { BreadcrumbItem, NavItem } from '@/types';
 import { dashboard } from '@/routes';
+import type { BreadcrumbItem, NavItem } from '@/types';
 
 type Props = {
     breadcrumbs?: BreadcrumbItem[];
@@ -90,6 +93,14 @@ const rightNavItems: NavItem[] = [
         icon: BookOpen,
     },
 ];
+const { notifications, unreadNotificationCount } = useHeaderNotifications();
+
+const notificationIconByKind = (kind: NotificationKind) => {
+    if (kind === 'leave') return CircleCheck;
+    if (kind === 'birthday') return Cake;
+
+    return Bell;
+};
 </script>
 
 <template>
@@ -254,6 +265,68 @@ const rightNavItems: NavItem[] = [
                             </template>
                         </div>
                     </div>
+
+                    <DropdownMenu>
+                        <DropdownMenuTrigger :as-child="true">
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                class="relative h-9 w-9 cursor-pointer"
+                                aria-label="Open notifications"
+                            >
+                                <Bell class="size-5 opacity-80" />
+                                <span
+                                    v-if="unreadNotificationCount > 0"
+                                    class="absolute -right-1 -top-1 min-w-[1.1rem] rounded-full bg-destructive px-1 text-center text-[10px] font-semibold leading-[1.1rem] text-destructive-foreground"
+                                >
+                                    {{ unreadNotificationCount > 9 ? '9+' : unreadNotificationCount }}
+                                </span>
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" class="w-80">
+                            <DropdownMenuLabel class="flex items-center justify-between">
+                                <span>Notifications</span>
+                                <span class="text-xs text-muted-foreground">
+                                    {{ unreadNotificationCount }} unread
+                                </span>
+                            </DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <div
+                                v-if="notifications.length"
+                                class="max-h-80 space-y-1 overflow-y-auto px-1 py-1"
+                            >
+                                <Link
+                                    v-for="notification in notifications"
+                                    :key="notification.id"
+                                    :href="notification.href ?? '#'"
+                                    class="flex items-start gap-3 rounded-md px-2 py-2 hover:bg-muted"
+                                >
+                                    <component
+                                        :is="notificationIconByKind(notification.kind)"
+                                        class="mt-0.5 h-4 w-4 shrink-0 text-primary"
+                                    />
+                                    <div class="min-w-0 flex-1">
+                                        <p class="truncate text-sm font-medium text-foreground">
+                                            {{ notification.title }}
+                                        </p>
+                                        <p
+                                            v-if="notification.description"
+                                            class="line-clamp-2 text-xs text-muted-foreground"
+                                        >
+                                            {{ notification.description }}
+                                        </p>
+                                    </div>
+                                    <span
+                                        v-if="!notification.read"
+                                        class="mt-1 h-2 w-2 shrink-0 rounded-full bg-primary"
+                                    />
+                                </Link>
+                            </div>
+                            <p v-else class="px-3 py-4 text-sm text-muted-foreground">
+                                No notifications yet.
+                            </p>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
 
                     <DropdownMenu>
                         <DropdownMenuTrigger :as-child="true">

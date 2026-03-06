@@ -18,6 +18,9 @@ class LeaveRequestUpdated implements ShouldBroadcastNow
         public ?int $rmAssigneeHrid,
         public string $action,
         public ?string $workflowStatus = null,
+        public ?string $employeeName = null,
+        public ?string $actorRole = null,
+        public ?int $actorHrid = null,
     ) {
     }
 
@@ -36,4 +39,3 @@ class LeaveRequestUpdated implements ShouldBroadcastNow
         return 'LeaveRequestUpdated';
     }
 }
-

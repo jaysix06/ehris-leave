@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Form, Head, Link } from '@inertiajs/vue3';
-import { computed, nextTick, ref } from 'vue';
+import { Form, Head, usePage } from '@inertiajs/vue3';
+import { computed, nextTick, ref, watch } from 'vue';
 import InputError from '@/components/InputError.vue';
 import TextLink from '@/components/TextLink.vue';
 import { Button } from '@/components/ui/button';
@@ -17,8 +17,22 @@ const props = defineProps<{
     stations?: { id: number | string; name: string; district_id?: number | string | null }[];
 }>();
 
+const page = usePage();
+const step2ErrorKeys = ['employment_status', 'district', 'station'];
+
 const currentStep = ref(1);
 const selectedDistrictId = ref<string>('');
+
+// When we land back with validation errors, stay on step 2 if errors are for step-2 fields
+watch(
+    () => (page.props as { errors?: Record<string, string> }).errors,
+    (errors) => {
+        if (errors && Object.keys(errors).some((k) => step2ErrorKeys.includes(k))) {
+            currentStep.value = 2;
+        }
+    },
+    { immediate: true },
+);
 
 const filteredStations = computed(() => {
     const all = props.stations ?? [];
@@ -80,7 +94,6 @@ const handleDistrictChange = (event: Event) => {
 
             <Form
                 v-bind="store.form()"
-                :reset-on-success="['password', 'password_confirmation']"
                 v-slot="{ errors, processing }"
                 class="flex flex-col gap-6"
             >
@@ -104,7 +117,7 @@ const handleDistrictChange = (event: Event) => {
                 </div>
 
                 <div class="grid gap-4 md:grid-cols-2">
-                    <template v-if="currentStep === 1">
+                    <div v-show="currentStep === 1" class="contents">
                         <div class="grid gap-2 md:col-span-1">
                             <Label for="firstname">First name</Label>
                             <Input
@@ -157,7 +170,7 @@ const handleDistrictChange = (event: Event) => {
                             <InputError :message="errors.extname" />
                         </div>
                         <div class="grid gap-2 md:col-span-2">
-                            <Label for="email">Email address</Label>
+                            <Label for="email">Personal email</Label>
                             <Input
                                 id="email"
                                 type="email"
@@ -165,9 +178,12 @@ const handleDistrictChange = (event: Event) => {
                                 :tabindex="5"
                                 autocomplete="email"
                                 name="email"
-                                placeholder="email@example.com"
+                                placeholder="your.personal@example.com"
                             />
                             <InputError :message="errors.email" />
+                            <p class="text-xs text-muted-foreground">
+                                Your official DepEd login email will be provided after your account is activated.
+                            </p>
                         </div>
 
                         <div class="md:col-span-2 flex justify-center">
@@ -181,9 +197,9 @@ const handleDistrictChange = (event: Event) => {
                                 Next
                             </Button>
                         </div>
-                    </template>
+                    </div>
 
-                    <template v-else>
+                    <div v-show="currentStep === 2" class="contents">
                         <div class="grid gap-2 md:col-span-2">
                             <Label for="employment_status">Employment status</Label>
                             <select
@@ -246,16 +262,15 @@ const handleDistrictChange = (event: Event) => {
                             </select>
                             <InputError :message="errors.station" />
                         </div>
-
                         <div class="grid gap-2 md:col-span-1">
                             <Label for="password">Password</Label>
                             <Input
                                 id="password"
                                 type="password"
+                                name="password"
                                 required
                                 :tabindex="9"
                                 autocomplete="new-password"
-                                name="password"
                                 placeholder="Password"
                             />
                             <InputError :message="errors.password" />
@@ -265,16 +280,16 @@ const handleDistrictChange = (event: Event) => {
                             <Input
                                 id="password_confirmation"
                                 type="password"
+                                name="password_confirmation"
                                 required
                                 :tabindex="10"
                                 autocomplete="new-password"
-                                name="password_confirmation"
                                 placeholder="Confirm password"
                             />
                             <InputError :message="errors.password_confirmation" />
                         </div>
 
-                        <div class="flex justify-center gap-4 md:col-span-2">
+                        <div class="md:col-span-2 flex justify-center gap-4">
                             <Button
                                 type="button"
                                 size="sm"
@@ -288,7 +303,7 @@ const handleDistrictChange = (event: Event) => {
                             <Button
                                 type="submit"
                                 size="sm"
-                                class="mt-2 w-fit"
+                                class="mt-2 px-8"
                                 :tabindex="12"
                                 :disabled="processing"
                                 data-test="register-user-button"
@@ -297,7 +312,7 @@ const handleDistrictChange = (event: Event) => {
                                 Register
                             </Button>
                         </div>
-                    </template>
+                    </div>
                 </div>
 
                 <div class="text-center text-sm text-muted-foreground">
@@ -305,7 +320,7 @@ const handleDistrictChange = (event: Event) => {
                     <TextLink
                         :href="login()"
                         class="underline underline-offset-4"
-                        :tabindex="13"
+                        :tabindex="11"
                         >Log in</TextLink
                     >
                 </div>
