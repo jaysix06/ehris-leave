@@ -28,7 +28,7 @@ Route::get('/', function () {
 })->name('home');
 
 // Route::prefix('ehris')->group(function () {
-    Route::middleware('guest')->group(function () {
+    Route::middleware(['guest', 'throttle:5,1'])->group(function () {
         Route::post('forgot-password/otp/send', [PasswordResetOtpController::class, 'send'])
             ->name('password.otp.send');
         Route::get('forgot-password/otp/verify', [PasswordResetOtpController::class, 'showVerify'])
