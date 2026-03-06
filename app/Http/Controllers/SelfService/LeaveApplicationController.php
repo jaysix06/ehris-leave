@@ -9,6 +9,7 @@ use App\Models\EmpOfficialInfo;
 use App\Models\LeaveType;
 use App\Models\Office;
 use App\Models\User;
+use App\Services\ActivityLogService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -828,6 +829,15 @@ class LeaveApplicationController extends Controller
 
         $leaveId = (int) DB::table(self::LEAVE_TABLE)->insertGetId($payload);
 
+        // Add activity log for leave request creation
+        $employeeName = $nameSource ?: ($authUser->name ?? 'Unknown');
+        $dateRange = $start->format('M d, Y').' - '.$end->format('M d, Y');
+        ActivityLogService::logCreate(
+            'Leave Request',
+            "{$leaveType} ({$days} days) for {$employeeName} - {$dateRange}",
+            $authUser->userId ?? null,
+        );
+
         LeaveRequestUpdated::dispatch(
             $leaveId > 0 ? $leaveId : null,
             $hrid > 0 ? $hrid : null,
@@ -944,6 +954,30 @@ class LeaveApplicationController extends Controller
         DB::table(self::LEAVE_TABLE)
             ->where('leave_application_id', $id)
             ->update(array_merge($updates, ['updated_at' => $now]));
+
+        // Add activity log for leave request decision
+        $leaveType = $leave->leave_type ?? 'Unknown';
+        $decisionText = $decision === 'approve' ? 'Approved' : 'Disapproved';
+        $roleText = '';
+
+        if (str_contains($authRole, 'reporting manager')) {
+            $roleText = 'RM';
+        } elseif (str_contains($authRole, 'hr')) {
+            $roleText = 'HR';
+        } elseif (str_contains($authRole, 'sds')) {
+            $roleText = 'SDS';
+        }
+
+        $activityDetails = "{$decisionText} Leave Request #{$id} ({$leaveType}) as {$roleText}";
+        if ($remarks) {
+            $activityDetails .= ' - '.substr($remarks, 0, 100);
+        }
+
+        ActivityLogService::logUpdate(
+            'Leave Request',
+            $activityDetails,
+            $authUser->userId ?? null,
+        );
 
         LeaveRequestUpdated::dispatch(
             isset($leave->leave_application_id) ? (int) $leave->leave_application_id : $id,
