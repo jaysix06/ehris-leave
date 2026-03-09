@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, router } from '@inertiajs/vue3';
-import { ArrowRight, Calendar, Clock, FolderOpen, ListPlus, Mail } from 'lucide-vue-next';
+import { ArrowRight, Calendar, Clock, FolderOpen, ListPlus } from 'lucide-vue-next';
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { toast } from 'vue3-toastify';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -105,8 +105,6 @@ watch(
     },
 );
 
-// Placeholder data (can wire to API later)
-const unreadMessagesCount = ref(0);
 
 function clockIn(): void {
     if (clockLoading.value) return;
@@ -146,24 +144,8 @@ function toggleClock(): void {
             </header>
 
             <!-- Row 1: Summary / nav cards – uniform height, responsive grid -->
-            <section class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-                <!-- 1. Messages – blue -->
-                <Link
-                    href="#"
-                    class="flex min-h-[160px] flex-col justify-between gap-3 rounded-2xl bg-blue-500 p-5 text-white shadow-sm transition hover:opacity-95"
-                >
-                    <Mail class="size-10 shrink-0 opacity-90" />
-                    <div class="flex-1">
-                        <p class="text-sm font-medium opacity-90">You Have</p>
-                        <p class="text-3xl font-bold tabular-nums">{{ unreadMessagesCount }}</p>
-                        <p class="text-sm font-medium opacity-90">unread messages</p>
-                    </div>
-                    <span class="text-xs font-medium opacity-90 underline decoration-white/70 underline-offset-2">
-                        View messages →
-                    </span>
-                </Link>
-
-                <!-- 2. Calendar – teal -->
+            <section class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <!-- 1. Calendar – teal -->
                 <Link
                     href="#"
                     class="flex min-h-[160px] flex-col justify-between gap-3 rounded-2xl bg-teal-500 p-5 text-white shadow-sm transition hover:opacity-95"
@@ -226,30 +208,24 @@ function toggleClock(): void {
                         </template>
                     </button>
                 </article>
-
-                <!-- 5. Create Task -->
-                <Link
-                    href="#"
-                    class="flex min-h-[160px] flex-col justify-between gap-3 rounded-2xl bg-amber-500 p-5 text-white shadow-sm transition hover:opacity-95"
-                >
-                    <ListPlus class="size-10 shrink-0 opacity-90" />
-                    <div class="flex-1">
-                        <p class="text-lg font-semibold">Create Task</p>
-                        <p class="text-sm font-medium opacity-90">Add a new task</p>
-                    </div>
-                    <span class="text-xs font-medium opacity-90 underline decoration-white/70 underline-offset-2">
-                        Create task →
-                    </span>
-                </Link>
             </section>
 
             <!-- Row 2: Recent Open Tasks (full width) -->
             <section class="grid grid-cols-1 gap-4">
                 <!-- Recent Open Tasks -->
                 <div class="ehris-card">
-                    <h3 class="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                        Recent Open Tasks
-                    </h3>
+                    <div class="mb-4 flex items-center justify-between gap-3">
+                        <h3 class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                            Recent Open Tasks
+                        </h3>
+                        <Link
+                            href="#"
+                            class="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
+                        >
+                            <ListPlus class="size-4" />
+                            Create Task
+                        </Link>
+                    </div>
                     <div class="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border/80 bg-muted/30 py-12">
                         <FolderOpen class="size-12 text-muted-foreground/60" />
                         <p class="text-sm text-muted-foreground">No Recent Open Tasks Found</p>
