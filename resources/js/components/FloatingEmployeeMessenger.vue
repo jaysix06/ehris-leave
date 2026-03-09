@@ -81,6 +81,7 @@ const conversationActivityAt = ref<Record<string, string>>({});
 const unreadByContact = ref<Record<string, number>>({});
 const loadedConversations = ref<Set<string>>(new Set());
 let contactsPollTimer: number | null = null;
+let searchDebounceTimer: number | null = null;
 
 const csrfToken = (): string => {
     const meta = document.querySelector('meta[name="csrf-token"]');
@@ -283,7 +284,12 @@ const fetchContactsPage = async (
 
 const loadInitialContacts = async () => {
     contacts.value = [];
-    nextContactsUrl.value = '/api/utilities/users?per_page=60';
+    const params = new URLSearchParams({ per_page: '60' });
+    const q = searchQuery.value.trim();
+    if (q !== '') {
+        params.set('search', q);
+    }
+    nextContactsUrl.value = `/api/utilities/users?${params.toString()}`;
     await fetchContactsPage(nextContactsUrl.value, { showLoader: true, append: false });
 };
 
@@ -294,7 +300,12 @@ const loadNextContacts = async () => {
 };
 
 const refreshContacts = async () => {
-    await fetchContactsPage('/api/utilities/users?per_page=60');
+    const params = new URLSearchParams({ per_page: '60' });
+    const q = searchQuery.value.trim();
+    if (q !== '') {
+        params.set('search', q);
+    }
+    await fetchContactsPage(`/api/utilities/users?${params.toString()}`);
 };
 
 const conversationListUrl = (cursor?: string | null): string => {
@@ -548,12 +559,35 @@ watch(activeConversationId, async (contactId) => {
     await scrollMessagesToBottom();
 });
 
+watch(searchQuery, (value) => {
+    if (!isOpen.value) return;
+
+    if (searchDebounceTimer) {
+        window.clearTimeout(searchDebounceTimer);
+    }
+
+    searchDebounceTimer = window.setTimeout(() => {
+        const params = new URLSearchParams({ per_page: '60' });
+        const q = value.trim();
+        if (q !== '') {
+            params.set('search', q);
+        }
+
+        nextContactsUrl.value = `/api/utilities/users?${params.toString()}`;
+        void fetchContactsPage(nextContactsUrl.value, { showLoader: true, append: false });
+    }, 300);
+});
+
 onMounted(() => {
     setupEchoListener();
 });
 
 onBeforeUnmount(() => {
     stopPolling();
+    if (searchDebounceTimer) {
+        window.clearTimeout(searchDebounceTimer);
+        searchDebounceTimer = null;
+    }
     teardownEchoListener();
 });
 </script>

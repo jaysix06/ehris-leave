@@ -529,5 +529,22 @@ Route::get('api/reports/employee-listing/summary-stats', [App\Http\Controllers\R
     ->middleware(['auth', 'verified'])
     ->name('reports.employee-listing.summary-stats');
 
+Route::get('api/messages/conversations', [MessageController::class, 'conversations'])
+    ->middleware(['auth'])
+    ->name('api.messages.conversations');
+Route::get('api/messages/{contactId}', [MessageController::class, 'show'])
+    ->middleware(['auth'])
+    ->where('contactId', '[0-9]+')
+    ->name('api.messages.show');
+Route::post('api/messages', [MessageController::class, 'store'])
+    ->middleware(['auth'])
+    ->withoutMiddleware([ValidateCsrfToken::class])
+    ->name('api.messages.store');
+Route::patch('api/messages/{contactId}/read', [MessageController::class, 'markRead'])
+    ->middleware(['auth'])
+    ->where('contactId', '[0-9]+')
+    ->withoutMiddleware([ValidateCsrfToken::class])
+    ->name('api.messages.read');
+
 require __DIR__.'/settings.php';
 // });
