@@ -136,18 +136,16 @@ function toggleClock(): void {
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="ehris-page timezone-attendance-page">
-            <!-- Top bar: date & time (Ohomework-style header) -->
-            <header class="rounded-2xl border border-border/80 bg-muted/50 px-4 py-3 sm:px-5 sm:py-4">
-                <p class="text-right text-sm font-medium tabular-nums text-foreground sm:text-base">
-                    {{ dateTimeDisplay }}
-                </p>
-            </header>
+            <!-- Date & time (text only, no card) -->
+            <p class="text-right text-sm font-medium tabular-nums text-foreground sm:text-base">
+                {{ dateTimeDisplay }}
+            </p>
 
             <!-- Row 1: Summary / nav cards – uniform height, responsive grid -->
             <section class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <!-- 1. Calendar – teal -->
                 <Link
-                    href="#"
+                    :href="'/self-service/calendar'"
                     class="flex min-h-[160px] flex-col justify-between gap-3 rounded-2xl bg-teal-500 p-5 text-white shadow-sm transition hover:opacity-95"
                 >
                     <Calendar class="size-10 shrink-0 opacity-90" />
@@ -160,9 +158,9 @@ function toggleClock(): void {
                     </span>
                 </Link>
 
-                <!-- 3. Hours worked – green (My Time) -->
+                <!-- 3. Hours worked – green (My Time / Weekly Time Logs) -->
                 <Link
-                    :href="selfServiceRoutes.timezone().url"
+                    :href="'/self-service/time-logs'"
                     class="flex min-h-[160px] flex-col justify-between gap-3 rounded-2xl bg-green-500 p-5 text-white shadow-sm transition hover:opacity-95"
                 >
                     <Clock class="size-10 shrink-0 opacity-90" />
@@ -210,11 +208,10 @@ function toggleClock(): void {
                 </article>
             </section>
 
-            <!-- Row 2: Recent Open Tasks (full width) -->
+            <!-- Row 2: Recent Open Tasks – compact -->
             <section class="grid grid-cols-1 gap-4">
-                <!-- Recent Open Tasks -->
-                <div class="ehris-card">
-                    <div class="mb-4 flex items-center justify-between gap-3">
+                <div class="ehris-card p-4">
+                    <div class="mb-3 flex items-center justify-between gap-3">
                         <h3 class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                             Recent Open Tasks
                         </h3>
@@ -226,8 +223,8 @@ function toggleClock(): void {
                             Create Task
                         </Link>
                     </div>
-                    <div class="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border/80 bg-muted/30 py-12">
-                        <FolderOpen class="size-12 text-muted-foreground/60" />
+                    <div class="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border/80 bg-muted/30 py-6">
+                        <FolderOpen class="size-10 text-muted-foreground/60" />
                         <p class="text-sm text-muted-foreground">No Recent Open Tasks Found</p>
                     </div>
                 </div>

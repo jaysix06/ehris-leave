@@ -11,6 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasTable('popup_messages')) {
+            return;
+        }
+
         Schema::create('popup_messages', function (Blueprint $table) {
             $table->id();
             $table->text('message');
