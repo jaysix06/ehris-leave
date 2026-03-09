@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { router } from '@inertiajs/vue3';
 import { Pencil, Plus, Trash2 } from 'lucide-vue-next';
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -14,10 +14,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 
-function val(v: unknown): string {
-    if (v == null || v === '') return '';
-    return String(v).trim();
-}
+type FamilyRow = Record<string, unknown>;
 
 type SpouseFields = {
     lastname: string;
@@ -30,14 +27,161 @@ type SpouseFields = {
     tel_num: string;
 };
 
-type ChildRow = { fullname: string; dob: string };
-
 type ParentFields = {
     lastname: string;
     firstname: string;
     middlename: string;
     extension: string;
 };
+
+type ChildRow = {
+    fullname: string;
+    dob: string;
+};
+
+function val(v: unknown): string {
+    if (v == null || v === '') {
+        return '';
+    }
+    return String(v).trim();
+}
+
+function displayVal(v: unknown): string {
+    const s = val(v);
+    return s === '' ? '—' : s;
+}
+
+function displayDate(v: unknown): string {
+    const raw = val(v);
+    if (raw === '') {
+        return '—';
+    }
+
+    const dash = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (dash) {
+        return `${dash[3]}/${dash[2]}/${dash[1]}`;
+    }
+
+    const slash = raw.match(/^(\d{4})\/(\d{2})\/(\d{2})$/);
+    if (slash) {
+        return `${slash[3]}/${slash[2]}/${slash[1]}`;
+    }
+
+    return raw;
+}
+
+function relationKey(relationship: unknown): 'spouse' | 'child' | 'father' | 'mother' | null {
+    const normalized = val(relationship).toLowerCase();
+    if (normalized === '') {
+        return null;
+    }
+    if (normalized.includes('spouse') || normalized.includes('wife') || normalized.includes('husband')) {
+        return 'spouse';
+    }
+    if (normalized.includes('child')) {
+        return 'child';
+    }
+    if (normalized.includes('father')) {
+        return 'father';
+    }
+    if (normalized.includes('mother')) {
+        return 'mother';
+    }
+    return null;
+}
+
+function fullNameFromRow(row: FamilyRow): string {
+    return [row.firstname, row.middlename, row.lastname, row.extension]
+        .map((item) => val(item))
+        .filter((item) => item !== '')
+        .join(' ');
+}
+
+function spouseScore(row: FamilyRow): number {
+    const fields = [
+        row.lastname,
+        row.firstname,
+        row.middlename,
+        row.extension,
+        row.occupation,
+        row.employer_name,
+        row.business_add,
+        row.tel_num,
+    ];
+    return fields.reduce((score, field) => score + (val(field) !== '' ? 1 : 0), 0);
+}
+
+const props = defineProps<{
+    family?: FamilyRow[];
+    familyUpdateUrl?: string;
+}>();
+
+const familyRows = computed<FamilyRow[]>(() => props.family ?? []);
+
+const spouseEntry = computed<FamilyRow | null>(() => {
+    const spouseRows = familyRows.value.filter((row) => relationKey(row.relationship) === 'spouse');
+    const fallbackRows = familyRows.value.filter((row) => relationKey(row.relationship) === null);
+    const candidates = [...spouseRows, ...fallbackRows];
+
+    let best: FamilyRow | null = null;
+    let bestScore = -1;
+    for (const row of candidates) {
+        const score = spouseScore(row);
+        if (score > bestScore) {
+            bestScore = score;
+            best = row;
+        }
+    }
+
+    return bestScore > 0 ? best : null;
+});
+
+const childrenEntries = computed<Array<{ fullName: string; dob: string }>>(() => {
+    return familyRows.value
+        .filter((row) => relationKey(row.relationship) === 'child')
+        .map((row) => ({
+            fullName: fullNameFromRow(row),
+            dob: val(row.dob),
+        }));
+});
+
+const fatherEntry = computed<FamilyRow | null>(() => {
+    return familyRows.value.find((row) => relationKey(row.relationship) === 'father') ?? null;
+});
+
+const motherEntry = computed<FamilyRow | null>(() => {
+    return familyRows.value.find((row) => relationKey(row.relationship) === 'mother') ?? null;
+});
+
+const spouseDetailRows = computed(() => {
+    return [
+        { label: 'FIRST NAME', value: spouseEntry.value?.firstname },
+        { label: 'MIDDLE NAME', value: spouseEntry.value?.middlename },
+        { label: 'OCCUPATION', value: spouseEntry.value?.occupation },
+        { label: 'EMPLOYER/BUSINESS NAME', value: spouseEntry.value?.employer_name },
+        { label: 'BUSINESS ADDRESS', value: spouseEntry.value?.business_add },
+        { label: 'TELEPHONE NO.', value: spouseEntry.value?.tel_num },
+    ];
+});
+
+const spouseAndChildrenRows = computed(() => {
+    const maxRows = Math.max(spouseDetailRows.value.length, Math.max(0, childrenEntries.value.length - 1));
+    return Array.from({ length: maxRows }, (_, idx) => ({
+        spouseLabel: spouseDetailRows.value[idx]?.label ?? '',
+        spouseValue: spouseDetailRows.value[idx]?.value ?? '',
+        childName: childrenEntries.value[idx + 1]?.fullName ?? '',
+        childDob: childrenEntries.value[idx + 1]?.dob ?? '',
+    }));
+});
+
+const hasFamilyData = computed(() => {
+    return Boolean(
+        spouseEntry.value
+        || childrenEntries.value.length > 0
+        || fatherEntry.value
+        || motherEntry.value
+    );
+});
 
 const emptySpouse = (): SpouseFields => ({
     lastname: '',
@@ -57,113 +201,100 @@ const emptyParent = (): ParentFields => ({
     extension: '',
 });
 
-const props = defineProps<{
-    family?: Record<string, unknown>[];
-    familyUpdateUrl?: string;
-}>();
-
-const isEditing = ref(false);
 const editModalOpen = ref(false);
-const spouse = ref<SpouseFields>(emptySpouse());
-const children = ref<ChildRow[]>([{ fullname: '', dob: '' }]);
-const father = ref<ParentFields>(emptyParent());
-const mother = ref<ParentFields>(emptyParent());
 const processing = ref(false);
 const errors = ref<Record<string, string>>({});
+const spouseForm = ref<SpouseFields>(emptySpouse());
+const fatherForm = ref<ParentFields>(emptyParent());
+const motherForm = ref<ParentFields>(emptyParent());
+const childrenForm = ref<ChildRow[]>([{ fullname: '', dob: '' }]);
 
-function parseFamily(fam: Record<string, unknown>[] | undefined): void {
-    if (!fam || !fam.length) return;
-    const childRows = fam.filter((item) => ['child', 'children'].includes((val(item.relationship) || '').toLowerCase()));
-    if (childRows.length > 0) {
-        children.value = childRows.map((item) => ({
-            fullname: familyName(item),
-            dob: val(item.dob),
-        }));
-    }
-    for (const item of fam) {
-        const rel = (val(item.relationship) || '').toLowerCase();
-        if (rel === 'spouse') {
-            spouse.value = {
-                lastname: val(item.lastname),
-                firstname: val(item.firstname),
-                middlename: val(item.middlename),
-                extension: val(item.extension),
-                occupation: val(item.occupation),
-                employer_name: val(item.employer_name),
-                business_add: val(item.business_add),
-                tel_num: val(item.tel_num),
-            };
-        } else if (rel === 'father') {
-            father.value = {
-                lastname: val(item.lastname),
-                firstname: val(item.firstname),
-                middlename: val(item.middlename),
-                extension: val(item.extension),
-            };
-        } else if (rel === 'mother') {
-            mother.value = {
-                lastname: val(item.lastname),
-                firstname: val(item.firstname),
-                middlename: val(item.middlename),
-                extension: '',
-            };
-        }
-    }
-    if (children.value.length === 0) {
-        children.value = [{ fullname: '', dob: '' }];
-    }
+const canEdit = computed(() => Boolean(props.familyUpdateUrl));
+
+function openEdit(): void {
+    spouseForm.value = {
+        lastname: val(spouseEntry.value?.lastname),
+        firstname: val(spouseEntry.value?.firstname),
+        middlename: val(spouseEntry.value?.middlename),
+        extension: val(spouseEntry.value?.extension),
+        occupation: val(spouseEntry.value?.occupation),
+        employer_name: val(spouseEntry.value?.employer_name),
+        business_add: val(spouseEntry.value?.business_add),
+        tel_num: val(spouseEntry.value?.tel_num),
+    };
+    fatherForm.value = {
+        lastname: val(fatherEntry.value?.lastname),
+        firstname: val(fatherEntry.value?.firstname),
+        middlename: val(fatherEntry.value?.middlename),
+        extension: val(fatherEntry.value?.extension),
+    };
+    motherForm.value = {
+        lastname: val(motherEntry.value?.lastname),
+        firstname: val(motherEntry.value?.firstname),
+        middlename: val(motherEntry.value?.middlename),
+        extension: '',
+    };
+    childrenForm.value = childrenEntries.value.length > 0
+        ? childrenEntries.value.map((child) => ({ fullname: child.fullName, dob: child.dob }))
+        : [{ fullname: '', dob: '' }];
+    errors.value = {};
+    editModalOpen.value = true;
 }
 
-function familyName(item: Record<string, unknown>): string {
-    const parts = [item.firstname, item.middlename, item.lastname, item.extension].filter(Boolean);
-    return parts.map(String).join(' ').trim();
+function addChild(): void {
+    childrenForm.value = [...childrenForm.value, { fullname: '', dob: '' }];
 }
 
-function relationOf(item: Record<string, unknown>): string {
-    return val(item.relationship).toLowerCase();
+function removeChild(index: number): void {
+    if (childrenForm.value.length <= 1) return;
+    childrenForm.value = childrenForm.value.filter((_, idx) => idx !== index);
 }
 
-function buildFamilyPayload(): Record<string, unknown>[] {
-    const out: Record<string, unknown>[] = [];
-    const s = spouse.value;
-    if (s.lastname || s.firstname || s.middlename || s.occupation || s.employer_name || s.business_add || s.tel_num) {
-        out.push({
+function buildFamilyPayload(): FamilyRow[] {
+    const payload: FamilyRow[] = [];
+
+    const s = spouseForm.value;
+    if ([s.lastname, s.firstname, s.middlename, s.extension, s.occupation, s.employer_name, s.business_add, s.tel_num].some((item) => val(item) !== '')) {
+        payload.push({
             relationship: 'Spouse',
-            lastname: s.lastname || null,
-            firstname: s.firstname || null,
-            middlename: s.middlename || null,
-            extension: s.extension || null,
-            occupation: s.occupation || null,
-            employer_name: s.employer_name || null,
-            business_add: s.business_add || null,
-            tel_num: s.tel_num || null,
+            lastname: val(s.lastname) || null,
+            firstname: val(s.firstname) || null,
+            middlename: val(s.middlename) || null,
+            extension: val(s.extension) || null,
+            occupation: val(s.occupation) || null,
+            employer_name: val(s.employer_name) || null,
+            business_add: val(s.business_add) || null,
+            tel_num: val(s.tel_num) || null,
             dob: null,
         });
     }
-    for (const c of children.value) {
-        if (c.fullname || c.dob) {
-            out.push({
-                relationship: 'Child',
-                lastname: null,
-                firstname: c.fullname || null,
-                middlename: null,
-                extension: null,
-                occupation: null,
-                employer_name: null,
-                business_add: null,
-                tel_num: null,
-                dob: c.dob || null,
-            });
+
+    for (const child of childrenForm.value) {
+        if (val(child.fullname) === '' && val(child.dob) === '') {
+            continue;
         }
+        payload.push({
+            relationship: 'Child',
+            lastname: null,
+            firstname: val(child.fullname) || null,
+            middlename: null,
+            extension: null,
+            occupation: null,
+            employer_name: null,
+            business_add: null,
+            tel_num: null,
+            dob: val(child.dob) || null,
+        });
     }
-    const f = father.value;
-    if (f.lastname || f.firstname || f.middlename) {
-        out.push({
+
+    const f = fatherForm.value;
+    if ([f.lastname, f.firstname, f.middlename, f.extension].some((item) => val(item) !== '')) {
+        payload.push({
             relationship: 'Father',
-            lastname: f.lastname || null,
-            firstname: f.firstname || null,
-            middlename: f.middlename || null,
-            extension: f.extension || null,
+            lastname: val(f.lastname) || null,
+            firstname: val(f.firstname) || null,
+            middlename: val(f.middlename) || null,
+            extension: val(f.extension) || null,
             occupation: null,
             employer_name: null,
             business_add: null,
@@ -171,13 +302,14 @@ function buildFamilyPayload(): Record<string, unknown>[] {
             dob: null,
         });
     }
-    const m = mother.value;
-    if (m.lastname || m.firstname || m.middlename) {
-        out.push({
+
+    const m = motherForm.value;
+    if ([m.lastname, m.firstname, m.middlename].some((item) => val(item) !== '')) {
+        payload.push({
             relationship: 'Mother',
-            lastname: m.lastname || null,
-            firstname: m.firstname || null,
-            middlename: m.middlename || null,
+            lastname: val(m.lastname) || null,
+            firstname: val(m.firstname) || null,
+            middlename: val(m.middlename) || null,
             extension: null,
             occupation: null,
             employer_name: null,
@@ -186,98 +318,32 @@ function buildFamilyPayload(): Record<string, unknown>[] {
             dob: null,
         });
     }
-    return out;
-}
 
-function openEdit(): void {
-    parseFamily(props.family);
-    if (children.value.length === 0) {
-        children.value = [{ fullname: '', dob: '' }];
-    }
-    errors.value = {};
-    isEditing.value = true;
-    editModalOpen.value = true;
-}
-
-function cancelEdit(): void {
-    isEditing.value = false;
-    editModalOpen.value = false;
-}
-
-function addChild(): void {
-    children.value = [...children.value, { fullname: '', dob: '' }];
-}
-
-function removeChild(index: number): void {
-    if (children.value.length <= 1) return;
-    children.value = children.value.filter((_, i) => i !== index);
+    return payload;
 }
 
 function submit(): void {
     if (!props.familyUpdateUrl) return;
     processing.value = true;
     errors.value = {};
-    const family = buildFamilyPayload();
+
     router.post(
         props.familyUpdateUrl,
-        { family } as Parameters<typeof router.post>[1],
+        { family: buildFamilyPayload() } as Parameters<typeof router.post>[1],
         {
-        preserveScroll: true,
-        onFinish: () => {
-            processing.value = false;
+            preserveScroll: true,
+            onFinish: () => {
+                processing.value = false;
+            },
+            onSuccess: () => {
+                editModalOpen.value = false;
+            },
+            onError: (errs) => {
+                errors.value = (errs as Record<string, string>) || {};
+            },
         },
-        onSuccess: () => {
-            isEditing.value = false;
-            editModalOpen.value = false;
-        },
-        onError: (errs) => {
-            errors.value = (errs as Record<string, string>) || {};
-        },
-    });
+    );
 }
-
-watch(() => props.family, (next) => {
-    if (!isEditing.value && next && next.length > 0) {
-        parseFamily(next);
-    }
-}, { immediate: true });
-
-const familyRows = computed(() => props.family ?? []);
-const spouseEntry = computed<Record<string, unknown> | null>(() => {
-    return familyRows.value.find((item) => relationOf(item) === 'spouse') ?? null;
-});
-const childrenEntries = computed<Record<string, unknown>[]>(() => {
-    return familyRows.value.filter((item) => {
-        const rel = relationOf(item);
-        return rel === 'child' || rel === 'children';
-    });
-});
-const fatherEntry = computed<Record<string, unknown> | null>(() => {
-    return familyRows.value.find((item) => relationOf(item) === 'father') ?? null;
-});
-const motherEntry = computed<Record<string, unknown> | null>(() => {
-    return familyRows.value.find((item) => relationOf(item) === 'mother') ?? null;
-});
-
-const canEdit = computed(() => Boolean(props.familyUpdateUrl));
-const hasFamily = computed(() => Boolean(
-    spouseEntry.value
-    || childrenEntries.value.length > 0
-    || fatherEntry.value
-    || motherEntry.value
-));
-
-function displayVal(v: unknown): string {
-    if (v == null || v === '') return '—';
-    return String(v);
-}
-
-// Default to view mode; user clicks Edit to add or change. Do not auto-open edit when empty.
-onMounted(() => {
-    if (props.family && props.family.length > 0) {
-        parseFamily(props.family);
-    }
-});
 </script>
 
 <template>
@@ -296,281 +362,136 @@ onMounted(() => {
             </button>
         </div>
 
-        <!-- View mode: PDS-style (same layout as edit form – sections 22–25, gray headers, label | value rows) -->
-        <template v-if="!isEditing">
-            <template v-if="hasFamily">
-                <div class="ehris-pds-family-form ehris-pds-family-view">
-                    <div class="ehris-pds-family-view-grid">
-                    <!-- 22. Spouse -->
-                    <div v-if="spouseEntry" class="ehris-pds-section ehris-pds-section--full">
-                        <div class="ehris-pds-section-title">
-                            <span class="ehris-pds-section-no">22.</span>
-                            <span>SPOUSE DETAILS</span>
-                        </div>
-                        <template>
-                            <div class="ehris-pds-row">
-                                <div class="ehris-pds-label">SPOUSE'S SURNAME</div>
-                                <div class="ehris-pds-value">{{ displayVal(spouseEntry.lastname) }}</div>
-                            </div>
-                            <div class="ehris-pds-row">
-                                <div class="ehris-pds-label">FIRST NAME</div>
-                                <div class="ehris-pds-value ehris-pds-value-group">
-                                    {{ displayVal(spouseEntry.firstname) }}
-                                    <span class="ehris-pds-label-inline">NAME EXTENSION (JR., SR.)</span>
-                                    {{ displayVal(spouseEntry.extension) }}
-                                </div>
-                            </div>
-                            <div class="ehris-pds-row">
-                                <div class="ehris-pds-label">MIDDLE NAME</div>
-                                <div class="ehris-pds-value">{{ displayVal(spouseEntry.middlename) }}</div>
-                            </div>
-                            <div class="ehris-pds-row">
-                                <div class="ehris-pds-label">OCCUPATION</div>
-                                <div class="ehris-pds-value">{{ displayVal(spouseEntry.occupation) }}</div>
-                            </div>
-                            <div class="ehris-pds-row">
-                                <div class="ehris-pds-label">EMPLOYER/BUSINESS NAME</div>
-                                <div class="ehris-pds-value">{{ displayVal(spouseEntry.employer_name) }}</div>
-                            </div>
-                            <div class="ehris-pds-row">
-                                <div class="ehris-pds-label">BUSINESS ADDRESS</div>
-                                <div class="ehris-pds-value">{{ displayVal(spouseEntry.business_add) }}</div>
-                            </div>
-                            <div class="ehris-pds-row">
-                                <div class="ehris-pds-label">TELEPHONE NO.</div>
-                                <div class="ehris-pds-value">{{ displayVal(spouseEntry.tel_num) }}</div>
-                            </div>
-                        </template>
-                    </div>
-
-                    <!-- 23. Children -->
-                    <div v-if="childrenEntries.length > 0" class="ehris-pds-section ehris-pds-section--full">
-                        <div class="ehris-pds-section-title ehris-pds-section-title-cols">
-                            <span class="ehris-pds-section-title-main">
-                                <span class="ehris-pds-section-no">23.</span>
+        <template v-if="hasFamilyData">
+            <div class="ehris-pds-family-sheet">
+                <table class="ehris-pds-family-table">
+                    <tbody>
+                        <tr class="ehris-pds-head-row">
+                            <th colspan="2">
+                                <span class="ehris-pds-no">22.</span>
+                                <span>SPOUSE'S SURNAME</span>
+                            </th>
+                            <th>
+                                <span class="ehris-pds-no">23.</span>
                                 <span>NAME OF CHILDREN (Write full name and list all)</span>
-                            </span>
-                            <span>DATE OF BIRTH (dd/mm/yyyy)</span>
-                        </div>
-                        <div
-                            v-for="(item, i) in childrenEntries"
-                            :key="i"
-                            class="ehris-pds-row ehris-pds-row-children"
-                        >
-                            <div class="ehris-pds-value">{{ familyName(item) }}</div>
-                            <div class="ehris-pds-value ehris-pds-value-dob">{{ displayVal(item.dob) }}</div>
-                        </div>
-                    </div>
-
-                    <!-- 24. Father -->
-                    <div v-if="fatherEntry" class="ehris-pds-section">
-                        <div class="ehris-pds-section-title">
-                            <span class="ehris-pds-section-no">24.</span>
-                            <span>FATHER'S DETAILS</span>
-                        </div>
-                        <div class="ehris-pds-row">
-                            <div class="ehris-pds-label">FATHER'S SURNAME</div>
-                            <div class="ehris-pds-value">{{ displayVal(fatherEntry.lastname) }}</div>
-                        </div>
-                        <div class="ehris-pds-row">
-                            <div class="ehris-pds-label">FIRST NAME</div>
-                            <div class="ehris-pds-value ehris-pds-value-group">
-                                {{ displayVal(fatherEntry.firstname) }}
-                                <span class="ehris-pds-label-inline">NAME EXTENSION (JR., SR.)</span>
-                                {{ displayVal(fatherEntry.extension) }}
-                            </div>
-                        </div>
-                        <div class="ehris-pds-row">
-                            <div class="ehris-pds-label">MIDDLE NAME</div>
-                            <div class="ehris-pds-value">{{ displayVal(fatherEntry.middlename) }}</div>
-                        </div>
-                    </div>
-
-                    <!-- 25. Mother -->
-                    <div v-if="motherEntry" class="ehris-pds-section">
-                        <div class="ehris-pds-section-title">
-                            <span class="ehris-pds-section-no">25.</span>
-                            <span>MOTHER'S MAIDEN NAME</span>
-                        </div>
-                        <div class="ehris-pds-row">
-                            <div class="ehris-pds-label">SURNAME</div>
-                            <div class="ehris-pds-value">{{ displayVal(motherEntry.lastname) }}</div>
-                        </div>
-                        <div class="ehris-pds-row">
-                            <div class="ehris-pds-label">FIRST NAME</div>
-                            <div class="ehris-pds-value">{{ displayVal(motherEntry.firstname) }}</div>
-                        </div>
-                        <div class="ehris-pds-row">
-                            <div class="ehris-pds-label">MIDDLE NAME</div>
-                            <div class="ehris-pds-value">{{ displayVal(motherEntry.middlename) }}</div>
-                        </div>
-                    </div>
-                    </div>
-                </div>
-            </template>
-            <p v-else class="ehris-muted">No family information on file.</p>
+                            </th>
+                            <th>DATE OF BIRTH (dd/mm/yyyy)</th>
+                        </tr>
+                        <tr>
+                            <td class="ehris-pds-label">SPOUSE'S SURNAME</td>
+                            <td class="ehris-pds-value is-strong">{{ displayVal(spouseEntry?.lastname) }}</td>
+                            <td class="ehris-pds-value">{{ displayVal(childrenEntries[0]?.fullName) }}</td>
+                            <td class="ehris-pds-value">{{ displayDate(childrenEntries[0]?.dob) }}</td>
+                        </tr>
+                        <tr v-for="(row, idx) in spouseAndChildrenRows" :key="idx">
+                            <td class="ehris-pds-label">{{ row.spouseLabel || ' ' }}</td>
+                            <td class="ehris-pds-value">
+                                <template v-if="row.spouseLabel === 'FIRST NAME'">
+                                    <span class="is-strong">{{ displayVal(row.spouseValue) }}</span>
+                                    <span class="ehris-pds-inline-label">NAME EXTENSION (JR., SR.)</span>
+                                    <span>{{ displayVal(spouseEntry?.extension || 'N/A') }}</span>
+                                </template>
+                                <template v-else>{{ displayVal(row.spouseValue) }}</template>
+                            </td>
+                            <td class="ehris-pds-value">{{ displayVal(row.childName) }}</td>
+                            <td class="ehris-pds-value">{{ displayDate(row.childDob) }}</td>
+                        </tr>
+                        <tr class="ehris-pds-head-row">
+                            <th colspan="2">
+                                <span class="ehris-pds-no">24.</span>
+                                <span>FATHER'S SURNAME</span>
+                            </th>
+                            <th colspan="2">
+                                <span class="ehris-pds-no">25.</span>
+                                <span>MOTHER'S MAIDEN NAME</span>
+                            </th>
+                        </tr>
+                        <tr>
+                            <td class="ehris-pds-label">FATHER'S SURNAME</td>
+                            <td class="ehris-pds-value is-strong">{{ displayVal(fatherEntry?.lastname) }}</td>
+                            <td class="ehris-pds-label">SURNAME</td>
+                            <td class="ehris-pds-value is-strong">{{ displayVal(motherEntry?.lastname) }}</td>
+                        </tr>
+                        <tr>
+                            <td class="ehris-pds-label">FIRST NAME</td>
+                            <td class="ehris-pds-value">
+                                <span class="is-strong">{{ displayVal(fatherEntry?.firstname) }}</span>
+                                <span class="ehris-pds-inline-label">NAME EXTENSION (JR., SR.)</span>
+                                <span>{{ displayVal(fatherEntry?.extension || 'N/A') }}</span>
+                            </td>
+                            <td class="ehris-pds-label">FIRST NAME</td>
+                            <td class="ehris-pds-value">{{ displayVal(motherEntry?.firstname) }}</td>
+                        </tr>
+                        <tr>
+                            <td class="ehris-pds-label">MIDDLE NAME</td>
+                            <td class="ehris-pds-value is-strong">{{ displayVal(fatherEntry?.middlename) }}</td>
+                            <td class="ehris-pds-label">MIDDLE NAME</td>
+                            <td class="ehris-pds-value is-strong">{{ displayVal(motherEntry?.middlename) }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </template>
+        <p v-else class="ehris-muted">No family information on file.</p>
 
-        <!-- Edit mode: form in a modal -->
-        <Dialog :open="editModalOpen" @update:open="(v) => { editModalOpen = v; if (!v) cancelEdit(); }">
-            <DialogContent
-                :show-close-button="true"
-                class="ehris-family-dialog sm:max-w-3xl max-h-[90vh] overflow-hidden flex flex-col"
-            >
+        <Dialog :open="editModalOpen" @update:open="(v) => { editModalOpen = v; }">
+            <DialogContent class="sm:max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
                 <DialogHeader>
                     <DialogTitle>Edit Family Background</DialogTitle>
                 </DialogHeader>
-                <form @submit.prevent="submit" class="ehris-family-form flex flex-col min-h-0 flex-1">
+
+                <form @submit.prevent="submit" class="flex flex-col min-h-0 flex-1">
                     <div v-if="Object.keys(errors).length" class="ehris-family-errors shrink-0">
                         <p v-for="(msg, key) in errors" :key="key">{{ msg }}</p>
                     </div>
-                    <div class="flex-1 min-h-0 overflow-y-auto pr-2">
 
-                <!-- PDS-style form: sections 22–25, label | input rows -->
-                <div class="ehris-pds-family-form">
-                    <!-- 22. Spouse -->
-                    <div class="ehris-pds-section">
-                        <div class="ehris-pds-section-title">22. SPOUSE'S SURNAME</div>
-                        <div class="ehris-pds-row">
-                            <label for="spouse-lastname" class="ehris-pds-label">SPOUSE'S SURNAME</label>
-                            <div class="ehris-pds-input-wrap">
-                                <Input id="spouse-lastname" v-model="spouse.lastname" type="text" class="ehris-pds-input" placeholder="Surname" />
-                            </div>
+                    <div class="flex-1 min-h-0 overflow-y-auto pr-2 space-y-4">
+                        <div class="grid gap-3 md:grid-cols-2">
+                            <Input v-model="spouseForm.lastname" type="text" placeholder="Spouse surname" />
+                            <Input v-model="spouseForm.firstname" type="text" placeholder="Spouse first name" />
+                            <Input v-model="spouseForm.middlename" type="text" placeholder="Spouse middle name" />
+                            <Input v-model="spouseForm.extension" type="text" placeholder="Spouse extension (JR., SR.)" />
+                            <Input v-model="spouseForm.occupation" type="text" placeholder="Spouse occupation" />
+                            <Input v-model="spouseForm.employer_name" type="text" placeholder="Employer/Business name" />
+                            <Input v-model="spouseForm.business_add" type="text" placeholder="Business address" />
+                            <Input v-model="spouseForm.tel_num" type="text" placeholder="Telephone no." />
                         </div>
-                        <div class="ehris-pds-row">
-                            <label for="spouse-firstname" class="ehris-pds-label">FIRST NAME</label>
-                            <div class="ehris-pds-input-wrap ehris-pds-input-group">
-                                <Input id="spouse-firstname" v-model="spouse.firstname" type="text" class="ehris-pds-input" placeholder="First name" />
-                                <span class="ehris-pds-label-inline">NAME EXTENSION (JR., SR.)</span>
-                                <Input id="spouse-extension" v-model="spouse.extension" type="text" class="ehris-pds-input ehris-pds-input-ext" placeholder="Jr., Sr." />
-                            </div>
-                        </div>
-                        <div class="ehris-pds-row">
-                            <label for="spouse-middlename" class="ehris-pds-label">MIDDLE NAME</label>
-                            <div class="ehris-pds-input-wrap">
-                                <Input id="spouse-middlename" v-model="spouse.middlename" type="text" class="ehris-pds-input" placeholder="Middle name" />
-                            </div>
-                        </div>
-                        <div class="ehris-pds-row">
-                            <label for="spouse-occupation" class="ehris-pds-label">OCCUPATION</label>
-                            <div class="ehris-pds-input-wrap">
-                                <Input id="spouse-occupation" v-model="spouse.occupation" type="text" class="ehris-pds-input" placeholder="Occupation" />
-                            </div>
-                        </div>
-                        <div class="ehris-pds-row">
-                            <label for="spouse-employer" class="ehris-pds-label">EMPLOYER/BUSINESS NAME</label>
-                            <div class="ehris-pds-input-wrap">
-                                <Input id="spouse-employer" v-model="spouse.employer_name" type="text" class="ehris-pds-input" placeholder="Employer or business name" />
-                            </div>
-                        </div>
-                        <div class="ehris-pds-row">
-                            <label for="spouse-business-add" class="ehris-pds-label">BUSINESS ADDRESS</label>
-                            <div class="ehris-pds-input-wrap">
-                                <Input id="spouse-business-add" v-model="spouse.business_add" type="text" class="ehris-pds-input" placeholder="Business address" />
-                            </div>
-                        </div>
-                        <div class="ehris-pds-row">
-                            <label for="spouse-tel" class="ehris-pds-label">TELEPHONE NO.</label>
-                            <div class="ehris-pds-input-wrap">
-                                <Input id="spouse-tel" v-model="spouse.tel_num" type="text" class="ehris-pds-input" placeholder="Telephone number" />
-                            </div>
-                        </div>
-                    </div>
 
-                    <!-- 23. Children -->
-                    <div class="ehris-pds-section">
-                        <div class="ehris-pds-section-title ehris-pds-section-title-cols">
-                            <span>23. NAME OF CHILDREN (Write full name and list all)</span>
-                            <span>DATE OF BIRTH (dd/mm/yyyy)</span>
-                        </div>
-                        <template v-for="(child, index) in children" :key="index">
-                            <div class="ehris-pds-row ehris-pds-row-children">
-                                <div class="ehris-pds-input-wrap">
-                                    <Input :id="`child-name-${index}`" v-model="child.fullname" type="text" class="ehris-pds-input" placeholder="Full name" />
-                                </div>
-                                <div class="ehris-pds-input-wrap ehris-pds-input-dob">
-                                    <Input :id="`child-dob-${index}`" v-model="child.dob" type="text" class="ehris-pds-input" placeholder="dd/mm/yyyy" />
-                                </div>
-                                <div class="ehris-pds-actions">
-                                    <Button type="button" variant="ghost" size="icon" aria-label="Remove" :disabled="children.length <= 1" @click="removeChild(index)">
-                                        <Trash2 class="size-4" />
-                                    </Button>
-                                </div>
+                        <div class="space-y-2">
+                            <div class="text-sm font-semibold">Children</div>
+                            <div v-for="(child, idx) in childrenForm" :key="idx" class="grid gap-2 md:grid-cols-[1fr_180px_auto] items-center">
+                                <Input v-model="child.fullname" type="text" placeholder="Child full name" />
+                                <Input v-model="child.dob" type="text" placeholder="Date of birth" />
+                                <Button type="button" variant="ghost" size="icon" :disabled="childrenForm.length <= 1" @click="removeChild(idx)">
+                                    <Trash2 class="size-4" />
+                                </Button>
                             </div>
-                        </template>
-                        <div class="ehris-add-child-wrap">
-                            <Button type="button" variant="outline" size="sm" :disabled="processing" @click="addChild">
+                            <Button type="button" variant="outline" size="sm" @click="addChild">
                                 <Plus class="size-4 mr-1" />
                                 Add child
                             </Button>
                         </div>
-                    </div>
 
-                    <!-- 24. Father -->
-                    <div class="ehris-pds-section">
-                        <div class="ehris-pds-section-title">24. FATHER'S SURNAME</div>
-                        <div class="ehris-pds-row">
-                            <label for="father-lastname" class="ehris-pds-label">FATHER'S SURNAME</label>
-                            <div class="ehris-pds-input-wrap">
-                                <Input id="father-lastname" v-model="father.lastname" type="text" class="ehris-pds-input" placeholder="Surname" />
-                            </div>
-                        </div>
-                        <div class="ehris-pds-row">
-                            <label for="father-firstname" class="ehris-pds-label">FIRST NAME</label>
-                            <div class="ehris-pds-input-wrap ehris-pds-input-group">
-                                <Input id="father-firstname" v-model="father.firstname" type="text" class="ehris-pds-input" placeholder="First name" />
-                                <span class="ehris-pds-label-inline">NAME EXTENSION (JR., SR.)</span>
-                                <Input id="father-extension" v-model="father.extension" type="text" class="ehris-pds-input ehris-pds-input-ext" placeholder="Jr., Sr." />
-                            </div>
-                        </div>
-                        <div class="ehris-pds-row">
-                            <label for="father-middlename" class="ehris-pds-label">MIDDLE NAME</label>
-                            <div class="ehris-pds-input-wrap">
-                                <Input id="father-middlename" v-model="father.middlename" type="text" class="ehris-pds-input" placeholder="Middle name" />
-                            </div>
+                        <div class="grid gap-3 md:grid-cols-2">
+                            <Input v-model="fatherForm.lastname" type="text" placeholder="Father surname" />
+                            <Input v-model="fatherForm.firstname" type="text" placeholder="Father first name" />
+                            <Input v-model="fatherForm.middlename" type="text" placeholder="Father middle name" />
+                            <Input v-model="fatherForm.extension" type="text" placeholder="Father extension" />
+                            <Input v-model="motherForm.lastname" type="text" placeholder="Mother surname" />
+                            <Input v-model="motherForm.firstname" type="text" placeholder="Mother first name" />
+                            <Input v-model="motherForm.middlename" type="text" placeholder="Mother middle name" />
                         </div>
                     </div>
 
-                    <!-- 25. Mother -->
-                    <div class="ehris-pds-section">
-                        <div class="ehris-pds-section-title">25. MOTHER'S MAIDEN NAME</div>
-                        <div class="ehris-pds-row">
-                            <label for="mother-lastname" class="ehris-pds-label">SURNAME</label>
-                            <div class="ehris-pds-input-wrap">
-                                <Input id="mother-lastname" v-model="mother.lastname" type="text" class="ehris-pds-input" placeholder="Surname" />
-                            </div>
-                        </div>
-                        <div class="ehris-pds-row">
-                            <label for="mother-firstname" class="ehris-pds-label">FIRST NAME</label>
-                            <div class="ehris-pds-input-wrap">
-                                <Input id="mother-firstname" v-model="mother.firstname" type="text" class="ehris-pds-input" placeholder="First name" />
-                            </div>
-                        </div>
-                        <div class="ehris-pds-row">
-                            <label for="mother-middlename" class="ehris-pds-label">MIDDLE NAME</label>
-                            <div class="ehris-pds-input-wrap">
-                                <Input id="mother-middlename" v-model="mother.middlename" type="text" class="ehris-pds-input" placeholder="Middle name" />
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                    </div>
-
-                <DialogFooter class="mt-4 shrink-0">
-                    <DialogClose as-child>
-                        <Button type="button" variant="ghost" :disabled="processing">
-                            Cancel
+                    <DialogFooter class="mt-4 shrink-0">
+                        <DialogClose as-child>
+                            <Button type="button" variant="ghost" :disabled="processing">Cancel</Button>
+                        </DialogClose>
+                        <Button type="submit" :disabled="processing">
+                            <Spinner v-if="processing" class="size-4 mr-1" />
+                            Save
                         </Button>
-                    </DialogClose>
-                    <Button
-                        type="submit"
-                        :disabled="processing"
-                    >
-                        <Spinner v-if="processing" class="size-4 mr-1" />
-                        Save
-                    </Button>
-                </DialogFooter>
+                    </DialogFooter>
                 </form>
             </DialogContent>
         </Dialog>
@@ -578,186 +499,73 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.ehris-family-form {
-    width: 100%;
-    max-width: 100%;
+.ehris-pds-family-sheet {
+    overflow-x: auto;
 }
+
+.ehris-pds-family-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-size: 0.875rem;
+}
+
+.ehris-pds-family-table th,
+.ehris-pds-family-table td {
+    border: 1px solid hsl(var(--border));
+    padding: 0.5rem 0.625rem;
+    vertical-align: top;
+}
+
+.ehris-pds-family-table th {
+    background: hsl(var(--muted));
+    color: hsl(var(--muted-foreground));
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-align: left;
+}
+
+.ehris-pds-head-row th {
+    text-transform: uppercase;
+}
+
+.ehris-pds-no {
+    display: inline-block;
+    min-width: 2rem;
+}
+
+.ehris-pds-label {
+    background: hsl(var(--muted));
+    color: hsl(var(--muted-foreground));
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.ehris-pds-value {
+    color: hsl(var(--foreground));
+    line-height: 1.35;
+}
+
+.is-strong {
+    font-weight: 600;
+}
+
+.ehris-pds-inline-label {
+    margin-left: 0.75rem;
+    margin-right: 0.375rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: hsl(var(--muted-foreground));
+}
+
 .ehris-family-errors {
-    margin-bottom: 1rem;
-    padding: 0.75rem 1rem;
+    margin-bottom: 0.75rem;
+    padding: 0.625rem 0.875rem;
     border-radius: 0.375rem;
     border: 1px solid hsl(var(--destructive));
     background: hsl(var(--destructive) / 0.08);
     color: hsl(var(--destructive));
     font-size: 0.875rem;
-}
-
-/* PDS-style family form: gray section headers, label | input rows, uniform field size */
-.ehris-pds-family-form {
-    width: 100%;
-    font-size: 0.875rem;
-}
-.ehris-pds-family-view-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 1rem;
-    align-items: start;
-}
-.ehris-pds-section {
-    margin-bottom: 1.25rem;
-}
-.ehris-pds-section--full {
-    grid-column: 1 / -1;
-}
-.ehris-pds-section-title {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    background: hsl(var(--muted));
-    color: hsl(var(--muted-foreground));
-    font-weight: 600;
-    padding: 0.5rem 0.75rem;
-    border: 1px solid hsl(var(--border));
-    border-bottom: none;
-}
-.ehris-pds-section-no {
-    width: 2.25rem;
-    text-align: right;
-    flex: 0 0 2.25rem;
-}
-.ehris-pds-section-title-cols {
-    display: grid;
-    grid-template-columns: 1fr 140px;
-    gap: 0.5rem;
-}
-.ehris-pds-section-title-main {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-.ehris-pds-row {
-    display: grid;
-    grid-template-columns: 180px 1fr;
-    gap: 0;
-    align-items: stretch;
-    border-left: 1px solid hsl(var(--border));
-    border-right: 1px solid hsl(var(--border));
-    border-bottom: 1px solid hsl(var(--border));
-}
-.ehris-pds-row:first-of-type {
-    border-top: 1px solid hsl(var(--border));
-}
-.ehris-pds-row-children {
-    grid-template-columns: 1fr 140px auto;
-    border-top: 1px solid hsl(var(--border));
-}
-.ehris-pds-row-children .ehris-pds-input-wrap:first-child {
-    border-right: 1px solid hsl(var(--border));
-}
-.ehris-pds-label {
-    background: hsl(var(--muted));
-    color: hsl(var(--muted-foreground));
-    font-weight: 600;
-    padding: 0.5rem 0.75rem;
-    display: flex;
-    align-items: center;
-    border-right: 1px solid hsl(var(--border));
-}
-.ehris-pds-input-wrap {
-    padding: 0.25rem 0.5rem;
-    display: flex;
-    align-items: center;
-    min-height: 2.25rem;
-    min-width: 0;
-}
-.ehris-pds-input-wrap.ehris-pds-input-group {
-    flex-wrap: wrap;
-    gap: 0.5rem 0.75rem;
-    align-items: center;
-}
-.ehris-pds-label-inline {
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: hsl(var(--muted-foreground));
-    margin-left: 0.25rem;
-}
-.ehris-pds-input {
-    width: 100%;
-    min-width: 0;
-    height: 2rem;
-}
-.ehris-pds-family-form :deep(.ehris-pds-input) {
-    height: 2rem;
-    min-height: 2rem;
-}
-.ehris-pds-input-ext {
-    max-width: 5rem;
-}
-.ehris-pds-input-dob {
-    max-width: 140px;
-}
-.ehris-pds-actions {
-    display: flex;
-    align-items: center;
-    padding: 0 0.25rem;
-    border-left: 1px solid hsl(var(--border));
-}
-/* View mode: read-only value cells styled like text fields (bordered, rounded, background) */
-.ehris-pds-family-view .ehris-pds-value {
-    padding: 0.5rem 0.75rem;
-    min-height: 2.25rem;
-    display: flex;
-    align-items: center;
-    min-width: 0;
-    border-right: none;
-    border-radius: 0.375rem;
-    border: 1px solid hsl(var(--border));
-    background: hsl(var(--muted) / 0.5);
-    color: hsl(var(--foreground));
-}
-.ehris-pds-family-view .ehris-pds-value-group {
-    flex-wrap: wrap;
-    gap: 0 0.75rem;
-    align-items: center;
-}
-.ehris-pds-family-view .ehris-pds-value-group .ehris-pds-label-inline {
-    margin-left: 0.5rem;
-}
-.ehris-pds-family-view .ehris-pds-value-dob {
-    max-width: 140px;
-    border-left: 1px solid hsl(var(--border));
-}
-.ehris-pds-family-view .ehris-pds-row-children .ehris-pds-value:first-child {
-    border-right: 1px solid hsl(var(--border));
-}
-.ehris-add-child-wrap {
-    margin-top: 0.75rem;
-    padding: 0.5rem 0;
-}
-.ehris-family-note {
-    font-size: 0.75rem;
-    color: hsl(var(--destructive));
-    margin-top: 1rem;
-    margin-bottom: 0.5rem;
-}
-@media (max-width: 960px) {
-    .ehris-pds-family-view-grid {
-        grid-template-columns: 1fr;
-    }
-}
-@media (max-width: 640px) {
-    .ehris-pds-row {
-        grid-template-columns: 1fr;
-    }
-    .ehris-pds-row .ehris-pds-label {
-        border-right: none;
-        border-bottom: 1px solid hsl(var(--border));
-    }
-    .ehris-pds-row-children {
-        grid-template-columns: 1fr auto;
-    }
-    .ehris-pds-section-title-cols {
-        grid-template-columns: 1fr;
-    }
 }
 </style>

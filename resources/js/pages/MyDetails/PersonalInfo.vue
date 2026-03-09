@@ -91,12 +91,12 @@ defineProps<{
                     </dl>
                 </div>
 
-                <div class="ehris-pds-personal-section">
+                <div class="ehris-pds-personal-section ehris-pds-personal-section--full">
                     <div class="ehris-pds-personal-title">
                         <span class="ehris-pds-personal-roman">III.</span>
                         <span>CONTACT AND ADDRESS INFORMATION</span>
                     </div>
-                    <dl class="ehris-pds-personal-content">
+                    <dl class="ehris-pds-personal-content ehris-pds-personal-content-horizontal">
                         <div class="ehris-pds-personal-row"><dt>RESIDENTIAL - HOUSE/BLOCK/LOT</dt><dd>{{ val(contactInfo?.house_block_lotnum) }}</dd></div>
                         <div class="ehris-pds-personal-row"><dt>RESIDENTIAL - STREET</dt><dd>{{ val(contactInfo?.street_add) }}</dd></div>
                         <div class="ehris-pds-personal-row"><dt>RESIDENTIAL - SUBDIVISION/VILLAGE</dt><dd>{{ val(contactInfo?.subdivision_village) }}</dd></div>
@@ -136,8 +136,12 @@ defineProps<{
 .ehris-pds-personal-form {
     display: grid;
     gap: 1rem;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: start;
+}
+
+.ehris-pds-personal-section--full {
+    grid-column: 1 / -1;
 }
 
 .ehris-pds-personal-title {
@@ -162,6 +166,13 @@ defineProps<{
 
 .ehris-pds-personal-content {
     margin: 0;
+}
+
+.ehris-pds-personal-content-horizontal {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.75rem;
+    align-items: start;
 }
 
 .ehris-pds-personal-row {
@@ -192,14 +203,46 @@ defineProps<{
     min-height: 2.25rem;
 }
 
+.ehris-pds-personal-content-horizontal .ehris-pds-personal-row {
+    display: grid;
+    grid-template-columns: 165px 1fr;
+    border: 1px solid hsl(var(--border));
+    align-items: start;
+}
+
+.ehris-pds-personal-content-horizontal .ehris-pds-personal-row dt {
+    display: flex;
+    align-items: flex-start;
+    border-right: 1px solid hsl(var(--border));
+    border-bottom: none;
+    line-height: 1.3;
+}
+
+.ehris-pds-personal-content-horizontal .ehris-pds-personal-row dd {
+    display: flex;
+    align-items: flex-start;
+    line-height: 1.3;
+    text-align: left;
+}
+
 @media (max-width: 1280px) {
-    .ehris-pds-personal-form {
+    .ehris-pds-personal-content-horizontal {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 1024px) {
+    .ehris-pds-personal-content-horizontal {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }
 
 @media (max-width: 640px) {
     .ehris-pds-personal-form {
+        grid-template-columns: 1fr;
+    }
+
+    .ehris-pds-personal-content-horizontal {
         grid-template-columns: 1fr;
     }
 

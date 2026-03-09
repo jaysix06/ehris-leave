@@ -13,6 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
@@ -71,10 +72,15 @@ class FortifyServiceProvider extends ServiceProvider
                 return null;
             }
 
-            $user = User::query()
-                ->whereRaw('LOWER(TRIM(email)) = ?', [$email])
-                ->orWhereRaw('LOWER(TRIM(personal_email)) = ?', [$email])
-                ->first();
+            $userQuery = User::query()
+                ->whereRaw('LOWER(TRIM(email)) = ?', [$email]);
+
+            $usersTable = (new User)->getTable();
+            if (Schema::hasColumn($usersTable, 'personal_email')) {
+                $userQuery->orWhereRaw('LOWER(TRIM(personal_email)) = ?', [$email]);
+            }
+
+            $user = $userQuery->first();
 
             if (! $user || ! is_string($user->password) || $user->password === '') {
                 Log::info('[Auth] User not found or no password', [
