@@ -7,8 +7,10 @@ use App\Http\Controllers\MessageController;
 use App\Http\Controllers\MyDetailsController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\RequestStatus\MyLeaveController;
+use App\Http\Controllers\SelfService\CalendarController;
 use App\Http\Controllers\SelfService\IdCardController;
 use App\Http\Controllers\SelfService\LeaveApplicationController;
+use App\Http\Controllers\SelfService\TimeLogsController;
 use App\Http\Controllers\SelfService\TimezoneController;
 use App\Http\Controllers\SurveyController;
 use App\Http\Controllers\Utilities\ActivityLogController;
@@ -155,6 +157,16 @@ Route::post('self-service/timezone/clock-in', [TimezoneController::class, 'clock
     ->middleware(['auth', 'verified'])->name('self-service.timezone.clock-in');
 Route::post('self-service/timezone/clock-out', [TimezoneController::class, 'clockOut'])
     ->middleware(['auth', 'verified'])->name('self-service.timezone.clock-out');
+Route::get('self-service/calendar', [CalendarController::class, 'index'])
+    ->middleware(['auth', 'verified'])->name('self-service.calendar');
+Route::get('api/self-service/calendar/events', [CalendarController::class, 'events'])
+    ->middleware(['auth'])->name('api.self-service.calendar.events');
+Route::post('api/self-service/calendar/events', [CalendarController::class, 'store'])
+    ->middleware(['auth'])->name('api.self-service.calendar.events.store');
+Route::delete('api/self-service/calendar/events/{event}', [CalendarController::class, 'destroy'])
+    ->middleware(['auth'])->name('api.self-service.calendar.events.destroy');
+Route::get('self-service/time-logs', [TimeLogsController::class, 'index'])
+    ->middleware(['auth', 'verified'])->name('self-service.time-logs');
 Route::get('self-service/wfh-time-in-out', function () {
     return Inertia::render('SelfService/WfhTimeInOut');
 })->middleware(['auth', 'verified'])->name('self-service.wfh-time-in-out');
@@ -507,23 +519,6 @@ Route::get('reports/employee-listing/export/print', [App\Http\Controllers\Report
 Route::get('api/reports/employee-listing/summary-stats', [App\Http\Controllers\Reports\EmployeeListingController::class, 'summaryStats'])
     ->middleware(['auth', 'verified'])
     ->name('reports.employee-listing.summary-stats');
-
-Route::get('api/messages/conversations', [MessageController::class, 'conversations'])
-    ->middleware(['auth'])
-    ->name('api.messages.conversations');
-Route::get('api/messages/{contactId}', [MessageController::class, 'show'])
-    ->middleware(['auth'])
-    ->where('contactId', '[0-9]+')
-    ->name('api.messages.show');
-Route::post('api/messages', [MessageController::class, 'store'])
-    ->middleware(['auth'])
-    ->withoutMiddleware([ValidateCsrfToken::class])
-    ->name('api.messages.store');
-Route::patch('api/messages/{contactId}/read', [MessageController::class, 'markRead'])
-    ->middleware(['auth'])
-    ->where('contactId', '[0-9]+')
-    ->withoutMiddleware([ValidateCsrfToken::class])
-    ->name('api.messages.read');
 
 require __DIR__.'/settings.php';
 // });
