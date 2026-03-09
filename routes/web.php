@@ -32,7 +32,16 @@ Route::get('/', function () {
     return Inertia::render('Welcome', [
         'canRegister' => Features::enabled(Features::registration()),
     ]);
-})->name('home');
+})->middleware('guest')->name('home');
+
+Route::get('auth/status', function (Request $request) {
+    return response()
+        ->json([
+            'authenticated' => (bool) $request->user(),
+        ])
+        ->header('Cache-Control', 'no-store, private')
+        ->header('Pragma', 'no-cache');
+})->name('auth.status');
 
 // Route::prefix('ehris')->group(function () {
 Route::middleware(['guest', 'throttle:5,1'])->group(function () {

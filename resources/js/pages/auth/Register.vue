@@ -133,29 +133,29 @@ const handleDistrictChange = (event: Event) => {
                             <InputError :message="errors.firstname" />
                         </div>
                         <div class="grid gap-2 md:col-span-1">
-                            <Label for="lastname">Last name</Label>
-                            <Input
-                                id="lastname"
-                                type="text"
-                                required
-                                :tabindex="2"
-                                autocomplete="family-name"
-                                name="lastname"
-                                placeholder="Last name"
-                            />
-                            <InputError :message="errors.lastname" />
-                        </div>
-                        <div class="grid gap-2 md:col-span-1">
                             <Label for="middlename">Middle name</Label>
                             <Input
                                 id="middlename"
                                 type="text"
-                                :tabindex="3"
+                                :tabindex="2"
                                 autocomplete="additional-name"
                                 name="middlename"
                                 placeholder="Middle name"
                             />
                             <InputError :message="errors.middlename" />
+                        </div>
+                        <div class="grid gap-2 md:col-span-1">
+                            <Label for="lastname">Last name</Label>
+                            <Input
+                                id="lastname"
+                                type="text"
+                                required
+                                :tabindex="3"
+                                autocomplete="family-name"
+                                name="lastname"
+                                placeholder="Last name"
+                            />
+                            <InputError :message="errors.lastname" />
                         </div>
 
                         <div class="grid gap-2 md:col-span-1">
@@ -262,39 +262,13 @@ const handleDistrictChange = (event: Event) => {
                             </select>
                             <InputError :message="errors.station" />
                         </div>
-                        <div class="grid gap-2 md:col-span-1">
-                            <Label for="password">Password</Label>
-                            <Input
-                                id="password"
-                                type="password"
-                                name="password"
-                                required
-                                :tabindex="9"
-                                autocomplete="new-password"
-                                placeholder="Password"
-                            />
-                            <InputError :message="errors.password" />
-                        </div>
-                        <div class="grid gap-2 md:col-span-1">
-                            <Label for="password_confirmation">Confirm password</Label>
-                            <Input
-                                id="password_confirmation"
-                                type="password"
-                                name="password_confirmation"
-                                required
-                                :tabindex="10"
-                                autocomplete="new-password"
-                                placeholder="Confirm password"
-                            />
-                            <InputError :message="errors.password_confirmation" />
-                        </div>
 
                         <div class="md:col-span-2 flex justify-center gap-4">
                             <Button
                                 type="button"
                                 size="sm"
                                 class="mt-2"
-                                :tabindex="11"
+                                :tabindex="9"
                                 variant="outline"
                                 @click="currentStep = 1"
                             >
@@ -304,7 +278,7 @@ const handleDistrictChange = (event: Event) => {
                                 type="submit"
                                 size="sm"
                                 class="mt-2 px-8"
-                                :tabindex="12"
+                                :tabindex="10"
                                 :disabled="processing"
                                 data-test="register-user-button"
                             >

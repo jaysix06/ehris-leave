@@ -7,6 +7,7 @@ import {
     Shield,
 } from 'lucide-vue-next';
 import { login, register } from '@/routes';
+import { useSessionTrap } from '@/composables/useSessionTrap';
 
 const announcements = [
     {
@@ -26,6 +27,11 @@ const announcements = [
         date: 'February 15, 2026',
     },
 ];
+
+useSessionTrap({
+    mode: 'guest',
+    redirectIfAuthenticated: '/dashboard',
+});
 </script>
 
 <template>

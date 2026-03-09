@@ -11,12 +11,18 @@ import { Spinner } from '@/components/ui/spinner';
 import { register } from '@/routes';
 import { store } from '@/routes/login';
 import { request } from '@/routes/password';
+import { useSessionTrap } from '@/composables/useSessionTrap';
 
 defineProps<{
     status?: string;
     canResetPassword: boolean;
     canRegister: boolean;
 }>();
+
+useSessionTrap({
+    mode: 'guest',
+    redirectIfAuthenticated: '/dashboard',
+});
 
 const handlePageShow = (event: PageTransitionEvent) => {
     // When browser restores this page from BFCache, force reload

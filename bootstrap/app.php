@@ -3,7 +3,6 @@
 use App\Http\Middleware\EnsureApiKey;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
-use App\Http\Middleware\LogoutAuthenticatedOnLoginPage;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -23,7 +22,6 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->web(append: [
             HandleAppearance::class,
             HandleInertiaRequests::class,
-            LogoutAuthenticatedOnLoginPage::class,
             \App\Http\Middleware\LogLogoutActivity::class,
             AddLinkHeadersForPreloadedAssets::class,
         ]);
@@ -31,6 +29,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'api.key' => EnsureApiKey::class,
         ]);
+        // Login session trapping: redirect authenticated users to dashboard when they visit guest-only routes
+        $middleware->redirectUsersTo(fn () => route('dashboard'));
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
