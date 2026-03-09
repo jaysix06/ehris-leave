@@ -7,6 +7,7 @@ use App\Models\Attendance;
 use App\Models\Employee;
 use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
@@ -36,34 +37,27 @@ class TimezoneController extends Controller
                 'isClockedIn' => $isClockedIn,
                 'hoursWorkedThisWeek' => $hoursWorkedThisWeek,
             ],
+            'successMessage' => $request->session()->get('successMessage'),
+            'errorMessage' => $request->session()->get('errorMessage'),
         ]);
     }
 
-    public function clockIn(Request $request): Response
+    public function clockIn(Request $request): Response|RedirectResponse
     {
         $attendance = $this->getAttendanceState($request);
 
         if (! Schema::hasTable('tbl_attendance')) {
-            return Inertia::render('SelfService/Timezone', [
-                'attendance' => $attendance,
-                'errorMessage' => 'Attendance table is not available.',
-            ]);
+            return redirect()->route('self-service.timezone')->with('errorMessage', 'Attendance table is not available.');
         }
 
         $hrid = $this->resolveHrid($request->user());
         if ($hrid <= 0) {
-            return Inertia::render('SelfService/Timezone', [
-                'attendance' => $attendance,
-                'errorMessage' => 'Unable to identify employee.',
-            ]);
+            return redirect()->route('self-service.timezone')->with('errorMessage', 'Unable to identify employee.');
         }
 
         $openRecord = Attendance::where('hrid', $hrid)->whereNull('time_out')->orderByDesc('time_in')->first();
         if ($openRecord !== null) {
-            return Inertia::render('SelfService/Timezone', [
-                'attendance' => $attendance,
-                'errorMessage' => 'You are already clocked in. Clock out first.',
-            ]);
+            return redirect()->route('self-service.timezone')->with('errorMessage', 'You are already clocked in. Clock out first.');
         }
 
         Attendance::create([
@@ -71,55 +65,30 @@ class TimezoneController extends Controller
             'time_in' => now(),
         ]);
 
-        $hoursWorkedThisWeek = $this->getHoursWorkedThisWeek($hrid);
-
-        return Inertia::render('SelfService/Timezone', [
-            'attendance' => [
-                'isClockedIn' => true,
-                'hoursWorkedThisWeek' => $hoursWorkedThisWeek,
-            ],
-            'successMessage' => 'Clocked in successfully.',
-        ]);
+        return redirect()->route('self-service.timezone')->with('successMessage', 'Clocked in successfully.');
     }
 
-    public function clockOut(Request $request): Response
+    public function clockOut(Request $request): Response|RedirectResponse
     {
         $attendance = $this->getAttendanceState($request);
 
         if (! Schema::hasTable('tbl_attendance')) {
-            return Inertia::render('SelfService/Timezone', [
-                'attendance' => $attendance,
-                'errorMessage' => 'Attendance table is not available.',
-            ]);
+            return redirect()->route('self-service.timezone')->with('errorMessage', 'Attendance table is not available.');
         }
 
         $hrid = $this->resolveHrid($request->user());
         if ($hrid <= 0) {
-            return Inertia::render('SelfService/Timezone', [
-                'attendance' => $attendance,
-                'errorMessage' => 'Unable to identify employee.',
-            ]);
+            return redirect()->route('self-service.timezone')->with('errorMessage', 'Unable to identify employee.');
         }
 
         $openRecord = Attendance::where('hrid', $hrid)->whereNull('time_out')->orderByDesc('time_in')->first();
         if ($openRecord === null) {
-            return Inertia::render('SelfService/Timezone', [
-                'attendance' => $attendance,
-                'errorMessage' => 'You are not clocked in.',
-            ]);
+            return redirect()->route('self-service.timezone')->with('errorMessage', 'You are not clocked in.');
         }
 
         $openRecord->update(['time_out' => now()]);
 
-        $hoursWorkedThisWeek = $this->getHoursWorkedThisWeek($hrid);
-
-        return Inertia::render('SelfService/Timezone', [
-            'attendance' => [
-                'isClockedIn' => false,
-                'hoursWorkedThisWeek' => $hoursWorkedThisWeek,
-            ],
-            'successMessage' => 'Clocked out successfully.',
-        ]);
+        return redirect()->route('self-service.timezone')->with('successMessage', 'Clocked out successfully.');
     }
 
     private function getAttendanceState(Request $request): array
