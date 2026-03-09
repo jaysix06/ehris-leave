@@ -8,6 +8,7 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\RequestStatus\MyLeaveController;
 use App\Http\Controllers\SelfService\IdCardController;
 use App\Http\Controllers\SelfService\LeaveApplicationController;
+use App\Http\Controllers\SelfService\TimezoneController;
 use App\Http\Controllers\Utilities\ActivityLogController;
 use App\Http\Controllers\Utilities\BusinessDepartmentController;
 use App\Http\Controllers\Utilities\JobTitleMonthlySalaryController;
@@ -147,6 +148,12 @@ Route::get('/', function () {
     Route::get('self-service', function () {
         return Inertia::render('SelfService');
     })->middleware(['auth', 'verified'])->name('self-service');
+    Route::get('self-service/timezone', [TimezoneController::class, 'index'])
+        ->middleware(['auth', 'verified'])->name('self-service.timezone');
+    Route::post('self-service/timezone/clock-in', [TimezoneController::class, 'clockIn'])
+        ->middleware(['auth', 'verified'])->name('self-service.timezone.clock-in');
+    Route::post('self-service/timezone/clock-out', [TimezoneController::class, 'clockOut'])
+        ->middleware(['auth', 'verified'])->name('self-service.timezone.clock-out');
     Route::get('self-service/wfh-time-in-out', function () {
         return Inertia::render('SelfService/WfhTimeInOut');
     })->middleware(['auth', 'verified'])->name('self-service.wfh-time-in-out');
