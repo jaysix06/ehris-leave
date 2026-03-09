@@ -25,7 +25,16 @@ Route::get('/', function () {
     return Inertia::render('Welcome', [
         'canRegister' => Features::enabled(Features::registration()),
     ]);
-})->name('home');
+})->middleware('guest')->name('home');
+
+Route::get('auth/status', function (Request $request) {
+    return response()
+        ->json([
+            'authenticated' => (bool) $request->user(),
+        ])
+        ->header('Cache-Control', 'no-store, private')
+        ->header('Pragma', 'no-cache');
+})->name('auth.status');
 
 Route::middleware('guest')->group(function () {
     Route::post('forgot-password/otp/send', [PasswordResetOtpController::class, 'send'])
