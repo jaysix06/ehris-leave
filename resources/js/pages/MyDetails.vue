@@ -3,6 +3,7 @@ import { Head, router, usePage } from '@inertiajs/vue3';
 import { echo } from '@laravel/echo-vue';
 import { Download, User } from 'lucide-vue-next';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { toast } from 'vue3-toastify';
 import { useSidebar } from '@/components/ui/sidebar/utils';
 import AppLayout from '@/layouts/AppLayout.vue';
 import EducationBackground from '@/pages/MyDetails/EducationBackground.vue';
@@ -104,6 +105,31 @@ const props = defineProps<{
 
 const page = usePage();
 const authUser = computed(() => page.props.auth.user);
+const flash = computed(() => page.props.flash as { success?: string; error?: string } | undefined);
+const lastToastedSuccess = ref<string | null>(null);
+const lastToastedError = ref<string | null>(null);
+
+watch(
+    () => flash.value?.success,
+    (message) => {
+        const msg = typeof message === 'string' ? message.trim() : '';
+        if (!msg || msg === lastToastedSuccess.value) return;
+        lastToastedSuccess.value = msg;
+        toast.success(msg);
+    },
+    { immediate: true },
+);
+
+watch(
+    () => flash.value?.error,
+    (message) => {
+        const msg = typeof message === 'string' ? message.trim() : '';
+        if (!msg || msg === lastToastedError.value) return;
+        lastToastedError.value = msg;
+        toast.error(msg);
+    },
+    { immediate: true },
+);
 const canEditOfficialRole = computed(() => {
     const roleRaw = (authUser.value?.role ?? props.profile?.role ?? '').toString().trim();
     if (!roleRaw) return false;

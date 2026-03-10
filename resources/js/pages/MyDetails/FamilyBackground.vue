@@ -21,10 +21,12 @@ type SpouseFields = {
     firstname: string;
     middlename: string;
     extension: string;
+    dob: string;
     occupation: string;
     employer_name: string;
     business_add: string;
     tel_num: string;
+    deceased: string;
 };
 
 type ParentFields = {
@@ -32,11 +34,17 @@ type ParentFields = {
     firstname: string;
     middlename: string;
     extension: string;
+    dob: string;
+    deceased: string;
 };
 
 type ChildRow = {
-    fullname: string;
+    lastname: string;
+    firstname: string;
+    middlename: string;
+    extension: string;
     dob: string;
+    deceased: string;
 };
 
 function val(v: unknown): string {
@@ -188,10 +196,12 @@ const emptySpouse = (): SpouseFields => ({
     firstname: '',
     middlename: '',
     extension: '',
+    dob: '',
     occupation: '',
     employer_name: '',
     business_add: '',
     tel_num: '',
+    deceased: '',
 });
 
 const emptyParent = (): ParentFields => ({
@@ -199,6 +209,8 @@ const emptyParent = (): ParentFields => ({
     firstname: '',
     middlename: '',
     extension: '',
+    dob: '',
+    deceased: '',
 });
 
 const editModalOpen = ref(false);
@@ -207,7 +219,7 @@ const errors = ref<Record<string, string>>({});
 const spouseForm = ref<SpouseFields>(emptySpouse());
 const fatherForm = ref<ParentFields>(emptyParent());
 const motherForm = ref<ParentFields>(emptyParent());
-const childrenForm = ref<ChildRow[]>([{ fullname: '', dob: '' }]);
+const childrenForm = ref<ChildRow[]>([{ lastname: '', firstname: '', middlename: '', extension: '', dob: '', deceased: '' }]);
 
 const canEdit = computed(() => Boolean(props.familyUpdateUrl));
 
@@ -217,32 +229,46 @@ function openEdit(): void {
         firstname: val(spouseEntry.value?.firstname),
         middlename: val(spouseEntry.value?.middlename),
         extension: val(spouseEntry.value?.extension),
+        dob: val(spouseEntry.value?.dob),
         occupation: val(spouseEntry.value?.occupation),
         employer_name: val(spouseEntry.value?.employer_name),
         business_add: val(spouseEntry.value?.business_add),
         tel_num: val(spouseEntry.value?.tel_num),
+        deceased: val(spouseEntry.value?.deceased),
     };
     fatherForm.value = {
         lastname: val(fatherEntry.value?.lastname),
         firstname: val(fatherEntry.value?.firstname),
         middlename: val(fatherEntry.value?.middlename),
         extension: val(fatherEntry.value?.extension),
+        dob: val(fatherEntry.value?.dob),
+        deceased: val(fatherEntry.value?.deceased),
     };
     motherForm.value = {
         lastname: val(motherEntry.value?.lastname),
         firstname: val(motherEntry.value?.firstname),
         middlename: val(motherEntry.value?.middlename),
-        extension: '',
+        extension: val(motherEntry.value?.extension),
+        dob: val(motherEntry.value?.dob),
+        deceased: val(motherEntry.value?.deceased),
     };
-    childrenForm.value = childrenEntries.value.length > 0
-        ? childrenEntries.value.map((child) => ({ fullname: child.fullName, dob: child.dob }))
-        : [{ fullname: '', dob: '' }];
+    const rawChildren = familyRows.value.filter((row) => relationKey(row.relationship) === 'child');
+    childrenForm.value = rawChildren.length > 0
+        ? rawChildren.map((row) => ({
+            lastname: val(row.lastname),
+            firstname: val(row.firstname),
+            middlename: val(row.middlename),
+            extension: val(row.extension),
+            dob: val(row.dob),
+            deceased: val(row.deceased),
+        }))
+        : [{ lastname: '', firstname: '', middlename: '', extension: '', dob: '', deceased: '' }];
     errors.value = {};
     editModalOpen.value = true;
 }
 
 function addChild(): void {
-    childrenForm.value = [...childrenForm.value, { fullname: '', dob: '' }];
+    childrenForm.value = [...childrenForm.value, { lastname: '', firstname: '', middlename: '', extension: '', dob: '', deceased: '' }];
 }
 
 function removeChild(index: number): void {
@@ -254,7 +280,7 @@ function buildFamilyPayload(): FamilyRow[] {
     const payload: FamilyRow[] = [];
 
     const s = spouseForm.value;
-    if ([s.lastname, s.firstname, s.middlename, s.extension, s.occupation, s.employer_name, s.business_add, s.tel_num].some((item) => val(item) !== '')) {
+    if ([s.lastname, s.firstname, s.middlename, s.extension, s.dob, s.occupation, s.employer_name, s.business_add, s.tel_num, s.deceased].some((item) => val(item) !== '')) {
         payload.push({
             relationship: 'Spouse',
             lastname: val(s.lastname) || null,
@@ -265,30 +291,39 @@ function buildFamilyPayload(): FamilyRow[] {
             employer_name: val(s.employer_name) || null,
             business_add: val(s.business_add) || null,
             tel_num: val(s.tel_num) || null,
-            dob: null,
+            dob: val(s.dob) || null,
+            deceased: val(s.deceased) || null,
         });
     }
 
     for (const child of childrenForm.value) {
-        if (val(child.fullname) === '' && val(child.dob) === '') {
+        if (
+            val(child.lastname) === ''
+            && val(child.firstname) === ''
+            && val(child.middlename) === ''
+            && val(child.extension) === ''
+            && val(child.dob) === ''
+            && val(child.deceased) === ''
+        ) {
             continue;
         }
         payload.push({
             relationship: 'Child',
-            lastname: null,
-            firstname: val(child.fullname) || null,
-            middlename: null,
-            extension: null,
+            lastname: val(child.lastname) || null,
+            firstname: val(child.firstname) || null,
+            middlename: val(child.middlename) || null,
+            extension: val(child.extension) || null,
             occupation: null,
             employer_name: null,
             business_add: null,
             tel_num: null,
             dob: val(child.dob) || null,
+            deceased: val(child.deceased) || null,
         });
     }
 
     const f = fatherForm.value;
-    if ([f.lastname, f.firstname, f.middlename, f.extension].some((item) => val(item) !== '')) {
+    if ([f.lastname, f.firstname, f.middlename, f.extension, f.dob, f.deceased].some((item) => val(item) !== '')) {
         payload.push({
             relationship: 'Father',
             lastname: val(f.lastname) || null,
@@ -299,23 +334,25 @@ function buildFamilyPayload(): FamilyRow[] {
             employer_name: null,
             business_add: null,
             tel_num: null,
-            dob: null,
+            dob: val(f.dob) || null,
+            deceased: val(f.deceased) || null,
         });
     }
 
     const m = motherForm.value;
-    if ([m.lastname, m.firstname, m.middlename].some((item) => val(item) !== '')) {
+    if ([m.lastname, m.firstname, m.middlename, m.extension, m.dob, m.deceased].some((item) => val(item) !== '')) {
         payload.push({
             relationship: 'Mother',
             lastname: val(m.lastname) || null,
             firstname: val(m.firstname) || null,
             middlename: val(m.middlename) || null,
-            extension: null,
+            extension: val(m.extension) || null,
             occupation: null,
             employer_name: null,
             business_add: null,
             tel_num: null,
-            dob: null,
+            dob: val(m.dob) || null,
+            deceased: val(m.deceased) || null,
         });
     }
 
@@ -446,40 +483,94 @@ function submit(): void {
                     </div>
 
                     <div class="flex-1 min-h-0 overflow-y-auto pr-2 space-y-4">
-                        <div class="grid gap-3 md:grid-cols-2">
-                            <Input v-model="spouseForm.lastname" type="text" placeholder="Spouse surname" />
-                            <Input v-model="spouseForm.firstname" type="text" placeholder="Spouse first name" />
-                            <Input v-model="spouseForm.middlename" type="text" placeholder="Spouse middle name" />
-                            <Input v-model="spouseForm.extension" type="text" placeholder="Spouse extension (JR., SR.)" />
-                            <Input v-model="spouseForm.occupation" type="text" placeholder="Spouse occupation" />
-                            <Input v-model="spouseForm.employer_name" type="text" placeholder="Employer/Business name" />
-                            <Input v-model="spouseForm.business_add" type="text" placeholder="Business address" />
-                            <Input v-model="spouseForm.tel_num" type="text" placeholder="Telephone no." />
+                        <div class="ehris-family-section">
+                            <div class="ehris-family-section-title">Spouse</div>
+                            <div class="grid gap-3 md:grid-cols-2">
+                                <Input v-model="spouseForm.lastname" type="text" placeholder="Surname" />
+                                <Input v-model="spouseForm.firstname" type="text" placeholder="First name" />
+                                <Input v-model="spouseForm.middlename" type="text" placeholder="Middle name" />
+                                <Input v-model="spouseForm.extension" type="text" placeholder="Extension (JR., SR.)" />
+                                <Input v-model="spouseForm.dob" type="text" placeholder="Date of birth (dd/mm/yyyy)" />
+                                <select v-model="spouseForm.deceased" class="ehris-select">
+                                    <option value="">Deceased</option>
+                                    <option value="Yes">Yes</option>
+                                    <option value="No">No</option>
+                                </select>
+                                <Input v-model="spouseForm.occupation" type="text" placeholder="Occupation" />
+                                <Input v-model="spouseForm.employer_name" type="text" placeholder="Employer/Business name" />
+                                <Input v-model="spouseForm.business_add" type="text" placeholder="Business address" class="md:col-span-2" />
+                                <Input v-model="spouseForm.tel_num" type="text" placeholder="Telephone no." />
+                            </div>
                         </div>
 
-                        <div class="space-y-2">
-                            <div class="text-sm font-semibold">Children</div>
-                            <div v-for="(child, idx) in childrenForm" :key="idx" class="grid gap-2 md:grid-cols-[1fr_180px_auto] items-center">
-                                <Input v-model="child.fullname" type="text" placeholder="Child full name" />
-                                <Input v-model="child.dob" type="text" placeholder="Date of birth" />
-                                <Button type="button" variant="ghost" size="icon" :disabled="childrenForm.length <= 1" @click="removeChild(idx)">
-                                    <Trash2 class="size-4" />
+                        <div class="ehris-family-section">
+                            <div class="ehris-family-section-title">Children</div>
+                            <div class="space-y-3">
+                                <div
+                                    v-for="(child, idx) in childrenForm"
+                                    :key="idx"
+                                    class="ehris-child-row"
+                                >
+                                    <div class="grid gap-3 md:grid-cols-2">
+                                        <Input v-model="child.lastname" type="text" placeholder="Surname" />
+                                        <Input v-model="child.firstname" type="text" placeholder="First name" />
+                                        <Input v-model="child.middlename" type="text" placeholder="Middle name" />
+                                        <Input v-model="child.extension" type="text" placeholder="Extension (JR., SR.)" />
+                                        <Input v-model="child.dob" type="text" placeholder="Date of birth (dd/mm/yyyy)" />
+                                        <select v-model="child.deceased" class="ehris-select">
+                                            <option value="">Deceased</option>
+                                            <option value="Yes">Yes</option>
+                                            <option value="No">No</option>
+                                        </select>
+                                    </div>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        class="ehris-child-remove"
+                                        :disabled="childrenForm.length <= 1"
+                                        @click="removeChild(idx)"
+                                    >
+                                        <Trash2 class="size-4" />
+                                    </Button>
+                                </div>
+                                <Button type="button" variant="outline" size="sm" @click="addChild">
+                                    <Plus class="size-4 mr-1" />
+                                    Add child
                                 </Button>
                             </div>
-                            <Button type="button" variant="outline" size="sm" @click="addChild">
-                                <Plus class="size-4 mr-1" />
-                                Add child
-                            </Button>
                         </div>
 
-                        <div class="grid gap-3 md:grid-cols-2">
-                            <Input v-model="fatherForm.lastname" type="text" placeholder="Father surname" />
-                            <Input v-model="fatherForm.firstname" type="text" placeholder="Father first name" />
-                            <Input v-model="fatherForm.middlename" type="text" placeholder="Father middle name" />
-                            <Input v-model="fatherForm.extension" type="text" placeholder="Father extension" />
-                            <Input v-model="motherForm.lastname" type="text" placeholder="Mother surname" />
-                            <Input v-model="motherForm.firstname" type="text" placeholder="Mother first name" />
-                            <Input v-model="motherForm.middlename" type="text" placeholder="Mother middle name" />
+                        <div class="ehris-family-section">
+                            <div class="ehris-family-section-title">Father</div>
+                            <div class="grid gap-3 md:grid-cols-2">
+                                <Input v-model="fatherForm.lastname" type="text" placeholder="Surname" />
+                                <Input v-model="fatherForm.firstname" type="text" placeholder="First name" />
+                                <Input v-model="fatherForm.middlename" type="text" placeholder="Middle name" />
+                                <Input v-model="fatherForm.extension" type="text" placeholder="Extension (JR., SR.)" />
+                                <Input v-model="fatherForm.dob" type="text" placeholder="Date of birth (dd/mm/yyyy)" />
+                                <select v-model="fatherForm.deceased" class="ehris-select">
+                                    <option value="">Deceased</option>
+                                    <option value="Yes">Yes</option>
+                                    <option value="No">No</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="ehris-family-section">
+                            <div class="ehris-family-section-title">Mother (Maiden Name)</div>
+                            <div class="grid gap-3 md:grid-cols-2">
+                                <Input v-model="motherForm.lastname" type="text" placeholder="Surname" />
+                                <Input v-model="motherForm.firstname" type="text" placeholder="First name" />
+                                <Input v-model="motherForm.middlename" type="text" placeholder="Middle name" />
+                                <Input v-model="motherForm.extension" type="text" placeholder="Extension (JR., SR.)" />
+                                <Input v-model="motherForm.dob" type="text" placeholder="Date of birth (dd/mm/yyyy)" />
+                                <select v-model="motherForm.deceased" class="ehris-select">
+                                    <option value="">Deceased</option>
+                                    <option value="Yes">Yes</option>
+                                    <option value="No">No</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
 
@@ -567,5 +658,43 @@ function submit(): void {
     background: hsl(var(--destructive) / 0.08);
     color: hsl(var(--destructive));
     font-size: 0.875rem;
+}
+
+.ehris-select {
+    border: 1px solid hsl(var(--border));
+    border-radius: 0.375rem;
+    padding: 0.25rem 0.75rem;
+    height: 2.25rem;
+    background: hsl(var(--card));
+    color: hsl(var(--foreground));
+    font-size: 0.875rem;
+}
+
+.ehris-family-section {
+    border: 1px solid hsl(var(--border));
+    border-radius: 0.5rem;
+    padding: 0.75rem;
+    background: hsl(var(--background));
+}
+
+.ehris-family-section-title {
+    font-weight: 700;
+    font-size: 0.9rem;
+    margin-bottom: 0.6rem;
+}
+
+.ehris-child-row {
+    position: relative;
+    border: 1px solid hsl(var(--border));
+    border-radius: 0.5rem;
+    padding: 0.75rem;
+    padding-right: 3rem;
+    background: hsl(var(--card));
+}
+
+.ehris-child-remove {
+    position: absolute;
+    top: 0.6rem;
+    right: 0.6rem;
 }
 </style>
