@@ -2,6 +2,10 @@
 
 namespace App\Http\Controllers\MyDetails;
 
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
+
 /**
  * Handles C4 sheet mapping (questions 34-40) and checkbox states.
  */
@@ -266,6 +270,656 @@ class PdsC4Handler
         $this->applyBinaryState($states, 'Check Box 17', 'Check Box 20', $q40cYes);
 
         return $states;
+    }
+
+    public function resolvePdsPhotoPath(mixed $hrid, ?object $dbProfile, ?object $officialInfo): ?string
+    {
+        $photoPath = $this->resolveStoredAssetPath($dbProfile?->avatar ?? null);
+        if ($photoPath === null && $officialInfo && isset($officialInfo->avatar)) {
+            $photoPath = $this->resolveStoredAssetPath($officialInfo->avatar);
+        }
+
+        if ($photoPath === null && $hrid !== null && $hrid !== '') {
+            foreach (['jpg', 'jpeg', 'png', 'webp'] as $ext) {
+                $candidate = public_path('uploads/'.$hrid.'/'.$hrid.'.'.$ext);
+                if (is_file($candidate)) {
+                    $photoPath = $candidate;
+                    break;
+                }
+            }
+        }
+
+        return $photoPath;
+    }
+
+    public function resolvePdsSignaturePath(mixed $hrid, ?string $email): ?string
+    {
+        $fileKey = (string) ($hrid ?? '');
+        if ($fileKey !== '') {
+            foreach (['png', 'jpg', 'jpeg', 'webp'] as $ext) {
+                $candidate = public_path('asset/uploads/print_id/sign/'.$fileKey.'.'.$ext);
+                if (is_file($candidate)) {
+                    return $candidate;
+                }
+            }
+        }
+
+        if (! Schema::hasTable('tbl_printingid_depaide')) {
+            return null;
+        }
+        if (($hrid === null || $hrid === '') && ($email === null || $email === '')) {
+            return null;
+        }
+
+        $row = DB::table('tbl_printingid_depaide')
+            ->where(function ($q) use ($hrid, $email) {
+                $hasAny = false;
+                if ($hrid !== null && $hrid !== '') {
+                    $q->where('hr_id', (string) $hrid);
+                    $hasAny = true;
+                }
+                if ($email !== null && $email !== '') {
+                    if ($hasAny) {
+                        $q->orWhere('email', $email);
+                    } else {
+                        $q->where('email', $email);
+                    }
+                }
+            })
+            ->orderByDesc('id')
+            ->first();
+
+        $sign = isset($row?->sign) ? trim((string) $row->sign) : '';
+        if ($sign === '') {
+            return null;
+        }
+
+        return $this->resolveStoredAssetPath($sign) ?? (is_file($sign) ? $sign : null);
+    }
+
+    public function insertC4Images(
+        string $extractRoot,
+        string $workbookXml,
+        string $relsXml,
+        ?string $passportPhotoPath,
+        ?string $signaturePath,
+        string $tempRoot
+    ): void {
+        $sheet4EntryPath = $this->resolveWorksheetEntryPath($workbookXml, $relsXml, 'C4');
+        if ($sheet4EntryPath === null) {
+            return;
+        }
+
+        $sheet4Path = $extractRoot.'/'.$sheet4EntryPath;
+        $sheet4RelsPath = dirname($sheet4Path).'/_rels/'.basename($sheet4Path).'.rels';
+        if (! is_file($sheet4Path) || ! is_file($sheet4RelsPath)) {
+            return;
+        }
+
+        $drawingPath = $this->resolveDrawingPathFromWorksheetRels($sheet4RelsPath, dirname($sheet4Path));
+        if ($drawingPath === null || ! is_file($drawingPath)) {
+            return;
+        }
+
+        $drawingRelsPath = dirname($drawingPath).'/_rels/'.basename($drawingPath).'.rels';
+        if (! is_dir(dirname($drawingRelsPath))) {
+            @mkdir(dirname($drawingRelsPath), 0777, true);
+        }
+        if (! is_file($drawingRelsPath)) {
+            file_put_contents($drawingRelsPath, '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>');
+        }
+
+        $mediaDir = $extractRoot.'/xl/media';
+        if (! is_dir($mediaDir)) {
+            @mkdir($mediaDir, 0777, true);
+        }
+
+        $drawingXml = file_get_contents($drawingPath) ?: '';
+        $drawingRelsXml = file_get_contents($drawingRelsPath) ?: '';
+        $contentTypesPath = $extractRoot.'/[Content_Types].xml';
+        $contentTypesXml = is_file($contentTypesPath) ? (file_get_contents($contentTypesPath) ?: '') : '';
+
+        $updated = false;
+        if ($passportPhotoPath && is_file($passportPhotoPath)) {
+            $prepared = $this->preparePassportPhoto($passportPhotoPath, $tempRoot);
+            if ($prepared !== null) {
+                $mediaName = $this->nextMediaFilename($mediaDir, 'png');
+                if (@copy($prepared, $mediaDir.'/'.$mediaName)) {
+                    $rid = $this->appendDrawingRelationship($drawingRelsXml, '../media/'.$mediaName, 'image');
+                    $anchor = $this->findAnchorForShapeName($drawingXml, 'Text Box 100');
+                    $drawingXml = $this->removeDrawingTextBoxByName($drawingXml, 'Text Box 100');
+                    $drawingXml = $this->appendPictureToDrawing(
+                        $drawingXml,
+                        $rid,
+                        'PDS Passport Photo',
+                        $anchor['from'] ?? ['col' => 9, 'colOff' => 0, 'row' => 49, 'rowOff' => 0],
+                        $anchor['to'] ?? ['col' => 12, 'colOff' => 0, 'row' => 54, 'rowOff' => 0]
+                    );
+                    $contentTypesXml = $this->ensureContentTypeForExtension($contentTypesXml, 'png', 'image/png');
+                    $updated = true;
+                }
+            }
+        }
+
+        if ($signaturePath && is_file($signaturePath)) {
+            $prepared = $this->prepareSignatureImage($signaturePath, $tempRoot);
+            if ($prepared !== null) {
+                $mediaName = $this->nextMediaFilename($mediaDir, 'png');
+                if (@copy($prepared, $mediaDir.'/'.$mediaName)) {
+                    $rid = $this->appendDrawingRelationship($drawingRelsXml, '../media/'.$mediaName, 'image');
+                    $drawingXml = $this->appendPictureToDrawing(
+                        $drawingXml,
+                        $rid,
+                        'PDS Signature',
+                        ['col' => 5, 'colOff' => 0, 'row' => 59, 'rowOff' => 0],
+                        ['col' => 8, 'colOff' => 0, 'row' => 61, 'rowOff' => 0]
+                    );
+                    $contentTypesXml = $this->ensureContentTypeForExtension($contentTypesXml, 'png', 'image/png');
+                    $updated = true;
+                }
+            }
+        }
+
+        if ($updated) {
+            file_put_contents($drawingPath, $drawingXml);
+            file_put_contents($drawingRelsPath, $drawingRelsXml);
+            if ($contentTypesXml !== '' && is_file($contentTypesPath)) {
+                file_put_contents($contentTypesPath, $contentTypesXml);
+            }
+        }
+    }
+
+    private function resolveStoredAssetPath(?string $value): ?string
+    {
+        $raw = trim((string) $value);
+        if ($raw === '' || str_starts_with($raw, 'http://') || str_starts_with($raw, 'https://') || str_starts_with($raw, '//')) {
+            return null;
+        }
+
+        $normalized = ltrim(parse_url($raw, PHP_URL_PATH) ?? $raw, '/');
+        if ($normalized === '') {
+            return null;
+        }
+
+        $candidates = [
+            public_path($normalized),
+            base_path('public/'.$normalized),
+            storage_path('app/public/'.$normalized),
+        ];
+
+        if (! str_contains($normalized, '/')) {
+            $candidates[] = Storage::path('public/avatars/'.$normalized);
+            $candidates[] = public_path('storage/avatars/'.$normalized);
+            $candidates[] = public_path('images/'.$normalized);
+            $candidates[] = storage_path('app/public/avatars/'.$normalized);
+        }
+
+        foreach ($candidates as $candidate) {
+            if ($candidate !== '' && is_file($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return null;
+    }
+
+    private function resolveWorksheetEntryPath(string $workbookXml, string $relsXml, string $sheetName): ?string
+    {
+        $workbook = @simplexml_load_string($workbookXml);
+        $rels = @simplexml_load_string($relsXml);
+        if (! $workbook || ! $rels) {
+            return null;
+        }
+
+        $workbook->registerXPathNamespace('s', 'http://schemas.openxmlformats.org/spreadsheetml/2006/main');
+        $workbook->registerXPathNamespace('r', 'http://schemas.openxmlformats.org/officeDocument/2006/relationships');
+        $rels->registerXPathNamespace('pr', 'http://schemas.openxmlformats.org/package/2006/relationships');
+
+        $matches = $workbook->xpath("//s:sheet[@name='{$sheetName}']");
+        if (! $matches || ! isset($matches[0])) {
+            return null;
+        }
+
+        $ridAttr = $matches[0]->attributes('http://schemas.openxmlformats.org/officeDocument/2006/relationships');
+        $rid = (string) ($ridAttr['id'] ?? '');
+        if ($rid === '') {
+            return null;
+        }
+
+        $relMatches = $rels->xpath("//pr:Relationship[@Id='{$rid}']");
+        if (! $relMatches || ! isset($relMatches[0])) {
+            return null;
+        }
+
+        $target = (string) ($relMatches[0]['Target'] ?? '');
+        if ($target === '') {
+            return null;
+        }
+
+        $target = ltrim($target, '/');
+        if (! str_starts_with($target, 'xl/')) {
+            $target = 'xl/'.$target;
+        }
+
+        return $target;
+    }
+
+    private function resolveDrawingPathFromWorksheetRels(string $relsPath, string $worksheetDir): ?string
+    {
+        $relsXml = file_get_contents($relsPath) ?: '';
+        $rels = @simplexml_load_string($relsXml);
+        if (! $rels) {
+            return null;
+        }
+        $rels->registerXPathNamespace('pr', 'http://schemas.openxmlformats.org/package/2006/relationships');
+        $matches = $rels->xpath("//pr:Relationship[contains(@Type, '/drawing')]");
+        if (! $matches || ! isset($matches[0])) {
+            return null;
+        }
+        $target = (string) ($matches[0]['Target'] ?? '');
+        if ($target === '') {
+            return null;
+        }
+        $target = str_replace('\\', '/', $target);
+        if (str_starts_with($target, '/')) {
+            $target = ltrim($target, '/');
+            return dirname($worksheetDir).'/'.$target;
+        }
+
+        return $worksheetDir.'/'.$target;
+    }
+
+    private function nextMediaFilename(string $mediaDir, string $extension): string
+    {
+        $max = 0;
+        foreach (glob($mediaDir.'/image*.'.$extension) ?: [] as $file) {
+            if (preg_match('/image(\\d+)\\.'.preg_quote($extension, '/').'$/', basename($file), $m)) {
+                $max = max($max, (int) $m[1]);
+            }
+        }
+
+        return 'image'.($max + 1).'.'.$extension;
+    }
+
+    private function appendDrawingRelationship(string &$relsXml, string $target, string $type): string
+    {
+        $dom = new \DOMDocument('1.0', 'UTF-8');
+        $dom->preserveWhiteSpace = false;
+        $dom->formatOutput = false;
+        if (! $this->safelyLoadXml($dom, $relsXml)) {
+            return '';
+        }
+
+        $xpath = new \DOMXPath($dom);
+        $xpath->registerNamespace('pr', 'http://schemas.openxmlformats.org/package/2006/relationships');
+
+        $maxId = 0;
+        foreach ($xpath->query('//pr:Relationship') as $rel) {
+            if (! $rel instanceof \DOMElement) {
+                continue;
+            }
+            $id = $rel->getAttribute('Id');
+            if (preg_match('/^rId(\\d+)$/', $id, $m)) {
+                $maxId = max($maxId, (int) $m[1]);
+            }
+        }
+        $newId = 'rId'.($maxId + 1);
+
+        $relsRoot = $dom->documentElement;
+        if (! $relsRoot) {
+            return '';
+        }
+
+        $relNode = $dom->createElementNS('http://schemas.openxmlformats.org/package/2006/relationships', 'Relationship');
+        $relNode->setAttribute('Id', $newId);
+        $relNode->setAttribute('Type', 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/'.$type);
+        $relNode->setAttribute('Target', $target);
+        $relsRoot->appendChild($relNode);
+
+        $relsXml = $dom->saveXML() ?: $relsXml;
+
+        return $newId;
+    }
+
+    private function appendPictureToDrawing(
+        string $drawingXml,
+        string $rid,
+        string $name,
+        array $fromAnchor,
+        array $toAnchor
+    ): string {
+        $dom = new \DOMDocument('1.0', 'UTF-8');
+        $dom->preserveWhiteSpace = false;
+        $dom->formatOutput = false;
+        if (! $this->safelyLoadXml($dom, $drawingXml)) {
+            return $drawingXml;
+        }
+
+        $root = $dom->documentElement;
+        if (! $root) {
+            return $drawingXml;
+        }
+        $root->setAttributeNS('http://www.w3.org/2000/xmlns/', 'xmlns:r', 'http://schemas.openxmlformats.org/officeDocument/2006/relationships');
+
+        $xpath = new \DOMXPath($dom);
+        $xpath->registerNamespace('xdr', 'http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing');
+        $xpath->registerNamespace('a', 'http://schemas.openxmlformats.org/drawingml/2006/main');
+
+        $maxId = 0;
+        foreach ($xpath->query('//xdr:cNvPr') as $node) {
+            if (! $node instanceof \DOMElement) {
+                continue;
+            }
+            $id = (int) $node->getAttribute('id');
+            if ($id > $maxId) {
+                $maxId = $id;
+            }
+        }
+        $picId = $maxId + 1;
+
+        $twoCell = $dom->createElementNS('http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing', 'xdr:twoCellAnchor');
+
+        $from = $dom->createElementNS($twoCell->namespaceURI, 'xdr:from');
+        $from->appendChild($dom->createElementNS($twoCell->namespaceURI, 'xdr:col', (string) ($fromAnchor['col'] ?? 0)));
+        $from->appendChild($dom->createElementNS($twoCell->namespaceURI, 'xdr:colOff', (string) ($fromAnchor['colOff'] ?? 0)));
+        $from->appendChild($dom->createElementNS($twoCell->namespaceURI, 'xdr:row', (string) ($fromAnchor['row'] ?? 0)));
+        $from->appendChild($dom->createElementNS($twoCell->namespaceURI, 'xdr:rowOff', (string) ($fromAnchor['rowOff'] ?? 0)));
+        $twoCell->appendChild($from);
+
+        $toNode = $dom->createElementNS($twoCell->namespaceURI, 'xdr:to');
+        $toNode->appendChild($dom->createElementNS($twoCell->namespaceURI, 'xdr:col', (string) ($toAnchor['col'] ?? 0)));
+        $toNode->appendChild($dom->createElementNS($twoCell->namespaceURI, 'xdr:colOff', (string) ($toAnchor['colOff'] ?? 0)));
+        $toNode->appendChild($dom->createElementNS($twoCell->namespaceURI, 'xdr:row', (string) ($toAnchor['row'] ?? 0)));
+        $toNode->appendChild($dom->createElementNS($twoCell->namespaceURI, 'xdr:rowOff', (string) ($toAnchor['rowOff'] ?? 0)));
+        $twoCell->appendChild($toNode);
+
+        $pic = $dom->createElementNS($twoCell->namespaceURI, 'xdr:pic');
+        $nvPicPr = $dom->createElementNS($twoCell->namespaceURI, 'xdr:nvPicPr');
+        $cNvPr = $dom->createElementNS($twoCell->namespaceURI, 'xdr:cNvPr');
+        $cNvPr->setAttribute('id', (string) $picId);
+        $cNvPr->setAttribute('name', $name);
+        $nvPicPr->appendChild($cNvPr);
+        $nvPicPr->appendChild($dom->createElementNS($twoCell->namespaceURI, 'xdr:cNvPicPr'));
+        $pic->appendChild($nvPicPr);
+
+        $blipFill = $dom->createElementNS($twoCell->namespaceURI, 'xdr:blipFill');
+        $blip = $dom->createElementNS('http://schemas.openxmlformats.org/drawingml/2006/main', 'a:blip');
+        $blip->setAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'r:embed', $rid);
+        $blipFill->appendChild($blip);
+        $stretch = $dom->createElementNS('http://schemas.openxmlformats.org/drawingml/2006/main', 'a:stretch');
+        $stretch->appendChild($dom->createElementNS('http://schemas.openxmlformats.org/drawingml/2006/main', 'a:fillRect'));
+        $blipFill->appendChild($stretch);
+        $pic->appendChild($blipFill);
+
+        $spPr = $dom->createElementNS($twoCell->namespaceURI, 'xdr:spPr');
+        $xfrm = $dom->createElementNS('http://schemas.openxmlformats.org/drawingml/2006/main', 'a:xfrm');
+        $xfrm->appendChild($dom->createElementNS('http://schemas.openxmlformats.org/drawingml/2006/main', 'a:off'))
+            ->setAttribute('x', '0');
+        $xfrm->lastChild?->setAttribute('y', '0');
+        $xfrm->appendChild($dom->createElementNS('http://schemas.openxmlformats.org/drawingml/2006/main', 'a:ext'))
+            ->setAttribute('cx', '0');
+        $xfrm->lastChild?->setAttribute('cy', '0');
+        $spPr->appendChild($xfrm);
+        $prst = $dom->createElementNS('http://schemas.openxmlformats.org/drawingml/2006/main', 'a:prstGeom');
+        $prst->setAttribute('prst', 'rect');
+        $prst->appendChild($dom->createElementNS('http://schemas.openxmlformats.org/drawingml/2006/main', 'a:avLst'));
+        $spPr->appendChild($prst);
+        $pic->appendChild($spPr);
+
+        $twoCell->appendChild($pic);
+        $twoCell->appendChild($dom->createElementNS($twoCell->namespaceURI, 'xdr:clientData'));
+
+        $root->appendChild($twoCell);
+
+        return $dom->saveXML() ?: $drawingXml;
+    }
+
+    private function findAnchorForShapeName(string $drawingXml, string $name): ?array
+    {
+        $dom = new \DOMDocument('1.0', 'UTF-8');
+        $dom->preserveWhiteSpace = false;
+        $dom->formatOutput = false;
+        if (! $this->safelyLoadXml($dom, $drawingXml)) {
+            return null;
+        }
+
+        $xpath = new \DOMXPath($dom);
+        $xpath->registerNamespace('xdr', 'http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing');
+        $node = $xpath->query("//xdr:twoCellAnchor[xdr:sp/xdr:nvSpPr/xdr:cNvPr[@name='{$name}']]")->item(0);
+        if (! $node instanceof \DOMElement) {
+            return null;
+        }
+
+        $from = $xpath->query('xdr:from', $node)->item(0);
+        $to = $xpath->query('xdr:to', $node)->item(0);
+        if (! $from instanceof \DOMElement || ! $to instanceof \DOMElement) {
+            return null;
+        }
+
+        $readAnchor = function (\DOMElement $anchor) use ($xpath): array {
+            $get = function (string $tag) use ($xpath, $anchor): int {
+                $node = $xpath->query('xdr:'.$tag, $anchor)->item(0);
+                return $node ? (int) $node->nodeValue : 0;
+            };
+
+            return [
+                'col' => $get('col'),
+                'colOff' => $get('colOff'),
+                'row' => $get('row'),
+                'rowOff' => $get('rowOff'),
+            ];
+        };
+
+        return [
+            'from' => $readAnchor($from),
+            'to' => $readAnchor($to),
+        ];
+    }
+
+    private function removeDrawingTextBoxByName(string $drawingXml, string $name): string
+    {
+        $dom = new \DOMDocument('1.0', 'UTF-8');
+        $dom->preserveWhiteSpace = false;
+        $dom->formatOutput = false;
+        if (! $this->safelyLoadXml($dom, $drawingXml)) {
+            return $drawingXml;
+        }
+
+        $xpath = new \DOMXPath($dom);
+        $xpath->registerNamespace('xdr', 'http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing');
+        $nodes = $xpath->query("//xdr:twoCellAnchor[xdr:sp/xdr:nvSpPr/xdr:cNvPr[@name='{$name}']]");
+        if ($nodes !== false) {
+            foreach ($nodes as $node) {
+                if ($node instanceof \DOMNode) {
+                    $node->parentNode?->removeChild($node);
+                }
+            }
+        }
+
+        return $dom->saveXML() ?: $drawingXml;
+    }
+
+    private function ensureContentTypeForExtension(string $xml, string $extension, string $contentType): string
+    {
+        if ($xml === '') {
+            return $xml;
+        }
+        $dom = new \DOMDocument('1.0', 'UTF-8');
+        $dom->preserveWhiteSpace = false;
+        $dom->formatOutput = false;
+        if (! $this->safelyLoadXml($dom, $xml)) {
+            return $xml;
+        }
+
+        $xpath = new \DOMXPath($dom);
+        $xpath->registerNamespace('ct', 'http://schemas.openxmlformats.org/package/2006/content-types');
+        $existing = $xpath->query("//ct:Default[@Extension='{$extension}']");
+        if ($existing !== false && $existing->length > 0) {
+            return $xml;
+        }
+
+        $root = $dom->documentElement;
+        if ($root) {
+            $node = $dom->createElementNS('http://schemas.openxmlformats.org/package/2006/content-types', 'Default');
+            $node->setAttribute('Extension', $extension);
+            $node->setAttribute('ContentType', $contentType);
+            $root->appendChild($node);
+        }
+
+        return $dom->saveXML() ?: $xml;
+    }
+
+    private function preparePassportPhoto(string $sourcePath, string $tempRoot): ?string
+    {
+        if (! $this->canProcessImages()) {
+            return $sourcePath;
+        }
+
+        $targetWidth = 413;
+        $targetHeight = 531;
+        $image = $this->loadImageResource($sourcePath);
+        if (! $image) {
+            return null;
+        }
+
+        $srcWidth = imagesx($image);
+        $srcHeight = imagesy($image);
+        if ($srcWidth <= 0 || $srcHeight <= 0) {
+            imagedestroy($image);
+            return null;
+        }
+
+        $targetRatio = $targetWidth / $targetHeight;
+        $srcRatio = $srcWidth / $srcHeight;
+
+        if ($srcRatio > $targetRatio) {
+            $newWidth = (int) floor($srcHeight * $targetRatio);
+            $newHeight = $srcHeight;
+            $srcX = (int) floor(($srcWidth - $newWidth) / 2);
+            $srcY = 0;
+        } else {
+            $newWidth = $srcWidth;
+            $newHeight = (int) floor($srcWidth / $targetRatio);
+            $srcX = 0;
+            $srcY = (int) floor(($srcHeight - $newHeight) / 2);
+        }
+
+        $dst = imagecreatetruecolor($targetWidth, $targetHeight);
+        if ($dst === false) {
+            imagedestroy($image);
+            return null;
+        }
+        imagealphablending($dst, false);
+        imagesavealpha($dst, true);
+        $transparent = imagecolorallocatealpha($dst, 0, 0, 0, 127);
+        imagefilledrectangle($dst, 0, 0, $targetWidth, $targetHeight, $transparent);
+
+        imagecopyresampled(
+            $dst,
+            $image,
+            0,
+            0,
+            $srcX,
+            $srcY,
+            $targetWidth,
+            $targetHeight,
+            $newWidth,
+            $newHeight
+        );
+
+        $outputPath = $tempRoot.'/passport_photo_'.uniqid().'.png';
+        imagepng($dst, $outputPath);
+        imagedestroy($dst);
+        imagedestroy($image);
+
+        return is_file($outputPath) ? $outputPath : null;
+    }
+
+    private function prepareSignatureImage(string $sourcePath, string $tempRoot): ?string
+    {
+        if (! $this->canProcessImages()) {
+            return $sourcePath;
+        }
+
+        $maxWidth = 800;
+        $maxHeight = 250;
+        $image = $this->loadImageResource($sourcePath);
+        if (! $image) {
+            return null;
+        }
+
+        $srcWidth = imagesx($image);
+        $srcHeight = imagesy($image);
+        if ($srcWidth <= 0 || $srcHeight <= 0) {
+            imagedestroy($image);
+            return null;
+        }
+
+        $scale = min($maxWidth / $srcWidth, $maxHeight / $srcHeight, 1);
+        $targetWidth = (int) max(1, floor($srcWidth * $scale));
+        $targetHeight = (int) max(1, floor($srcHeight * $scale));
+
+        $dst = imagecreatetruecolor($targetWidth, $targetHeight);
+        if ($dst === false) {
+            imagedestroy($image);
+            return null;
+        }
+        imagealphablending($dst, false);
+        imagesavealpha($dst, true);
+        $transparent = imagecolorallocatealpha($dst, 0, 0, 0, 127);
+        imagefilledrectangle($dst, 0, 0, $targetWidth, $targetHeight, $transparent);
+
+        imagecopyresampled(
+            $dst,
+            $image,
+            0,
+            0,
+            0,
+            0,
+            $targetWidth,
+            $targetHeight,
+            $srcWidth,
+            $srcHeight
+        );
+
+        $outputPath = $tempRoot.'/signature_'.uniqid().'.png';
+        imagepng($dst, $outputPath);
+        imagedestroy($dst);
+        imagedestroy($image);
+
+        return is_file($outputPath) ? $outputPath : null;
+    }
+
+    private function canProcessImages(): bool
+    {
+        return function_exists('imagecreatetruecolor')
+            && function_exists('imagecopyresampled')
+            && function_exists('imagepng');
+    }
+
+    private function loadImageResource(string $path): mixed
+    {
+        $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+        return match ($ext) {
+            'jpg', 'jpeg' => @imagecreatefromjpeg($path),
+            'png' => @imagecreatefrompng($path),
+            'webp' => function_exists('imagecreatefromwebp') ? @imagecreatefromwebp($path) : null,
+            'gif' => function_exists('imagecreatefromgif') ? @imagecreatefromgif($path) : null,
+            default => null,
+        };
+    }
+
+    private function safelyLoadXml(\DOMDocument $dom, string $xml): bool
+    {
+        $previous = libxml_use_internal_errors(true);
+        libxml_clear_errors();
+
+        $loaded = $dom->loadXML($xml);
+
+        libxml_clear_errors();
+        libxml_use_internal_errors($previous);
+
+        return $loaded;
     }
 
     /**

@@ -76,6 +76,8 @@ const props = defineProps<{
     familyUpdateUrl?: string;
     education?: Record<string, unknown>[];
     educationUpdateUrl?: string;
+    officialUpdateUrl?: string;
+    personalUpdateUrl?: string;
     workExperience?: Record<string, unknown>[];
     eligibility?: Record<string, unknown>[];
     serviceRecord?: Record<string, unknown>[];
@@ -88,10 +90,25 @@ const props = defineProps<{
     researches?: Record<string, unknown>[];
     expertise?: Record<string, unknown>[];
     affiliation?: Record<string, unknown>[];
+    officialOptions?: {
+        salaryGrades?: string[];
+        steps?: string[];
+        positions?: string[];
+        departments?: string[];
+        divisionOffices?: string[];
+        roles?: string[];
+        employmentStatuses?: string[];
+    };
 }>();
 
 const page = usePage();
 const authUser = computed(() => page.props.auth.user);
+const canEditOfficialRole = computed(() => {
+    const roleRaw = (authUser.value?.role ?? props.profile?.role ?? '').toString().trim();
+    if (!roleRaw) return false;
+    const role = roleRaw.toLowerCase();
+    return /\bhr\b/i.test(roleRaw) || role.includes('human resources');
+});
 
 // Sidebar context may be unavailable during certain render timings.
 let sidebarContext: ReturnType<typeof useSidebar> | null = null;
@@ -180,13 +197,19 @@ const contactNo = computed(() => {
 function sectionProps(index: number): Record<string, unknown> {
     switch (index) {
         case 0:
-            return { officialInfo: props.officialInfo };
+            return {
+                officialInfo: props.officialInfo,
+                officialUpdateUrl: props.officialUpdateUrl,
+                canEditOfficialRole: canEditOfficialRole.value,
+                officialOptions: props.officialOptions,
+            };
         case 1:
             return {
                 personalInfo: props.personalInfo,
                 officialInfo: props.officialInfo,
                 contactInfo: props.contactInfo,
                 profile: props.profile,
+                personalUpdateUrl: props.personalUpdateUrl,
             };
         case 2:
             return { family: props.family, familyUpdateUrl: props.familyUpdateUrl };

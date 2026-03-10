@@ -1,10 +1,28 @@
 <script setup lang="ts">
+import { router } from '@inertiajs/vue3';
 import { Pencil } from 'lucide-vue-next';
+import { ref } from 'vue';
+import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Spinner } from '@/components/ui/spinner';
 
 function val(v: unknown): string {
     if (v == null || v === '') return 'N/A';
     const s = String(v).trim();
     return s === '' ? 'N/A' : s;
+}
+
+function valInput(v: unknown): string {
+    if (v == null) return '';
+    return String(v);
 }
 
 function pick(source: Record<string, unknown> | null | undefined, keys: string[]): unknown {
@@ -20,12 +38,120 @@ function pick(source: Record<string, unknown> | null | undefined, keys: string[]
     return null;
 }
 
-defineProps<{
+const props = defineProps<{
     personalInfo?: Record<string, unknown> | null;
     officialInfo?: Record<string, unknown> | null;
     contactInfo?: Record<string, unknown> | null;
     profile?: Record<string, unknown> | null;
+    personalUpdateUrl?: string;
 }>();
+
+const editModalOpen = ref(false);
+const processing = ref(false);
+const errors = ref<Record<string, string>>({});
+const form = ref({
+    dob: '',
+    pob: '',
+    gender: '',
+    civil_stat: '',
+    height: '',
+    weight: '',
+    blood_type: '',
+    citizenship: '',
+    dual_citizenship: '',
+    country: '',
+    umid: '',
+    pag_ibig: '',
+    philhealth: '',
+    philsys: '',
+    tin: '',
+    agency_emp_num: '',
+    prc_no: '',
+    sss: '',
+    gsis: '',
+    gsis_bp: '',
+    house_block_lotnum: '',
+    street_add: '',
+    subdivision_village: '',
+    barangay: '',
+    city_municipality: '',
+    province: '',
+    zip_code: '',
+    house_block_lotnum1: '',
+    street_add1: '',
+    subdivision_village1: '',
+    barangay1: '',
+    city_municipality1: '',
+    province1: '',
+    zip_code1: '',
+    phone_num: '',
+    mobile_num: '',
+    email: '',
+});
+
+function openEdit(): void {
+    const p = props.personalInfo ?? {};
+    const c = props.contactInfo ?? {};
+    form.value = {
+        dob: valInput(p.dob),
+        pob: valInput(p.pob),
+        gender: valInput(p.gender),
+        civil_stat: valInput(p.civil_stat),
+        height: valInput(p.height),
+        weight: valInput(p.weight),
+        blood_type: valInput(p.blood_type),
+        citizenship: valInput(p.citizenship),
+        dual_citizenship: valInput(p.dual_citizenship),
+        country: valInput(p.country),
+        umid: valInput(p.umid ?? p.umid_no ?? p.umid_num),
+        pag_ibig: valInput(p.pag_ibig),
+        philhealth: valInput(p.philhealth),
+        philsys: valInput(p.philsys ?? p.philsys_no ?? p.philsys_num ?? p.psn),
+        tin: valInput(p.tin ?? p.tin_no),
+        agency_emp_num: valInput(p.agency_emp_num ?? p.agency_employee_no ?? p.agency_emp_no),
+        prc_no: valInput(p.prc_no),
+        sss: valInput(p.sss),
+        gsis: valInput(p.gsis),
+        gsis_bp: valInput(p.gsis_bp),
+        house_block_lotnum: valInput(c.house_block_lotnum),
+        street_add: valInput(c.street_add),
+        subdivision_village: valInput(c.subdivision_village),
+        barangay: valInput(c.barangay),
+        city_municipality: valInput(c.city_municipality),
+        province: valInput(c.province),
+        zip_code: valInput(c.zip_code),
+        house_block_lotnum1: valInput(c.house_block_lotnum1),
+        street_add1: valInput(c.street_add1),
+        subdivision_village1: valInput(c.subdivision_village1),
+        barangay1: valInput(c.barangay1),
+        city_municipality1: valInput(c.city_municipality1),
+        province1: valInput(c.province1),
+        zip_code1: valInput(c.zip_code1),
+        phone_num: valInput(c.phone_num),
+        mobile_num: valInput(c.mobile_num),
+        email: valInput(c.email),
+    };
+    errors.value = {};
+    editModalOpen.value = true;
+}
+
+function submit(): void {
+    if (! props.personalUpdateUrl) return;
+    processing.value = true;
+    errors.value = {};
+    router.post(props.personalUpdateUrl, { ...form.value }, {
+        preserveScroll: true,
+        onFinish: () => {
+            processing.value = false;
+        },
+        onSuccess: () => {
+            editModalOpen.value = false;
+        },
+        onError: (e) => {
+            errors.value = e as Record<string, string>;
+        },
+    });
+}
 </script>
 
 <template>
@@ -36,6 +162,7 @@ defineProps<{
                 type="button"
                 class="ehris-btn-grade-subject"
                 aria-label="Edit personal information"
+                @click="openEdit"
             >
                 <Pencil class="size-4" />
                 <span>Edit</span>
@@ -129,6 +256,95 @@ defineProps<{
             </div>
         </template>
         <p v-else class="ehris-muted">No personal information on file.</p>
+
+        <Dialog :open="editModalOpen" @update:open="(v) => { editModalOpen = v; }">
+            <DialogContent class="sm:max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
+                <DialogHeader>
+                    <DialogTitle>Edit Personal Information</DialogTitle>
+                </DialogHeader>
+
+                <div class="ehris-modal-scroll">
+                    <div class="ehris-modal-section">
+                        <h4>Basic Personal Details</h4>
+                        <div class="ehris-modal-grid">
+                            <label class="ehris-modal-field"><span>Date of Birth</span><Input v-model="form.dob" /></label>
+                            <label class="ehris-modal-field"><span>Place of Birth</span><Input v-model="form.pob" /></label>
+                            <label class="ehris-modal-field"><span>Gender</span><Input v-model="form.gender" /></label>
+                            <label class="ehris-modal-field"><span>Civil Status</span><Input v-model="form.civil_stat" /></label>
+                            <label class="ehris-modal-field"><span>Height (m)</span><Input v-model="form.height" /></label>
+                            <label class="ehris-modal-field"><span>Weight (kg)</span><Input v-model="form.weight" /></label>
+                            <label class="ehris-modal-field"><span>Blood Type</span><Input v-model="form.blood_type" /></label>
+                        </div>
+                    </div>
+
+                    <div class="ehris-modal-section">
+                        <h4>Citizenship and IDs</h4>
+                        <div class="ehris-modal-grid">
+                            <label class="ehris-modal-field"><span>Citizenship</span><Input v-model="form.citizenship" /></label>
+                            <label class="ehris-modal-field"><span>Dual Citizenship</span><Input v-model="form.dual_citizenship" /></label>
+                            <label class="ehris-modal-field"><span>Country</span><Input v-model="form.country" /></label>
+                            <label class="ehris-modal-field"><span>UMID</span><Input v-model="form.umid" /></label>
+                            <label class="ehris-modal-field"><span>Pag-IBIG</span><Input v-model="form.pag_ibig" /></label>
+                            <label class="ehris-modal-field"><span>PhilHealth</span><Input v-model="form.philhealth" /></label>
+                            <label class="ehris-modal-field"><span>PhilSys (PSN)</span><Input v-model="form.philsys" /></label>
+                            <label class="ehris-modal-field"><span>TIN</span><Input v-model="form.tin" /></label>
+                            <label class="ehris-modal-field"><span>Agency Employee No.</span><Input v-model="form.agency_emp_num" /></label>
+                            <label class="ehris-modal-field"><span>PRC No.</span><Input v-model="form.prc_no" /></label>
+                            <label class="ehris-modal-field"><span>SSS No.</span><Input v-model="form.sss" /></label>
+                            <label class="ehris-modal-field"><span>GSIS No.</span><Input v-model="form.gsis" /></label>
+                            <label class="ehris-modal-field"><span>GSIS BP No.</span><Input v-model="form.gsis_bp" /></label>
+                        </div>
+                    </div>
+
+                    <div class="ehris-modal-section">
+                        <h4>Residential Address</h4>
+                        <div class="ehris-modal-grid">
+                            <label class="ehris-modal-field"><span>House/Block/Lot</span><Input v-model="form.house_block_lotnum" /></label>
+                            <label class="ehris-modal-field"><span>Street</span><Input v-model="form.street_add" /></label>
+                            <label class="ehris-modal-field"><span>Subdivision/Village</span><Input v-model="form.subdivision_village" /></label>
+                            <label class="ehris-modal-field"><span>Barangay</span><Input v-model="form.barangay" /></label>
+                            <label class="ehris-modal-field"><span>City/Municipality</span><Input v-model="form.city_municipality" /></label>
+                            <label class="ehris-modal-field"><span>Province</span><Input v-model="form.province" /></label>
+                            <label class="ehris-modal-field"><span>Zip Code</span><Input v-model="form.zip_code" /></label>
+                        </div>
+                    </div>
+
+                    <div class="ehris-modal-section">
+                        <h4>Permanent Address</h4>
+                        <div class="ehris-modal-grid">
+                            <label class="ehris-modal-field"><span>House/Block/Lot</span><Input v-model="form.house_block_lotnum1" /></label>
+                            <label class="ehris-modal-field"><span>Street</span><Input v-model="form.street_add1" /></label>
+                            <label class="ehris-modal-field"><span>Subdivision/Village</span><Input v-model="form.subdivision_village1" /></label>
+                            <label class="ehris-modal-field"><span>Barangay</span><Input v-model="form.barangay1" /></label>
+                            <label class="ehris-modal-field"><span>City/Municipality</span><Input v-model="form.city_municipality1" /></label>
+                            <label class="ehris-modal-field"><span>Province</span><Input v-model="form.province1" /></label>
+                            <label class="ehris-modal-field"><span>Zip Code</span><Input v-model="form.zip_code1" /></label>
+                        </div>
+                    </div>
+
+                    <div class="ehris-modal-section">
+                        <h4>Contact</h4>
+                        <div class="ehris-modal-grid">
+                            <label class="ehris-modal-field"><span>Telephone No.</span><Input v-model="form.phone_num" /></label>
+                            <label class="ehris-modal-field"><span>Mobile No.</span><Input v-model="form.mobile_num" /></label>
+                            <label class="ehris-modal-field"><span>Email Address</span><Input v-model="form.email" type="email" /></label>
+                        </div>
+                    </div>
+
+                    <p v-if="errors.message" class="ehris-form-error">{{ errors.message }}</p>
+                </div>
+
+                <DialogFooter class="mt-4 shrink-0 border-t pt-4">
+                    <DialogClose as-child>
+                        <Button type="button" variant="outline">Cancel</Button>
+                    </DialogClose>
+                    <Button type="button" :disabled="processing" @click="submit">
+                        <Spinner v-if="processing" class="mr-2 h-4 w-4" />
+                        Save Changes
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     </section>
 </template>
 
@@ -216,6 +432,55 @@ defineProps<{
     border-right: 1px solid hsl(var(--border));
     border-bottom: none;
     line-height: 1.3;
+}
+
+.ehris-modal-scroll {
+    overflow-y: auto;
+    padding-right: 0.25rem;
+}
+
+.ehris-modal-section {
+    border: 1px solid hsl(var(--border));
+    border-radius: 0.5rem;
+    padding: 0.75rem;
+    margin-bottom: 0.75rem;
+    background: hsl(var(--background));
+}
+
+.ehris-modal-section h4 {
+    font-weight: 700;
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
+}
+
+.ehris-modal-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+
+.ehris-modal-field {
+    display: grid;
+    gap: 0.35rem;
+    font-size: 0.875rem;
+    color: hsl(var(--muted-foreground));
+}
+
+.ehris-modal-field span {
+    font-weight: 600;
+    color: hsl(var(--foreground));
+}
+
+.ehris-form-error {
+    color: hsl(var(--destructive));
+    font-size: 0.875rem;
+    margin-top: 0.5rem;
+}
+
+@media (max-width: 640px) {
+    .ehris-modal-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 .ehris-pds-personal-content-horizontal .ehris-pds-personal-row dd {

@@ -242,6 +242,21 @@ class MyDetailsController extends Controller
                 $official = $data['officialInfo'];
                 $managerHrid = null;
 
+                $businessUnitName = null;
+                if (! empty($official->business_id) && Schema::hasTable('tbl_business')) {
+                    $businessQuery = DB::table('tbl_business')->select('BusinessUnit');
+                    if (Schema::hasColumn('tbl_business', 'BusinessUnitId')) {
+                        $businessQuery->where('BusinessUnitId', $official->business_id);
+                    } elseif (Schema::hasColumn('tbl_business', 'business_id')) {
+                        $businessQuery->where('business_id', $official->business_id);
+                    }
+                    $businessUnitName = $businessQuery->value('BusinessUnit');
+                }
+                if (is_string($businessUnitName) && trim($businessUnitName) !== '') {
+                    $official->business_unit_name = trim($businessUnitName);
+                    $official->division_office_name = trim($businessUnitName);
+                }
+
                 $rawReportingManager = trim((string) ($official->reporting_manager ?? ''));
                 if ($rawReportingManager !== '' && ctype_digit($rawReportingManager)) {
                     $managerHrid = (int) $rawReportingManager;
@@ -275,10 +290,119 @@ class MyDetailsController extends Controller
             }
         }
 
+        $officialOptions = [
+            'salaryGrades' => [],
+            'steps' => [],
+            'positions' => [],
+            'departments' => [],
+            'divisionOffices' => [],
+            'roles' => [],
+            'employmentStatuses' => [],
+        ];
+
+        if (Schema::hasTable('tbl_salary_grade') && Schema::hasColumn('tbl_salary_grade', 'salary_grade')) {
+            $officialOptions['salaryGrades'] = DB::table('tbl_salary_grade')
+                ->whereNotNull('salary_grade')
+                ->pluck('salary_grade')
+                ->map(fn ($value) => trim((string) $value))
+                ->filter(fn ($value) => $value !== '')
+                ->unique()
+                ->sort()
+                ->values()
+                ->all();
+        }
+
+        if (Schema::hasTable('tbl_step') && Schema::hasColumn('tbl_step', 'step')) {
+            $officialOptions['steps'] = DB::table('tbl_step')
+                ->whereNotNull('step')
+                ->pluck('step')
+                ->map(fn ($value) => trim((string) $value))
+                ->filter(fn ($value) => $value !== '')
+                ->unique()
+                ->sort()
+                ->values()
+                ->all();
+        }
+
+        if (Schema::hasTable('tbl_job_title') && Schema::hasColumn('tbl_job_title', 'job_title')) {
+            $officialOptions['positions'] = DB::table('tbl_job_title')
+                ->whereNotNull('job_title')
+                ->pluck('job_title')
+                ->map(fn ($value) => trim((string) $value))
+                ->filter(fn ($value) => $value !== '')
+                ->unique()
+                ->sort()
+                ->values()
+                ->all();
+        }
+
+        if (Schema::hasTable('tbl_department') && Schema::hasColumn('tbl_department', 'department_name')) {
+            $officialOptions['departments'] = DB::table('tbl_department')
+                ->whereNotNull('department_name')
+                ->pluck('department_name')
+                ->map(fn ($value) => trim((string) $value))
+                ->filter(fn ($value) => $value !== '')
+                ->unique()
+                ->sort()
+                ->values()
+                ->all();
+        }
+
+        if (Schema::hasTable('tbl_business') && Schema::hasColumn('tbl_business', 'BusinessUnit')) {
+            $officialOptions['divisionOffices'] = DB::table('tbl_business')
+                ->whereNotNull('BusinessUnit')
+                ->pluck('BusinessUnit')
+                ->map(fn ($value) => trim((string) $value))
+                ->filter(fn ($value) => $value !== '')
+                ->unique()
+                ->sort()
+                ->values()
+                ->all();
+        }
+
+        if (Schema::hasTable('tbl_user') && Schema::hasColumn('tbl_user', 'role')) {
+            $officialOptions['roles'] = DB::table('tbl_user')
+                ->whereNotNull('role')
+                ->distinct()
+                ->pluck('role')
+                ->map(fn ($value) => trim((string) $value))
+                ->filter(fn ($value) => $value !== '')
+                ->unique()
+                ->sort()
+                ->values()
+                ->all();
+        }
+
+        if (Schema::hasTable('tbl_employment_status') && Schema::hasColumn('tbl_employment_status', 'emp_status')) {
+            $officialOptions['employmentStatuses'] = DB::table('tbl_employment_status')
+                ->whereNotNull('emp_status')
+                ->pluck('emp_status')
+                ->map(fn ($value) => trim((string) $value))
+                ->filter(fn ($value) => $value !== '')
+                ->unique()
+                ->sort()
+                ->values()
+                ->all();
+        } elseif (Schema::hasTable('tbl_emp_official_info') && Schema::hasColumn('tbl_emp_official_info', 'employ_status')) {
+            $officialOptions['employmentStatuses'] = DB::table('tbl_emp_official_info')
+                ->whereNotNull('employ_status')
+                ->distinct()
+                ->pluck('employ_status')
+                ->map(fn ($value) => trim((string) $value))
+                ->filter(fn ($value) => $value !== '')
+                ->unique()
+                ->sort()
+                ->values()
+                ->all();
+        }
+
         return Inertia::render('MyDetails', array_merge(
             [
                 'profile' => $dbProfile,
                 'educationUpdateUrl' => route('my-details.education.store'),
+                'officialUpdateUrl' => route('my-details.official.store'),
+                'personalUpdateUrl' => route('my-details.personal.store'),
+                'officialOptions' => $officialOptions,
             ],
             $data,
         ));
@@ -462,5 +586,226 @@ class MyDetailsController extends Controller
         }
 
         return back();
+    }
+
+    public function updateOfficialInfo(Request $request)
+    {
+        $authUser = $request->user();
+        $profile = $authUser && Schema::hasTable('tbl_user')
+            ? User::query()->where('email', $authUser->email)->first()
+            : null;
+        $hrid = $profile?->hrId ?? $authUser?->hrId ?? $authUser?->id ?? null;
+
+        if ($hrid === null) {
+            return redirect()->route('my-details')
+                ->withErrors(['message' => 'Unable to identify employee.']);
+        }
+
+        $data = $request->validate([
+            'employee_id' => ['nullable', 'string', 'max:64'],
+            'prefix_name' => ['nullable', 'string', 'max:32'],
+            'firstname' => ['nullable', 'string', 'max:128'],
+            'middlename' => ['nullable', 'string', 'max:128'],
+            'lastname' => ['nullable', 'string', 'max:128'],
+            'extension' => ['nullable', 'string', 'max:32'],
+            'email' => ['nullable', 'string', 'max:255'],
+            'item_no' => ['nullable', 'string', 'max:64'],
+            'plantilla' => ['nullable', 'string', 'max:255'],
+            'job_title' => ['nullable', 'string', 'max:255'],
+            'employ_status' => ['nullable', 'string', 'max:64'],
+            'salary_grade' => ['nullable', 'string', 'max:64'],
+            'step' => ['nullable', 'string', 'max:64'],
+            'date_of_joining' => ['nullable', 'string', 'max:64'],
+            'date_of_promotion' => ['nullable', 'string', 'max:64'],
+            'year_experience' => ['nullable', 'string', 'max:64'],
+            'role' => ['nullable', 'string', 'max:64'],
+            'division_code' => ['nullable', 'string', 'max:255'],
+            'business_id' => ['nullable', 'string', 'max:255'],
+            'office' => ['nullable', 'string', 'max:255'],
+            'reporting_manager' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        if (! Schema::hasTable('tbl_emp_official_info')) {
+            return redirect()->route('my-details')
+                ->withErrors(['message' => 'Official info table not found.']);
+        }
+
+        $canEditRole = $this->canEditOfficialRole($authUser, $profile);
+        $payload = [];
+        foreach ($data as $key => $value) {
+            if ($key === 'role' && ! $canEditRole) {
+                continue;
+            }
+            if (Schema::hasColumn('tbl_emp_official_info', $key)) {
+                $payload[$key] = $value === '' ? null : $value;
+            }
+        }
+
+        if ($payload !== []) {
+            $base = ['hrid' => $hrid];
+            if ($profile?->email && Schema::hasColumn('tbl_emp_official_info', 'email')) {
+                $base['email'] = $profile->email;
+            }
+            DB::table('tbl_emp_official_info')->updateOrInsert(
+                ['hrid' => $hrid],
+                array_merge($base, $payload),
+            );
+        }
+
+        return redirect()->route('my-details')->with('success', 'Official information updated.');
+    }
+
+    public function updatePersonalInfo(Request $request)
+    {
+        $authUser = $request->user();
+        $profile = $authUser && Schema::hasTable('tbl_user')
+            ? User::query()->where('email', $authUser->email)->first()
+            : null;
+        $hrid = $profile?->hrId ?? $authUser?->hrId ?? $authUser?->id ?? null;
+
+        if ($hrid === null) {
+            return redirect()->route('my-details')
+                ->withErrors(['message' => 'Unable to identify employee.']);
+        }
+
+        $data = $request->validate([
+            'dob' => ['nullable', 'string', 'max:32'],
+            'pob' => ['nullable', 'string', 'max:255'],
+            'gender' => ['nullable', 'string', 'max:32'],
+            'civil_stat' => ['nullable', 'string', 'max:64'],
+            'height' => ['nullable', 'string', 'max:32'],
+            'weight' => ['nullable', 'string', 'max:32'],
+            'blood_type' => ['nullable', 'string', 'max:16'],
+            'citizenship' => ['nullable', 'string', 'max:64'],
+            'dual_citizenship' => ['nullable', 'string', 'max:64'],
+            'country' => ['nullable', 'string', 'max:64'],
+            'umid' => ['nullable', 'string', 'max:64'],
+            'pag_ibig' => ['nullable', 'string', 'max:64'],
+            'philhealth' => ['nullable', 'string', 'max:64'],
+            'philsys' => ['nullable', 'string', 'max:64'],
+            'tin' => ['nullable', 'string', 'max:64'],
+            'agency_emp_num' => ['nullable', 'string', 'max:64'],
+            'prc_no' => ['nullable', 'string', 'max:64'],
+            'sss' => ['nullable', 'string', 'max:64'],
+            'gsis' => ['nullable', 'string', 'max:64'],
+            'gsis_bp' => ['nullable', 'string', 'max:64'],
+            'house_block_lotnum' => ['nullable', 'string', 'max:255'],
+            'street_add' => ['nullable', 'string', 'max:255'],
+            'subdivision_village' => ['nullable', 'string', 'max:255'],
+            'barangay' => ['nullable', 'string', 'max:255'],
+            'city_municipality' => ['nullable', 'string', 'max:255'],
+            'province' => ['nullable', 'string', 'max:255'],
+            'zip_code' => ['nullable', 'string', 'max:32'],
+            'house_block_lotnum1' => ['nullable', 'string', 'max:255'],
+            'street_add1' => ['nullable', 'string', 'max:255'],
+            'subdivision_village1' => ['nullable', 'string', 'max:255'],
+            'barangay1' => ['nullable', 'string', 'max:255'],
+            'city_municipality1' => ['nullable', 'string', 'max:255'],
+            'province1' => ['nullable', 'string', 'max:255'],
+            'zip_code1' => ['nullable', 'string', 'max:32'],
+            'phone_num' => ['nullable', 'string', 'max:64'],
+            'mobile_num' => ['nullable', 'string', 'max:64'],
+            'email' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        if (Schema::hasTable('tbl_emp_personal_info')) {
+            $personalPayload = [];
+            $assignFirst = function (string $dataKey, array $columns) use (&$personalPayload, $data): void {
+                if (! array_key_exists($dataKey, $data)) {
+                    return;
+                }
+                foreach ($columns as $column) {
+                    if (Schema::hasColumn('tbl_emp_personal_info', $column)) {
+                        $personalPayload[$column] = $data[$dataKey] === '' ? null : $data[$dataKey];
+                        return;
+                    }
+                }
+            };
+
+            foreach ([
+                'dob',
+                'pob',
+                'gender',
+                'civil_stat',
+                'height',
+                'weight',
+                'blood_type',
+                'citizenship',
+                'dual_citizenship',
+                'country',
+                'pag_ibig',
+                'philhealth',
+                'prc_no',
+                'sss',
+                'gsis',
+                'gsis_bp',
+            ] as $key) {
+                if (array_key_exists($key, $data) && Schema::hasColumn('tbl_emp_personal_info', $key)) {
+                    $personalPayload[$key] = $data[$key] === '' ? null : $data[$key];
+                }
+            }
+
+            $assignFirst('umid', ['umid', 'umid_no', 'umid_num']);
+            $assignFirst('philsys', ['philsys', 'philsys_no', 'philsys_num', 'psn']);
+            $assignFirst('tin', ['tin', 'tin_no']);
+            $assignFirst('agency_emp_num', ['agency_emp_num', 'agency_employee_no', 'agency_emp_no']);
+            if ($personalPayload !== []) {
+                DB::table('tbl_emp_personal_info')->updateOrInsert(
+                    ['hrid' => $hrid],
+                    array_merge(['hrid' => $hrid], $personalPayload),
+                );
+            }
+        }
+
+        if (Schema::hasTable('tbl_emp_contact_info')) {
+            $contactPayload = [];
+            foreach ([
+                'house_block_lotnum',
+                'street_add',
+                'subdivision_village',
+                'barangay',
+                'city_municipality',
+                'province',
+                'zip_code',
+                'house_block_lotnum1',
+                'street_add1',
+                'subdivision_village1',
+                'barangay1',
+                'city_municipality1',
+                'province1',
+                'zip_code1',
+                'phone_num',
+                'mobile_num',
+                'email',
+            ] as $key) {
+                if (array_key_exists($key, $data) && Schema::hasColumn('tbl_emp_contact_info', $key)) {
+                    $contactPayload[$key] = $data[$key] === '' ? null : $data[$key];
+                }
+            }
+
+            if ($contactPayload !== []) {
+                $base = ['hrid' => $hrid];
+                if ($profile?->email && Schema::hasColumn('tbl_emp_contact_info', 'email')) {
+                    $base['email'] = $profile->email;
+                }
+                DB::table('tbl_emp_contact_info')->updateOrInsert(
+                    ['hrid' => $hrid],
+                    array_merge($base, $contactPayload),
+                );
+            }
+        }
+
+        return redirect()->route('my-details')->with('success', 'Personal information updated.');
+    }
+
+    private function canEditOfficialRole(?User $authUser, ?User $profile): bool
+    {
+        $role = (string) ($authUser?->role ?? $profile?->role ?? '');
+        if ($role === '') {
+            return false;
+        }
+
+        return (bool) preg_match('/\\bhr\\b/i', $role)
+            || str_contains(strtolower($role), 'human resources');
     }
 }

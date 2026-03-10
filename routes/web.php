@@ -280,6 +280,12 @@ Route::get('my-details/pds-export', [MyDetailsController::class, 'exportPdsExcel
 Route::post('my-details/education', [MyDetailsController::class, 'updateEducation'])
     ->middleware(['auth', 'verified'])
     ->name('my-details.education.store');
+Route::post('my-details/official', [MyDetailsController::class, 'updateOfficialInfo'])
+    ->middleware(['auth', 'verified'])
+    ->name('my-details.official.store');
+Route::post('my-details/personal', [MyDetailsController::class, 'updatePersonalInfo'])
+    ->middleware(['auth', 'verified'])
+    ->name('my-details.personal.store');
 
 Route::get('utilities', function () {
     return Inertia::render('Utilities');

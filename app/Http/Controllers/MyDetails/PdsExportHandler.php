@@ -168,6 +168,8 @@ class PdsExportHandler
             fn ($value) => $this->pdsValue($value)
         );
         $c4CheckStates = $c4Handler->buildControlCheckStates($personalInfo);
+        $passportPhotoPath = $c4Handler->resolvePdsPhotoPath($hrid, $dbProfile, $officialInfo);
+        $signaturePath = $c4Handler->resolvePdsSignaturePath($hrid, $dbProfile?->email ?? $officialInfo?->email ?? null);
 
         return $this->populateTemplateWorkbook(
             $templatePath,
@@ -180,7 +182,9 @@ class PdsExportHandler
             $c2CellMap,
             $c3CellMap,
             $c4CellMap,
-            $c4CheckStates
+            $c4CheckStates,
+            $passportPhotoPath,
+            $signaturePath
         );
     }
 
@@ -531,7 +535,9 @@ class PdsExportHandler
         array $c2CellMap = [],
         array $c3CellMap = [],
         array $c4CellMap = [],
-        array $c4CheckStates = []
+        array $c4CheckStates = [],
+        ?string $passportPhotoPath = null,
+        ?string $signaturePath = null
     ): string {
         if (! class_exists('PclZip')) {
             require_once base_path('vendor/phpoffice/phpexcel/Classes/PHPExcel/Shared/PCLZip/pclzip.lib.php');
@@ -685,6 +691,16 @@ class PdsExportHandler
                     }
                 }
             }
+        }
+        if ($passportPhotoPath !== null || $signaturePath !== null) {
+            (new PdsC4Handler)->insertC4Images(
+                $extractRoot,
+                $workbookXml,
+                $relsXml,
+                $passportPhotoPath,
+                $signaturePath,
+                $tempRoot
+            );
         }
 
         $worksheetRelsPath = dirname($sheetXmlPath).'/_rels/'.basename($sheetXmlPath).'.rels';
