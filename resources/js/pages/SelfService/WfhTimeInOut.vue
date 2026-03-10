@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { Head, router, usePage } from '@inertiajs/vue3';
 import { Calendar, DatePicker } from 'v-calendar';
 import { Clock, FileText, Calendar as CalendarIcon, User, Mail, Briefcase, Hash } from 'lucide-vue-next';

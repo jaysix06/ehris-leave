@@ -5,6 +5,7 @@ namespace App\Http\Controllers\SelfService;
 use App\Http\Controllers\Controller;
 use App\Models\Attendance;
 use App\Models\Employee;
+use App\Models\SelfServiceTask;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
@@ -32,14 +33,105 @@ class TimezoneController extends Controller
             }
         }
 
+        $openTasks = [];
+        $completedTasks = [];
+        if (Schema::hasTable('tbl_self_service_tasks') && $request->user()) {
+            $userId = $request->user()->getKey();
+            $openStatuses = ['Not Started', 'In Progress', 'On Hold', 'open'];
+            $openTasks = SelfServiceTask::where('user_id', $userId)
+                ->whereIn('status', $openStatuses)
+                ->orderBy('due_date')
+                ->get()
+                ->map(fn ($t) => [
+                    'id' => $t->id,
+                    'title' => $t->title,
+                    'description' => $t->description,
+                    'priority' => $t->priority,
+                    'due_date' => $t->due_date->format('Y-m-d'),
+                    'due_date_end' => $t->due_date_end?->format('Y-m-d') ?? null,
+                    'add_to_calendar' => $t->add_to_calendar,
+                    'status' => $t->status,
+                ]);
+            $completedTasks = SelfServiceTask::where('user_id', $userId)
+                ->whereIn('status', ['Complete', 'completed'])
+                ->orderByDesc('updated_at')
+                ->get()
+                ->map(fn ($t) => [
+                    'id' => $t->id,
+                    'title' => $t->title,
+                    'description' => $t->description,
+                    'priority' => $t->priority,
+                    'due_date' => $t->due_date->format('Y-m-d'),
+                    'due_date_end' => $t->due_date_end?->format('Y-m-d') ?? null,
+                    'add_to_calendar' => $t->add_to_calendar,
+                    'status' => $t->status,
+                ]);
+        }
+
         return Inertia::render('SelfService/Timezone', [
             'attendance' => [
                 'isClockedIn' => $isClockedIn,
                 'hoursWorkedThisWeek' => $hoursWorkedThisWeek,
             ],
+            'openTasks' => $openTasks,
+            'completedTasks' => $completedTasks,
             'successMessage' => $request->session()->get('successMessage'),
             'errorMessage' => $request->session()->get('errorMessage'),
         ]);
+    }
+
+    public function storeTask(Request $request): RedirectResponse
+    {
+        $request->validate([
+            'title' => ['required', 'string', 'max:50'],
+            'description' => ['required', 'string'],
+            'priority' => ['required', 'string', 'in:Low,Medium,High'],
+            'due_date' => ['required', 'date'],
+            'due_date_end' => ['nullable', 'date', 'after_or_equal:due_date'],
+        ]);
+
+        if (! $request->user()) {
+            return redirect()->route('self-service.timezone')->with('errorMessage', 'You must be logged in to create a task.');
+        }
+
+        SelfServiceTask::create([
+            'user_id' => $request->user()->getKey(),
+            'title' => $request->input('title'),
+            'description' => $request->input('description'),
+            'priority' => $request->input('priority'),
+            'due_date' => $request->input('due_date'),
+            'due_date_end' => $request->input('due_date_end'),
+            'add_to_calendar' => true,
+            'status' => 'Not Started',
+        ]);
+
+        return redirect()->route('self-service.timezone')->with('successMessage', 'Task created successfully.');
+    }
+
+    public function updateTaskStatus(Request $request, SelfServiceTask $task): RedirectResponse
+    {
+        if (! $request->user() || $task->user_id !== $request->user()->getKey()) {
+            return redirect()->route('self-service.timezone')->with('errorMessage', 'Unauthorized.');
+        }
+
+        $request->validate([
+            'status' => ['required', 'string', 'in:Not Started,In Progress,On Hold,Complete'],
+        ]);
+
+        $task->update(['status' => $request->input('status')]);
+
+        return redirect()->route('self-service.timezone')->with('successMessage', 'Task status updated.');
+    }
+
+    public function destroyTask(Request $request, SelfServiceTask $task): RedirectResponse
+    {
+        if (! $request->user() || $task->user_id !== $request->user()->getKey()) {
+            return redirect()->route('self-service.timezone')->with('errorMessage', 'Unauthorized.');
+        }
+
+        $task->delete();
+
+        return redirect()->route('self-service.timezone')->with('successMessage', 'Task deleted.');
     }
 
     public function clockIn(Request $request): Response|RedirectResponse
