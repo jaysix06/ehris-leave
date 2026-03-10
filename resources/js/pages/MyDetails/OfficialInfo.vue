@@ -1,19 +1,154 @@
 <script setup lang="ts">
+import { router } from '@inertiajs/vue3';
+import { Pencil } from 'lucide-vue-next';
+import { ref } from 'vue';
+import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Spinner } from '@/components/ui/spinner';
+
 function val(v: unknown): string {
     if (v == null || v === '') return 'N/A';
     const s = String(v).trim();
     return s === '' ? 'N/A' : s;
 }
 
-defineProps<{
+function valInput(v: unknown): string {
+    if (v == null) return '';
+    return String(v);
+}
+
+const props = defineProps<{
     officialInfo?: Record<string, unknown> | null;
+    officialUpdateUrl?: string;
+    canEditOfficialRole?: boolean;
+    officialOptions?: {
+        salaryGrades?: string[];
+        steps?: string[];
+        positions?: string[];
+        departments?: string[];
+        divisionOffices?: string[];
+        roles?: string[];
+        employmentStatuses?: string[];
+    };
 }>();
+
+function optionList(key: keyof NonNullable<typeof props.officialOptions>): string[] {
+    const options = props.officialOptions;
+    const list = options && Array.isArray(options[key]) ? options[key] : [];
+    return list.filter((item) => item != null && String(item).trim() !== '').map((item) => String(item));
+}
+
+function optionsWithCurrent(
+    key: keyof NonNullable<typeof props.officialOptions>,
+    current: string,
+): string[] {
+    const base = optionList(key);
+    const trimmed = current.trim();
+    if (trimmed === '' || base.includes(trimmed)) {
+        return base;
+    }
+    return [trimmed, ...base];
+}
+
+const selectClass =
+    'border-input h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm';
+
+const editModalOpen = ref(false);
+const processing = ref(false);
+const errors = ref<Record<string, string>>({});
+const form = ref({
+    employee_id: '',
+    prefix_name: '',
+    firstname: '',
+    middlename: '',
+    lastname: '',
+    extension: '',
+    email: '',
+    item_no: '',
+    plantilla: '',
+    job_title: '',
+    employ_status: '',
+    salary_grade: '',
+    step: '',
+    date_of_joining: '',
+    date_of_promotion: '',
+    year_experience: '',
+    role: '',
+    division_code: '',
+    business_id: '',
+    office: '',
+    reporting_manager: '',
+});
+
+function openEdit(): void {
+    const o = props.officialInfo ?? {};
+    form.value = {
+        employee_id: valInput(o.employee_id),
+        prefix_name: valInput(o.prefix_name),
+        firstname: valInput(o.firstname),
+        middlename: valInput(o.middlename),
+        lastname: valInput(o.lastname),
+        extension: valInput(o.extension),
+        email: valInput(o.email),
+        item_no: valInput(o.item_no),
+        plantilla: valInput(o.plantilla),
+        job_title: valInput(o.job_title),
+        employ_status: valInput(o.employ_status),
+        salary_grade: valInput(o.salary_grade),
+        step: valInput(o.step),
+        date_of_joining: valInput(o.date_of_joining),
+        date_of_promotion: valInput(o.date_of_promotion),
+        year_experience: valInput(o.year_experience),
+        role: valInput(o.role),
+        division_code: valInput(o.division_office_name ?? o.division_code),
+        business_id: valInput(o.business_id),
+        office: valInput(o.office),
+        reporting_manager: valInput(o.reporting_manager),
+    };
+    errors.value = {};
+    editModalOpen.value = true;
+}
+
+function submit(): void {
+    if (!props.officialUpdateUrl) return;
+    processing.value = true;
+    errors.value = {};
+    router.post(props.officialUpdateUrl, { ...form.value }, {
+        preserveScroll: true,
+        onFinish: () => {
+            processing.value = false;
+        },
+        onSuccess: () => {
+            editModalOpen.value = false;
+        },
+        onError: (e) => {
+            errors.value = e as Record<string, string>;
+        },
+    });
+}
 </script>
 
 <template>
     <section class="ehris-card">
         <div class="ehris-official-info-header">
             <h3>Official information</h3>
+            <button
+                type="button"
+                class="ehris-edit-btn"
+                aria-label="Edit official information"
+                @click="openEdit"
+            >
+                <Pencil class="size-4" />
+                <span>Edit</span>
+            </button>
         </div>
         <div v-if="officialInfo" class="ehris-pds-official-form">
             <div class="ehris-pds-official-section">
@@ -122,11 +257,11 @@ defineProps<{
                         </div>
                         <div class="ehris-pds-official-row">
                             <dt>DIVISION OFFICE</dt>
-                            <dd>{{ val(officialInfo.division_code) }}</dd>
+                            <dd>{{ val(officialInfo.division_office_name ?? officialInfo.division_code) }}</dd>
                         </div>
                         <div class="ehris-pds-official-row">
                             <dt>BUSINESS UNIT</dt>
-                            <dd>{{ val(officialInfo.business_id) }}</dd>
+                            <dd>{{ val(officialInfo.business_unit_name ?? officialInfo.business_id) }}</dd>
                         </div>
                         <div class="ehris-pds-official-row">
                             <dt>DEPARTMENT</dt>
@@ -141,6 +276,137 @@ defineProps<{
             </div>
         </div>
         <p v-else class="ehris-muted">No official information on file.</p>
+
+        <Dialog :open="editModalOpen" @update:open="(v) => { editModalOpen = v; }">
+            <DialogContent class="sm:max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+                <DialogHeader>
+                    <DialogTitle>Edit Official Information</DialogTitle>
+                </DialogHeader>
+
+                <div class="ehris-modal-scroll">
+                    <div class="ehris-modal-grid">
+                        <label class="ehris-modal-field">
+                            <span>Employee No.</span>
+                            <Input v-model="form.employee_id" />
+                        </label>
+                        <label class="ehris-modal-field">
+                            <span>Prefix Name</span>
+                            <Input v-model="form.prefix_name" />
+                        </label>
+                        <label class="ehris-modal-field">
+                            <span>First Name</span>
+                            <Input v-model="form.firstname" />
+                        </label>
+                        <label class="ehris-modal-field">
+                            <span>Middle Name</span>
+                            <Input v-model="form.middlename" />
+                        </label>
+                        <label class="ehris-modal-field">
+                            <span>Last Name</span>
+                            <Input v-model="form.lastname" />
+                        </label>
+                        <label class="ehris-modal-field">
+                            <span>Name Extension</span>
+                            <Input v-model="form.extension" />
+                        </label>
+                        <label class="ehris-modal-field">
+                            <span>DepEd Email</span>
+                            <Input v-model="form.email" type="email" />
+                        </label>
+                        <label class="ehris-modal-field">
+                            <span>Item No.</span>
+                            <Input v-model="form.item_no" />
+                        </label>
+                        <label class="ehris-modal-field">
+                            <span>Plantilla Assignment</span>
+                            <Input v-model="form.plantilla" />
+                        </label>
+                        <label class="ehris-modal-field">
+                            <span>Position</span>
+                            <select v-model="form.job_title" :class="selectClass">
+                                <option value="" disabled>Select position</option>
+                                <option v-for="item in optionsWithCurrent('positions', form.job_title)" :key="item" :value="item">{{ item }}</option>
+                            </select>
+                        </label>
+                        <label class="ehris-modal-field">
+                            <span>Employment Status</span>
+                            <select v-model="form.employ_status" :class="selectClass">
+                                <option value="" disabled>Select status</option>
+                                <option v-for="item in optionsWithCurrent('employmentStatuses', form.employ_status)" :key="item" :value="item">{{ item }}</option>
+                            </select>
+                        </label>
+                        <label class="ehris-modal-field">
+                            <span>Salary Grade</span>
+                            <select v-model="form.salary_grade" :class="selectClass">
+                                <option value="" disabled>Select grade</option>
+                                <option v-for="item in optionsWithCurrent('salaryGrades', form.salary_grade)" :key="item" :value="item">{{ item }}</option>
+                            </select>
+                        </label>
+                        <label class="ehris-modal-field">
+                            <span>Step</span>
+                            <select v-model="form.step" :class="selectClass">
+                                <option value="" disabled>Select step</option>
+                                <option v-for="item in optionsWithCurrent('steps', form.step)" :key="item" :value="item">{{ item }}</option>
+                            </select>
+                        </label>
+                        <label class="ehris-modal-field">
+                            <span>Date of Joining</span>
+                            <Input v-model="form.date_of_joining" />
+                        </label>
+                        <label class="ehris-modal-field">
+                            <span>Date of Promotion</span>
+                            <Input v-model="form.date_of_promotion" />
+                        </label>
+                        <label class="ehris-modal-field">
+                            <span>Years of Experience</span>
+                            <Input v-model="form.year_experience" />
+                        </label>
+                        <label class="ehris-modal-field">
+                            <span>Role</span>
+                            <select v-model="form.role" :class="selectClass" :disabled="!props.canEditOfficialRole">
+                                <option value="" disabled>Select role</option>
+                                <option v-for="item in optionsWithCurrent('roles', form.role)" :key="item" :value="item">{{ item }}</option>
+                            </select>
+                            <small v-if="!props.canEditOfficialRole" class="ehris-modal-hint">Only HR can edit this field.</small>
+                        </label>
+                        <label class="ehris-modal-field">
+                            <span>Division Office</span>
+                            <select v-model="form.division_code" :class="selectClass">
+                                <option value="" disabled>Select division office</option>
+                                <option v-for="item in optionsWithCurrent('divisionOffices', form.division_code)" :key="item" :value="item">{{ item }}</option>
+                            </select>
+                        </label>
+                        <label class="ehris-modal-field">
+                            <span>Business Unit</span>
+                            <Input v-model="form.business_id" />
+                        </label>
+                        <label class="ehris-modal-field">
+                            <span>Department</span>
+                            <select v-model="form.office" :class="selectClass">
+                                <option value="" disabled>Select department</option>
+                                <option v-for="item in optionsWithCurrent('departments', form.office)" :key="item" :value="item">{{ item }}</option>
+                            </select>
+                        </label>
+                        <label class="ehris-modal-field">
+                            <span>Reporting Manager</span>
+                            <Input v-model="form.reporting_manager" />
+                        </label>
+                    </div>
+
+                    <p v-if="errors.message" class="ehris-form-error">{{ errors.message }}</p>
+                </div>
+
+                <DialogFooter class="mt-4 shrink-0 border-t pt-4">
+                    <DialogClose as-child>
+                        <Button type="button" variant="outline">Cancel</Button>
+                    </DialogClose>
+                    <Button type="button" :disabled="processing" @click="submit">
+                        <Spinner v-if="processing" class="mr-2 h-4 w-4" />
+                        Save Changes
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     </section>
 </template>
 
@@ -206,6 +472,46 @@ defineProps<{
     display: flex;
     align-items: center;
     min-height: 2.25rem;
+}
+
+.ehris-modal-scroll {
+    overflow-y: auto;
+    padding-right: 0.25rem;
+}
+
+.ehris-modal-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+
+.ehris-modal-field {
+    display: grid;
+    gap: 0.35rem;
+    font-size: 0.875rem;
+    color: hsl(var(--muted-foreground));
+}
+
+.ehris-modal-field span {
+    font-weight: 600;
+    color: hsl(var(--foreground));
+}
+
+.ehris-modal-hint {
+    font-size: 0.75rem;
+    color: hsl(var(--muted-foreground));
+}
+
+.ehris-form-error {
+    color: hsl(var(--destructive));
+    font-size: 0.875rem;
+    margin-top: 0.5rem;
+}
+
+@media (max-width: 640px) {
+    .ehris-modal-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 @media (max-width: 1280px) {
