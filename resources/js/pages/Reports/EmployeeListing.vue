@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, router } from '@inertiajs/vue3';
-import { computed, ref, onMounted, watch } from 'vue';
+import { computed, ref, onMounted, onBeforeUnmount, watch } from 'vue';
 import { useDebounceFn, onClickOutside } from '@vueuse/core';
 import {
     ChevronDown,
@@ -30,6 +30,23 @@ import { employeeListing } from '@/routes/reports';
 import type { BreadcrumbItem } from '@/types';
 
 ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, Title, Tooltip, Legend);
+
+// Theme-reactive chart rendering (same as Dashboard)
+const themeKey = ref(0);
+let themeObserver: MutationObserver | null = null;
+
+function cssVar(name: string): string {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+onMounted(() => {
+    themeObserver = new MutationObserver(() => { themeKey.value++; });
+    themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+});
+
+onBeforeUnmount(() => {
+    themeObserver?.disconnect();
+});
 
 const pageTitle = 'Employee Listing & Reports';
 
@@ -92,6 +109,8 @@ type Props = {
             legend: ChartItem[];
             others: ChartItem[];
         };
+        gender: ChartItem[];
+        teachingPosition: ChartItem[];
     };
     filterOptions: {
         schools: string[];
@@ -250,7 +269,7 @@ const showEmploymentStatusOthers = ref(false);
 const showSchoolOthers = ref(false);
 
 // Track hidden items (items unchecked will be hidden from chart)
-// Initialize with all items beyond top 5 hidden by default
+// Initialize with all items beyond top 4 hidden by default (legends show only 4)
 const hiddenEmploymentStatus = ref<string[]>([]);
 const hiddenSchools = ref<string[]>([]);
 
@@ -258,12 +277,12 @@ const hiddenSchools = ref<string[]>([]);
 const initializeHiddenItems = () => {
     if (props.chartData?.employmentStatus?.chart) {
         hiddenEmploymentStatus.value = props.chartData.employmentStatus.chart
-            .slice(5)
+            .slice(4)
             .map((item) => item.label);
     }
     if (props.chartData?.school?.chart) {
         hiddenSchools.value = props.chartData.school.chart
-            .slice(5)
+            .slice(4)
             .map((item) => item.label);
     }
 };
@@ -348,6 +367,8 @@ const chartDataSafe = computed(() => ({
         legend: props.chartData?.school?.legend ?? [],
         others: props.chartData?.school?.others ?? [],
     },
+    gender: props.chartData?.gender ?? [],
+    teachingPosition: props.chartData?.teachingPosition ?? [],
 }));
 
 const prevLink = computed(() => props.employees.links[0] ?? null);
@@ -362,6 +383,7 @@ const pageNumberLinks = computed(() => {
 });
 
 const employmentStatusChartData = computed(() => {
+    void themeKey.value;
     const allItems = chartDataSafe.value.employmentStatus.chart;
     const visibleItems = allItems.filter(
         (item) => !hiddenEmploymentStatus.value.includes(item.label),
@@ -377,13 +399,16 @@ const employmentStatusChartData = computed(() => {
                     const originalIndex = allItems.findIndex((c) => c.label === item.label);
                     return allColors[originalIndex];
                 }),
-                borderWidth: 1,
+                borderWidth: 0,
+                spacing: 3,
+                borderRadius: 4,
             },
         ],
     };
 });
 
 const jobTitleChartData = computed(() => {
+    void themeKey.value;
     const items = chartDataSafe.value.jobTitle;
     return {
         labels: items.map((i) => i.label),
@@ -391,14 +416,16 @@ const jobTitleChartData = computed(() => {
             {
                 label: 'Employees',
                 data: items.map((i) => i.count),
-                backgroundColor: CHART_COLORS[0],
-                borderWidth: 0,
+                backgroundColor: cssVar('--chart-2') || CHART_COLORS[0],
+                borderRadius: 6,
+                borderSkipped: false as const,
             },
         ],
     };
 });
 
 const schoolChartData = computed(() => {
+    void themeKey.value;
     const allItems = chartDataSafe.value.school.chart;
     const visibleItems = allItems.filter(
         (item) => !hiddenSchools.value.includes(item.label),
@@ -414,39 +441,114 @@ const schoolChartData = computed(() => {
                     const originalIndex = allItems.findIndex((c) => c.label === item.label);
                     return allColors[originalIndex];
                 }),
-                borderWidth: 1,
+                borderWidth: 0,
+                spacing: 3,
+                borderRadius: 4,
             },
         ],
     };
 });
 
-const chartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-        legend: { position: 'bottom' as const },
-        tooltip: { enabled: true },
-    },
-};
+const genderChartData = computed(() => {
+    void themeKey.value;
+    const items = chartDataSafe.value.gender;
+    const colors = getColors(Math.max(items.length, 2));
+    return {
+        labels: items.map((i) => i.label),
+        datasets: [
+            {
+                data: items.map((i) => i.count),
+                backgroundColor: items.map((_, i) => colors[i]),
+                borderWidth: 0,
+                spacing: 3,
+                borderRadius: 4,
+            },
+        ],
+    };
+});
 
-const doughnutOptions = {
-    ...chartOptions,
-    cutout: '60%',
-    plugins: {
-        ...chartOptions.plugins,
-        legend: {
-            display: false,
+const teachingPositionChartData = computed(() => {
+    void themeKey.value;
+    const items = chartDataSafe.value.teachingPosition;
+    const colors = getColors(Math.max(items.length, 2));
+    return {
+        labels: items.map((i) => i.label),
+        datasets: [
+            {
+                data: items.map((i) => i.count),
+                backgroundColor: items.map((_, i) => colors[i]),
+                borderWidth: 0,
+                spacing: 3,
+                borderRadius: 4,
+            },
+        ],
+    };
+});
+
+// Chart options (Dashboard-style: theme-aware legend, tooltip, scales)
+const doughnutOptions = computed(() => {
+    void themeKey.value;
+    const mutedFg = cssVar('--muted-foreground');
+    const border = cssVar('--border');
+    return {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '55%',
+        animation: { duration: 500 },
+        plugins: {
+            legend: { display: false },
+            tooltip: {
+                backgroundColor: cssVar('--card'),
+                titleColor: cssVar('--foreground'),
+                bodyColor: mutedFg,
+                borderColor: border,
+                borderWidth: 1,
+                cornerRadius: 8,
+                padding: 10,
+                titleFont: { family: 'Manrope', weight: 'bold' as const },
+                bodyFont: { family: 'Manrope' },
+            },
         },
-    },
-};
+    };
+});
 
-const barOptions = {
-    ...chartOptions,
-    indexAxis: 'y' as const,
-    scales: {
-        x: { beginAtZero: true },
-    },
-};
+const barOptions = computed(() => {
+    void themeKey.value;
+    const mutedFg = cssVar('--muted-foreground');
+    const border = cssVar('--border');
+    return {
+        responsive: true,
+        maintainAspectRatio: false,
+        indexAxis: 'y' as const,
+        plugins: {
+            legend: { display: false },
+            tooltip: {
+                backgroundColor: cssVar('--card'),
+                titleColor: cssVar('--foreground'),
+                bodyColor: mutedFg,
+                borderColor: border,
+                borderWidth: 1,
+                cornerRadius: 8,
+                padding: 10,
+                titleFont: { family: 'Manrope', weight: 'bold' as const },
+                bodyFont: { family: 'Manrope' },
+            },
+        },
+        scales: {
+            x: {
+                beginAtZero: true,
+                grid: { color: border },
+                ticks: { color: mutedFg, font: { size: 12, family: 'Manrope' } },
+                border: { display: false },
+            },
+            y: {
+                grid: { display: false },
+                ticks: { color: mutedFg, font: { size: 12, family: 'Manrope' } },
+                border: { display: false },
+            },
+        },
+    };
+});
 
 // Function to fetch summary stats based on current filters
 const fetchSummaryStats = async () => {
@@ -802,13 +904,13 @@ const getAjaxParams = computed(() => () => ({
                 </div>
 
                 <!-- Charts -->
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 items-start">
-                    <div class="rounded-lg border p-4 bg-card">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6 items-start">
+                    <div class="flex flex-col">
                         <h3 class="text-sm font-semibold text-muted-foreground mb-3">Employment Status</h3>
-                        <div class="h-[240px]">
+                        <div class="h-[160px]">
                             <Doughnut
                                 v-if="employmentStatusChartData.labels.length"
-                                :key="`employment-${hiddenEmploymentStatus.length}-${employmentStatusChartData.labels.length}`"
+                                :key="`employment-${themeKey}`"
                                 :data="employmentStatusChartData"
                                 :options="doughnutOptions"
                             />
@@ -819,11 +921,11 @@ const getAjaxParams = computed(() => () => ({
                                 No data
                             </div>
                         </div>
-                        <!-- Custom Legend: Top 5 + Display -->
+                        <!-- Custom Legend: Top 4 + Others -->
                         <div class="mt-4">
                             <div class="flex flex-wrap gap-3 items-center mb-2">
                                 <template
-                                    v-for="item in chartDataSafe.employmentStatus.legend"
+                                    v-for="item in chartDataSafe.employmentStatus.legend.slice(0, 4)"
                                     :key="item.label"
                                 >
                                     <div class="flex items-center gap-2">
@@ -846,7 +948,10 @@ const getAjaxParams = computed(() => () => ({
                                     class="flex items-center gap-2 px-2 py-1 rounded border border-border bg-background hover:bg-muted/50 text-xs font-medium text-foreground hover:text-primary transition-colors"
                                 >
                                     <span>Others ({{ chartDataSafe.employmentStatus.others.length || chartDataSafe.employmentStatus.chart.length - 4 }})</span>
-                                    <span class="text-xs">{{ showEmploymentStatusOthers ? '▼' : '▶' }}</span>
+                                    <ChevronDown
+                                        class="size-3.5 shrink-0 transition-transform duration-200 ease-in-out"
+                                        :class="{ 'rotate-[-90deg]': !showEmploymentStatusOthers }"
+                                    />
                                 </button>
                             </div>
                             <!-- Display Dropdown - Show ALL items -->
@@ -916,12 +1021,12 @@ const getAjaxParams = computed(() => () => ({
                             </transition>
                         </div>
                     </div>
-                    <div class="rounded-lg border p-4 bg-card">
+                    <div class="flex flex-col">
                         <h3 class="text-sm font-semibold text-muted-foreground mb-3">By School/Office</h3>
-                        <div class="h-[240px]">
+                        <div class="h-[160px]">
                             <Doughnut
                                 v-if="schoolChartData.labels.length"
-                                :key="`school-${hiddenSchools.length}-${schoolChartData.labels.length}`"
+                                :key="`school-${themeKey}`"
                                 :data="schoolChartData"
                                 :options="doughnutOptions"
                             />
@@ -932,11 +1037,11 @@ const getAjaxParams = computed(() => () => ({
                                 No data
                             </div>
                         </div>
-                        <!-- Custom Legend: Top 5 + Display -->
+                        <!-- Custom Legend: Top 4 + Others -->
                         <div class="mt-4">
                             <div class="flex flex-wrap gap-3 items-center mb-2">
                                 <template
-                                    v-for="item in chartDataSafe.school.legend"
+                                    v-for="item in chartDataSafe.school.legend.slice(0, 4)"
                                     :key="item.label"
                                 >
                                     <div class="flex items-center gap-2">
@@ -959,7 +1064,10 @@ const getAjaxParams = computed(() => () => ({
                                     class="flex items-center gap-2 px-2 py-1 rounded border border-border bg-background hover:bg-muted/50 text-xs font-medium text-foreground hover:text-primary transition-colors"
                                 >
                                     <span>Others ({{ chartDataSafe.school.others.length || chartDataSafe.school.chart.length - 4 }})</span>
-                                    <span class="text-xs">{{ showSchoolOthers ? '▼' : '▶' }}</span>
+                                    <ChevronDown
+                                        class="size-3.5 shrink-0 transition-transform duration-200 ease-in-out"
+                                        :class="{ 'rotate-[-90deg]': !showSchoolOthers }"
+                                    />
                                 </button>
                             </div>
                             <!-- Display Dropdown - Show ALL items -->
@@ -1029,6 +1137,66 @@ const getAjaxParams = computed(() => () => ({
                             </transition>
                         </div>
                     </div>
+                    <div class="flex flex-col">
+                        <h3 class="text-sm font-semibold text-muted-foreground mb-3">Male and Female Employee</h3>
+                        <div class="h-[160px]">
+                            <Doughnut
+                                v-if="genderChartData.labels.length"
+                                :key="`gender-${themeKey}`"
+                                :data="genderChartData"
+                                :options="doughnutOptions"
+                            />
+                            <div
+                                v-else
+                                class="h-full flex items-center justify-center text-muted-foreground text-sm"
+                            >
+                                No data
+                            </div>
+                        </div>
+                        <div class="mt-4 flex flex-wrap gap-3 items-center">
+                            <div
+                                v-for="(item, idx) in chartDataSafe.gender"
+                                :key="item.label"
+                                class="flex items-center gap-2"
+                            >
+                                <div
+                                    class="w-4 h-4 rounded"
+                                    :style="{ backgroundColor: getColors(chartDataSafe.gender.length)[idx] }"
+                                ></div>
+                                <span class="text-xs text-muted-foreground">{{ item.label }} ({{ item.count }})</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex flex-col">
+                        <h3 class="text-sm font-semibold text-muted-foreground mb-3">Teaching vs Non-Teaching Position</h3>
+                        <div class="h-[160px]">
+                            <Doughnut
+                                v-if="teachingPositionChartData.labels.length"
+                                :key="`teaching-${themeKey}`"
+                                :data="teachingPositionChartData"
+                                :options="doughnutOptions"
+                            />
+                            <div
+                                v-else
+                                class="h-full flex items-center justify-center text-muted-foreground text-sm"
+                            >
+                                No data
+                            </div>
+                        </div>
+                        <div class="mt-4 flex flex-wrap gap-3 items-center">
+                            <div
+                                v-for="(item, idx) in chartDataSafe.teachingPosition"
+                                :key="item.label"
+                                class="flex items-center gap-2"
+                            >
+                                <div
+                                    class="w-4 h-4 rounded"
+                                    :style="{ backgroundColor: getColors(chartDataSafe.teachingPosition.length)[idx] }"
+                                ></div>
+                                <span class="text-xs text-muted-foreground">{{ item.label }} ({{ item.count }})</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="grid grid-cols-1 gap-6 mb-6">
                     <div class="rounded-lg border p-4 bg-card">
@@ -1036,6 +1204,7 @@ const getAjaxParams = computed(() => () => ({
                         <div class="h-[320px]">
                             <Bar
                                 v-if="jobTitleChartData.labels.length"
+                                :key="`bar-${themeKey}`"
                                 :data="jobTitleChartData"
                                 :options="barOptions"
                             />

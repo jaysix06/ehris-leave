@@ -7,6 +7,7 @@ use App\Models\Employee;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Response;
+use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
 use Maatwebsite\Excel\Facades\Excel;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -123,6 +124,30 @@ class EmployeeListingController extends Controller
         $schoolTop = $allSchoolDistribution->take(5)->all();
         $schoolOthers = $allSchoolDistribution->skip(5)->all();
 
+        // Gender (Male / Female): from official info or personal info if column exists
+        $genderDistribution = $this->getGenderDistribution($query);
+
+        // Teaching vs Non-Teaching: group by job_title then aggregate in PHP (MySQL ONLY_FULL_GROUP_BY)
+        $byJobTitle = (clone $query)
+            ->select('job_title', DB::raw('count(*) as count'))
+            ->groupBy('job_title')
+            ->get();
+        $teaching = 0;
+        $nonTeaching = 0;
+        foreach ($byJobTitle as $row) {
+            $title = trim((string) ($row->job_title ?? ''));
+            $count = (int) $row->count;
+            if ($title !== '' && str_contains(strtolower($title), 'teacher')) {
+                $teaching += $count;
+            } else {
+                $nonTeaching += $count;
+            }
+        }
+        $teachingPositionDistribution = [
+            ['label' => 'Teaching', 'count' => $teaching],
+            ['label' => 'Non-Teaching', 'count' => $nonTeaching],
+        ];
+
         // Pagination (full load)
         $employees = $query->paginate($perPage)->withQueryString();
 
@@ -145,6 +170,8 @@ class EmployeeListingController extends Controller
                     'legend' => $schoolTop,
                     'others' => $schoolOthers,
                 ],
+                'gender' => $genderDistribution,
+                'teachingPosition' => $teachingPositionDistribution,
             ],
             'filterOptions' => [
                 'schools' => $schools,
@@ -156,6 +183,59 @@ class EmployeeListingController extends Controller
             ],
             'filters' => $request->only(['school', 'district', 'job_title', 'subject', 'grade_level', 'employment_status', 'salary_grade', 'search']),
         ]);
+    }
+
+    /**
+     * Get gender distribution (Male and Female only). Uses gender column on official or personal info if present.
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder  $query  Base employee query with filters
+     * @return array<int, array{label: string, count: int}>
+     */
+    private function getGenderDistribution($query)
+    {
+        $raw = [];
+
+        if (Schema::hasColumn('tbl_emp_official_info', 'gender')) {
+            $raw = (clone $query)
+                ->select('gender', DB::raw('count(*) as count'))
+                ->groupBy('gender')
+                ->get()
+                ->map(fn ($row) => [
+                    'label' => trim((string) ($row->gender ?? '')) !== '' ? trim((string) $row->gender) : 'Not Specified',
+                    'count' => (int) $row->count,
+                ])
+                ->values()
+                ->all();
+        } elseif (Schema::hasTable('tbl_emp_personal_info') && Schema::hasColumn('tbl_emp_personal_info', 'gender')) {
+            $raw = (clone $query)
+                ->join('tbl_emp_personal_info', 'tbl_emp_official_info.hrid', '=', 'tbl_emp_personal_info.hrid')
+                ->select('tbl_emp_personal_info.gender', DB::raw('count(*) as count'))
+                ->groupBy('tbl_emp_personal_info.gender')
+                ->get()
+                ->map(fn ($row) => [
+                    'label' => trim((string) ($row->gender ?? '')) !== '' ? trim((string) $row->gender) : 'Not Specified',
+                    'count' => (int) $row->count,
+                ])
+                ->values()
+                ->all();
+        }
+
+        $male = 0;
+        $female = 0;
+        foreach ($raw as $row) {
+            $label = strtolower((string) $row['label']);
+            $count = (int) $row['count'];
+            if ($label === 'male') {
+                $male = $count;
+            } elseif ($label === 'female') {
+                $female = $count;
+            }
+        }
+
+        return [
+            ['label' => 'Male', 'count' => $male],
+            ['label' => 'Female', 'count' => $female],
+        ];
     }
 
     /**
