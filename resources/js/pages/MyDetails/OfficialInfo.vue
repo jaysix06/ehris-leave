@@ -29,6 +29,7 @@ const props = defineProps<{
     officialInfo?: Record<string, unknown> | null;
     officialUpdateUrl?: string;
     canEditOfficialRole?: boolean;
+    canEditOfficialInfo?: boolean;
     officialOptions?: {
         salaryGrades?: string[];
         steps?: string[];
@@ -141,8 +142,9 @@ function submit(): void {
         <div class="ehris-official-info-header">
             <h3>Official information</h3>
             <button
+                v-if="props.canEditOfficialInfo"
                 type="button"
-                class="ehris-edit-btn"
+                class="ehris-btn-grade-subject"
                 aria-label="Edit official information"
                 @click="openEdit"
             >
@@ -284,6 +286,7 @@ function submit(): void {
                 </DialogHeader>
 
                 <div class="ehris-modal-scroll">
+                    <p v-if="!props.canEditOfficialInfo" class="ehris-form-error">Only HR Manager can edit official information.</p>
                     <div class="ehris-modal-grid">
                         <label class="ehris-modal-field">
                             <span>Employee No.</span>

@@ -400,8 +400,10 @@ class MyDetailsController extends Controller
             [
                 'profile' => $dbProfile,
                 'educationUpdateUrl' => route('my-details.education.store'),
+                'familyUpdateUrl' => route('my-details.family.store'),
                 'officialUpdateUrl' => route('my-details.official.store'),
                 'personalUpdateUrl' => route('my-details.personal.store'),
+                'canEditOfficialInfo' => $this->canEditOfficialInfo($authUser, $dbProfile),
                 'officialOptions' => $officialOptions,
             ],
             $data,
@@ -601,6 +603,11 @@ class MyDetailsController extends Controller
                 ->withErrors(['message' => 'Unable to identify employee.']);
         }
 
+        if (! $this->canEditOfficialInfo($authUser, $profile)) {
+            return redirect()->route('my-details')
+                ->withErrors(['message' => 'Only HR Manager can edit official information.']);
+        }
+
         $data = $request->validate([
             'employee_id' => ['nullable', 'string', 'max:64'],
             'prefix_name' => ['nullable', 'string', 'max:32'],
@@ -798,14 +805,99 @@ class MyDetailsController extends Controller
         return redirect()->route('my-details')->with('success', 'Personal information updated.');
     }
 
+    public function updateFamilyBackground(Request $request)
+    {
+        $authUser = $request->user();
+        $profile = $authUser && Schema::hasTable('tbl_user')
+            ? User::query()->where('email', $authUser->email)->first()
+            : null;
+        $hrid = $profile?->hrId ?? $authUser?->hrId ?? $authUser?->id ?? null;
+
+        if ($hrid === null) {
+            return redirect()->route('my-details')
+                ->withErrors(['message' => 'Unable to identify employee.']);
+        }
+
+        if (! Schema::hasTable('tbl_emp_family_info')) {
+            return redirect()->route('my-details')
+                ->withErrors(['message' => 'Family info table not found.']);
+        }
+
+        $data = $request->validate([
+            'family' => ['required', 'array'],
+            'family.*.relationship' => ['nullable', 'string', 'max:64'],
+            'family.*.lastname' => ['nullable', 'string', 'max:255'],
+            'family.*.firstname' => ['nullable', 'string', 'max:255'],
+            'family.*.middlename' => ['nullable', 'string', 'max:255'],
+            'family.*.extension' => ['nullable', 'string', 'max:64'],
+            'family.*.occupation' => ['nullable', 'string', 'max:255'],
+            'family.*.employer_name' => ['nullable', 'string', 'max:255'],
+            'family.*.business_add' => ['nullable', 'string', 'max:255'],
+            'family.*.tel_num' => ['nullable', 'string', 'max:64'],
+            'family.*.dob' => ['nullable', 'string', 'max:64'],
+            'family.*.deceased' => ['nullable', 'string', 'max:64'],
+        ]);
+
+        $rows = collect($data['family'] ?? [])
+            ->map(function (array $row) use ($hrid) {
+                $payload = ['hrid' => $hrid];
+                foreach ([
+                    'relationship',
+                    'lastname',
+                    'firstname',
+                    'middlename',
+                    'extension',
+                    'occupation',
+                    'employer_name',
+                    'business_add',
+                    'tel_num',
+                    'dob',
+                    'deceased',
+                ] as $key) {
+                    if (Schema::hasColumn('tbl_emp_family_info', $key)) {
+                        $val = $row[$key] ?? null;
+                        $payload[$key] = $val === '' ? null : $val;
+                    }
+                }
+                return $payload;
+            })
+            ->filter(function (array $row) {
+                // Keep the row if it has any meaningful values besides hrid.
+                foreach ($row as $key => $val) {
+                    if ($key === 'hrid') {
+                        continue;
+                    }
+                    if ($val !== null && trim((string) $val) !== '') {
+                        return true;
+                    }
+                }
+                return false;
+            })
+            ->values()
+            ->all();
+
+        DB::table('tbl_emp_family_info')->where('hrid', $hrid)->delete();
+        foreach ($rows as $row) {
+            DB::table('tbl_emp_family_info')->insert($row);
+        }
+
+        return redirect()->route('my-details')->with('success', 'Family background updated.');
+    }
+
     private function canEditOfficialRole(?User $authUser, ?User $profile): bool
+    {
+        return $this->canEditOfficialInfo($authUser, $profile);
+    }
+
+    private function canEditOfficialInfo(?User $authUser, ?User $profile): bool
     {
         $role = (string) ($authUser?->role ?? $profile?->role ?? '');
         if ($role === '') {
             return false;
         }
 
-        return (bool) preg_match('/\\bhr\\b/i', $role)
-            || str_contains(strtolower($role), 'human resources');
+        $normalized = strtolower(trim($role));
+        return str_contains($normalized, 'hr manager')
+            || str_contains($normalized, 'human resources manager');
     }
 }

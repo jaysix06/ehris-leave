@@ -291,6 +291,9 @@ Route::post('my-details/official', [MyDetailsController::class, 'updateOfficialI
 Route::post('my-details/personal', [MyDetailsController::class, 'updatePersonalInfo'])
     ->middleware(['auth', 'verified'])
     ->name('my-details.personal.store');
+Route::post('my-details/family', [MyDetailsController::class, 'updateFamilyBackground'])
+    ->middleware(['auth', 'verified'])
+    ->name('my-details.family.store');
 
 Route::get('utilities', function () {
     return Inertia::render('Utilities');
