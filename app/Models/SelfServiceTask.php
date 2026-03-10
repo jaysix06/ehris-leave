@@ -18,6 +18,7 @@ class SelfServiceTask extends Model
         'due_date_end',
         'add_to_calendar',
         'status',
+        'accomplishment_report',
     ];
 
     protected function casts(): array

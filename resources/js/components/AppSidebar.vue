@@ -136,10 +136,6 @@ const mainNavItems = computed<NavItem[]>(() => {
         icon: UserRoundCog,
         children: [
             {
-                title: 'Timezone',
-                href: selfServiceRoutes.timezone(),
-            },
-            {
                 title: 'WFH TimeIn/Out',
                 href: selfServiceRoutes.wfhTimeInOut(),
             },

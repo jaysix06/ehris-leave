@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { Head, Link, router } from '@inertiajs/vue3';
-import { ArrowRight, CheckCircle2, Clock, Eye, FolderOpen, ListPlus, Pause, Play, Search, Trash2, X } from 'lucide-vue-next';
+import { ArrowRight, CheckCircle2, Clock, Eye, FolderOpen, ListPlus, Pause, Pencil, Play, Search, Trash2, X } from 'lucide-vue-next';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Calendar as VCalendar, DatePicker } from 'v-calendar';
 import { toast } from 'vue3-toastify';
 import AppLayout from '@/layouts/AppLayout.vue';
+import AppModal from '@/components/AppModal.vue';
 import selfServiceRoutes from '@/routes/self-service';
 import type { BreadcrumbItem } from '@/types';
 
@@ -17,6 +18,7 @@ type TaskItem = {
     due_date_end: string | null;
     add_to_calendar: boolean;
     status: string;
+    accomplishment_report: string | null;
 };
 
 type TaskDueDateRange = { start: Date; end: Date };
@@ -40,7 +42,7 @@ const props = withDefaults(defineProps<Props>(), {
     errorMessage: '',
 });
 
-const pageTitle = 'Self-Service - Timezone';
+const pageTitle = 'Self-Service - WFH TimeIn/Out';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -144,28 +146,161 @@ function openViewModal(t: TaskItem): void {
 
 function closeViewModal(): void {
     viewTask.value = null;
+    isEditingTask.value = false;
+}
+
+// Edit task (inside view modal)
+const isEditingTask = ref(false);
+const editTitle = ref('');
+const editDescription = ref('');
+const editPriority = ref<'Low' | 'Medium' | 'High'>('Low');
+const editDueDateRange = ref<{ start: Date; end: Date } | null>(null);
+const editCalendarKey = ref(0);
+const editSubmitLoading = ref(false);
+
+const editDueDateRangeForPicker = computed({
+    get: () => editDueDateRange.value ?? undefined,
+    set: (v: { start: Date; end: Date } | undefined) => { editDueDateRange.value = v ?? null; },
+});
+
+function startEditing(): void {
+    if (!viewTask.value) return;
+    const t = viewTask.value;
+    editTitle.value = t.title;
+    editDescription.value = t.description;
+    editPriority.value = (t.priority as 'Low' | 'Medium' | 'High') || 'Low';
+    const start = parseTaskDate(t.due_date);
+    const end = t.due_date_end && t.due_date_end !== t.due_date ? parseTaskDate(t.due_date_end) : start;
+    editDueDateRange.value = { start, end };
+    editCalendarKey.value += 1;
+    isEditingTask.value = true;
+}
+
+function cancelEditing(): void {
+    isEditingTask.value = false;
+}
+
+function submitEditTask(): void {
+    if (!viewTask.value) return;
+    const title = editTitle.value.trim();
+    if (!title) { toast.error('Task title is required.'); return; }
+    if (title.length > 50) { toast.error('Task title must be at most 50 characters.'); return; }
+    const description = editDescription.value.trim();
+    if (!description) { toast.error('Task description is required.'); return; }
+    const range = editDueDateRange.value;
+    if (!range?.start) { toast.error('Task due date is required.'); return; }
+    const end = range.end && range.end >= range.start ? range.end : range.start;
+
+    editSubmitLoading.value = true;
+    router.patch(`/self-service/wfh-time-in-out/tasks/${viewTask.value.id}`, {
+        title,
+        description,
+        priority: editPriority.value,
+        due_date: formatTaskDueDate(range.start),
+        due_date_end: formatTaskDueDate(end) !== formatTaskDueDate(range.start) ? formatTaskDueDate(end) : null,
+    }, {
+        preserveScroll: true,
+        onFinish: () => { editSubmitLoading.value = false; },
+        onSuccess: () => {
+            isEditingTask.value = false;
+            closeViewModal();
+        },
+    });
 }
 
 function normalizedStatus(t: TaskItem): string {
     return t.status === 'open' ? 'Not Started' : t.status;
 }
 
-function updateTaskStatus(taskId: number, status: string): void {
+function updateTaskStatus(taskId: number, status: string, fromStatus?: string): void {
     taskActionLoading.value = true;
-    router.put(`/self-service/timezone/tasks/${taskId}`, { status }, {
+    router.put(`/self-service/wfh-time-in-out/tasks/${taskId}`, { status }, {
         preserveScroll: true,
         onFinish: () => { taskActionLoading.value = false; },
-        onSuccess: () => { closeViewModal(); },
+        onSuccess: () => {
+            closeViewModal();
+            if (status === 'In Progress' && fromStatus === 'On Hold') {
+                toast.success('Task resumed!');
+            } else if (status === 'In Progress') {
+                toast.success('Task started!');
+            } else if (status === 'On Hold') {
+                toast.info('Task put on hold.');
+            }
+        },
     });
 }
 
-function deleteTask(taskId: number): void {
-    if (!confirm('Delete this task?')) return;
+const showDeleteModal = ref(false);
+const pendingDeleteTaskId = ref<number | null>(null);
+
+function requestDeleteTask(taskId: number): void {
+    pendingDeleteTaskId.value = taskId;
+    showDeleteModal.value = true;
+}
+
+function cancelDelete(): void {
+    showDeleteModal.value = false;
+    pendingDeleteTaskId.value = null;
+}
+
+function confirmDelete(): void {
+    if (pendingDeleteTaskId.value === null) return;
     taskActionLoading.value = true;
-    router.delete(`/self-service/timezone/tasks/${taskId}`, {
+    const taskId = pendingDeleteTaskId.value;
+    showDeleteModal.value = false;
+    pendingDeleteTaskId.value = null;
+    router.delete(`/self-service/wfh-time-in-out/tasks/${taskId}`, {
         preserveScroll: true,
         onFinish: () => { taskActionLoading.value = false; },
-        onSuccess: () => { closeViewModal(); },
+        onSuccess: () => {
+            closeViewModal();
+            toast.success('Task deleted.');
+        },
+    });
+}
+
+// Complete Task (accomplishment report) modal
+const showCompleteModal = ref(false);
+const pendingCompleteTaskId = ref<number | null>(null);
+const accomplishmentReport = ref('');
+const completeSubmitLoading = ref(false);
+
+function requestCompleteTask(taskId: number): void {
+    pendingCompleteTaskId.value = taskId;
+    accomplishmentReport.value = '';
+    showCompleteModal.value = true;
+}
+
+function cancelComplete(): void {
+    showCompleteModal.value = false;
+    pendingCompleteTaskId.value = null;
+    accomplishmentReport.value = '';
+}
+
+function confirmComplete(): void {
+    if (pendingCompleteTaskId.value === null) return;
+    const report = accomplishmentReport.value.trim();
+    if (!report) {
+        toast.error('Please write your accomplishment report.');
+        return;
+    }
+    completeSubmitLoading.value = true;
+    const taskId = pendingCompleteTaskId.value;
+    showCompleteModal.value = false;
+    pendingCompleteTaskId.value = null;
+    router.put(`/self-service/wfh-time-in-out/tasks/${taskId}`, {
+        status: 'Complete',
+        accomplishment_report: report,
+    }, {
+        preserveScroll: true,
+        onFinish: () => {
+            completeSubmitLoading.value = false;
+            accomplishmentReport.value = '';
+        },
+        onSuccess: () => {
+            closeViewModal();
+            toast.success('Task completed!');
+        },
     });
 }
 
@@ -177,10 +312,6 @@ const taskPriority = ref<'Low' | 'Medium' | 'High'>('Low');
 const taskDueDateRange = ref<{ start: Date; end: Date } | null>(null);
 const taskCalendarKey = ref(0);
 const taskSubmitLoading = ref(false);
-
-// Disable Saturday and Sunday in task due date picker (weekdays 1 = Sunday, 7 = Saturday)
-/* Disable Saturday and Sunday (v-calendar: 1=Sunday, 7=Saturday) */
-const taskDisabledDates = [{ repeat: { weekdays: [1, 7] } }];
 
 // Task view calendar (dashboard): show open tasks on their due dates
 const taskViewCalendarDate = ref(new Date());
@@ -204,23 +335,86 @@ function getDaysInRange(startYmd: string, endYmd: string | null): Date[] {
     return days;
 }
 
+const HIGHLIGHT_COLORS: Record<string, { fillMode: 'light'; color: string }> = {
+    High: { fillMode: 'light', color: 'red' },
+    Medium: { fillMode: 'light', color: 'orange' },
+    Low: { fillMode: 'light', color: 'green' },
+} as const;
+
 const taskViewAttributes = computed(() => {
-    const out: Array<{ key: string; dates: Date; order: number; bar: { color: string }; popover: { label: string; visibility: string } }> = [];
+    type Attr = {
+        key: string;
+        dates: Array<{ start: Date; end: Date }> | Date[];
+        order: number;
+        highlight?: { start: { fillMode: 'light'; color: string }; base: { fillMode: 'light'; color: string }; end: { fillMode: 'light'; color: string } };
+        dot?: { color: string; class: string };
+    };
+    const out: Attr[] = [];
+
     (props.openTasks ?? []).forEach((t, taskIndex) => {
-        const days = getDaysInRange(t.due_date, t.due_date_end && t.due_date_end !== t.due_date ? t.due_date_end : null);
-        const barColor = t.priority === 'High' ? 'red' : t.priority === 'Medium' ? 'orange' : 'green';
+        const start = parseTaskDate(t.due_date);
+        const hasRange = t.due_date_end && t.due_date_end !== t.due_date;
+        const end = hasRange ? parseTaskDate(t.due_date_end!) : start;
+        const style = HIGHLIGHT_COLORS[t.priority] ?? HIGHLIGHT_COLORS.Low;
+
+        out.push({
+            key: `task-hl-${t.id}`,
+            dates: [{ start, end }],
+            order: taskIndex,
+            highlight: { start: style, base: style, end: style },
+        });
+
+        const days = getDaysInRange(t.due_date, hasRange ? t.due_date_end : null);
         days.forEach((day, dayIndex) => {
             out.push({
-                key: `task-${t.id}-${day.getTime()}`,
-                dates: day,
-                order: taskIndex * 1000 + dayIndex,
-                bar: { color: barColor },
-                popover: { label: t.title, visibility: 'hover' },
+                key: `task-dot-${t.id}-${day.getTime()}`,
+                dates: [day],
+                order: 1000 + taskIndex * 100 + dayIndex,
+                dot: { color: style.color, class: 'task-dot' },
             });
         });
     });
     return out;
 });
+
+type DayTaskEntry = { title: string; priority: string; color: string };
+
+const tasksByDayKey = computed(() => {
+    const map = new Map<string, DayTaskEntry[]>();
+    (props.openTasks ?? []).forEach((t) => {
+        const hasRange = t.due_date_end && t.due_date_end !== t.due_date;
+        const days = getDaysInRange(t.due_date, hasRange ? t.due_date_end : null);
+        const color = t.priority === 'High' ? 'red' : t.priority === 'Medium' ? 'orange' : 'green';
+        for (const day of days) {
+            const key = `${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`;
+            if (!map.has(key)) map.set(key, []);
+            map.get(key)!.push({ title: t.title, priority: t.priority, color });
+        }
+    });
+    return map;
+});
+
+const hoveredDayTasks = ref<DayTaskEntry[]>([]);
+const tooltipPos = ref({ x: 0, y: 0 });
+const showTooltip = ref(false);
+
+function onDayMouseEnter(day: { date: Date }, event: MouseEvent): void {
+    const d = day.date;
+    const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+    const tasks = tasksByDayKey.value.get(key);
+    if (!tasks || tasks.length === 0) {
+        showTooltip.value = false;
+        return;
+    }
+    hoveredDayTasks.value = tasks;
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    tooltipPos.value = { x: rect.left + rect.width / 2, y: rect.top };
+    showTooltip.value = true;
+}
+
+function onDayMouseLeave(): void {
+    showTooltip.value = false;
+}
 
 const taskDueDateRangeForPicker = computed({
     get: () => taskDueDateRange.value ?? undefined,
@@ -282,7 +476,7 @@ function submitCreateTask(): void {
     }
     const end = range.end && range.end >= range.start ? range.end : range.start;
     taskSubmitLoading.value = true;
-    router.post('/self-service/timezone/tasks', {
+    router.post('/self-service/wfh-time-in-out/tasks', {
         title,
         description,
         priority: taskPriority.value,
@@ -325,7 +519,7 @@ watch(
 function clockIn(): void {
     if (clockLoading.value) return;
     clockLoading.value = true;
-    router.post('/self-service/timezone/clock-in', {}, {
+    router.post('/self-service/wfh-time-in-out/clock-in', {}, {
         preserveScroll: true,
         onFinish: () => { clockLoading.value = false; },
     });
@@ -334,7 +528,7 @@ function clockIn(): void {
 function clockOut(): void {
     if (clockLoading.value) return;
     clockLoading.value = true;
-    router.post('/self-service/timezone/clock-out', {}, {
+    router.post('/self-service/wfh-time-in-out/clock-out', {}, {
         preserveScroll: true,
         onFinish: () => { clockLoading.value = false; },
     });
@@ -371,14 +565,37 @@ function toggleClock(): void {
                             expanded
                             :masks="{ weekdays: 'WWW' }"
                             class="task-calendar-inline task-view-calendar"
+                            @daymouseenter="onDayMouseEnter"
+                            @daymouseleave="onDayMouseLeave"
                         />
                     </div>
+
+                    <!-- Custom task tooltip -->
+                    <Teleport to="body">
+                        <Transition name="fade">
+                            <div
+                                v-if="showTooltip && hoveredDayTasks.length > 0"
+                                class="task-tooltip"
+                                :style="{ left: tooltipPos.x + 'px', top: tooltipPos.y + 'px' }"
+                            >
+                                <div
+                                    v-for="(entry, idx) in hoveredDayTasks"
+                                    :key="idx"
+                                    class="task-tooltip-row"
+                                >
+                                    <span class="task-tooltip-dot" :style="{ background: entry.color }" />
+                                    <span class="task-tooltip-priority">[{{ entry.priority[0] }}]</span>
+                                    <span class="task-tooltip-label">{{ entry.title }}</span>
+                                </div>
+                            </div>
+                        </Transition>
+                    </Teleport>
                 </div>
 
                 <!-- Activity Logs card (right) – hours worked + Clock In button in empty space -->
                 <article
                     class="flex min-h-0 flex-col justify-between gap-3 rounded-2xl p-4 text-white"
-                    :class="isClockedIn ? 'bg-green-500' : 'bg-red-500'"
+                    :class="isClockedIn ? 'bg-green-700' : 'bg-red-700'"
                 >
                     <Link
                         :href="'/self-service/time-logs'"
@@ -399,16 +616,16 @@ function toggleClock(): void {
                             View time →
                         </span>
                     </Link>
-                    <div class="pt-2">
+                    <div class="pt-2 flex flex-col items-stretch sm:items-end">
                         <p class="mb-1 text-xs font-medium opacity-90">You are currently {{ isClockedIn ? 'Clocked In' : 'Clocked Out' }}</p>
                         <button
                             type="button"
                             :disabled="clockLoading"
                             :class="[
-                                'inline-flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-white/50 focus:ring-offset-2 disabled:opacity-60 disabled:pointer-events-none',
+                                'inline-flex w-full sm:w-56 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-4 py-3 text-sm font-semibold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-white/50 focus:ring-offset-2 disabled:opacity-60 disabled:pointer-events-none',
                                 isClockedIn
-                                    ? 'bg-amber-400 text-amber-950 hover:bg-amber-500 focus:ring-offset-green-500'
-                                    : 'bg-green-500 text-white hover:bg-green-600 focus:ring-offset-red-500',
+                                    ? 'bg-red-700 text-white hover:bg-red-800 focus:ring-offset-green-700'
+                                    : 'bg-green-700 text-white hover:bg-green-800 focus:ring-offset-red-700',
                             ]"
                             @click="toggleClock"
                         >
@@ -486,7 +703,14 @@ function toggleClock(): void {
                             <li
                                 v-for="t in sortedFilteredOpenTasks"
                                 :key="t.id"
-                                class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/80 bg-muted/20 px-3 py-2 text-sm"
+                                :class="[
+                                    'flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm',
+                                    normalizedStatus(t) === 'In Progress'
+                                        ? 'border-blue-600/25 bg-blue-600/10'
+                                        : normalizedStatus(t) === 'On Hold'
+                                          ? 'border-amber-500/30 bg-amber-500/15'
+                                          : 'border-slate-500/20 bg-slate-500/10',
+                                ]"
                             >
                                 <div class="min-w-0 flex-1">
                                     <p class="font-medium text-foreground">{{ t.title }}</p>
@@ -508,7 +732,7 @@ function toggleClock(): void {
                                             type="button"
                                             :disabled="taskActionLoading"
                                             class="inline-flex items-center gap-1 rounded bg-primary px-2 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
-                                            @click="updateTaskStatus(t.id, 'In Progress')"
+                                            @click="updateTaskStatus(t.id, 'In Progress', 'Not Started')"
                                         >
                                             <Play class="size-3.5" />
                                             Start Task
@@ -528,7 +752,7 @@ function toggleClock(): void {
                                             type="button"
                                             :disabled="taskActionLoading"
                                             class="inline-flex items-center gap-1 rounded bg-emerald-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
-                                            @click="updateTaskStatus(t.id, 'Complete')"
+                                            @click="requestCompleteTask(t.id)"
                                         >
                                             <CheckCircle2 class="size-3.5" />
                                             Complete Task
@@ -539,7 +763,7 @@ function toggleClock(): void {
                                             type="button"
                                             :disabled="taskActionLoading"
                                             class="inline-flex items-center gap-1 rounded bg-primary px-2 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
-                                            @click="updateTaskStatus(t.id, 'In Progress')"
+                                            @click="updateTaskStatus(t.id, 'In Progress', 'On Hold')"
                                         >
                                             <Play class="size-3.5" />
                                             Resume Task
@@ -549,7 +773,7 @@ function toggleClock(): void {
                                         type="button"
                                         :disabled="taskActionLoading"
                                         class="inline-flex items-center gap-1 rounded border border-red-300 bg-red-50 px-2 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-60"
-                                        @click="deleteTask(t.id)"
+                                        @click="requestDeleteTask(t.id)"
                                     >
                                         <Trash2 class="size-3.5" />
                                         Delete Task
@@ -594,7 +818,7 @@ function toggleClock(): void {
             </section>
         </div>
 
-        <!-- View Task modal -->
+        <!-- View / Edit Task modal -->
         <Teleport to="body">
             <div
                 v-if="viewTask"
@@ -602,23 +826,38 @@ function toggleClock(): void {
                 @click.self="closeViewModal"
             >
                 <div
-                    class="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-lg"
+                    class="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl border border-border bg-card p-6 shadow-lg"
                     role="dialog"
                     aria-modal="true"
                     aria-labelledby="view-task-title"
                 >
                     <div class="mb-4 flex items-center justify-between">
-                        <h2 id="view-task-title" class="text-lg font-semibold text-foreground">Task details</h2>
-                        <button
-                            type="button"
-                            class="rounded p-1 text-muted-foreground hover:bg-muted"
-                            aria-label="Close"
-                            @click="closeViewModal"
-                        >
-                            <X class="size-5" />
-                        </button>
+                        <h2 id="view-task-title" class="text-lg font-semibold text-foreground">
+                            {{ isEditingTask ? 'Edit Task' : 'Task details' }}
+                        </h2>
+                        <div class="flex items-center gap-1">
+                            <button
+                                v-if="!isEditingTask && viewTask.status !== 'Complete'"
+                                type="button"
+                                class="rounded p-1 text-muted-foreground hover:bg-muted"
+                                aria-label="Edit task"
+                                @click="startEditing"
+                            >
+                                <Pencil class="size-4" />
+                            </button>
+                            <button
+                                type="button"
+                                class="rounded p-1 text-muted-foreground hover:bg-muted"
+                                aria-label="Close"
+                                @click="closeViewModal"
+                            >
+                                <X class="size-5" />
+                            </button>
+                        </div>
                     </div>
-                    <dl class="space-y-3 text-sm">
+
+                    <!-- View mode -->
+                    <dl v-if="!isEditingTask" class="space-y-3 text-sm">
                         <div>
                             <dt class="font-medium text-muted-foreground">Title</dt>
                             <dd class="mt-0.5 font-medium text-foreground">{{ viewTask.title }}</dd>
@@ -641,7 +880,79 @@ function toggleClock(): void {
                             <dt class="font-medium text-muted-foreground">Status</dt>
                             <dd class="mt-0.5 text-foreground">{{ viewTask.status === 'open' ? 'Not Started' : viewTask.status }}</dd>
                         </div>
+                        <div v-if="viewTask.accomplishment_report">
+                            <dt class="font-medium text-muted-foreground">Accomplishment Report</dt>
+                            <dd class="mt-0.5 whitespace-pre-wrap text-foreground">{{ viewTask.accomplishment_report }}</dd>
+                        </div>
                     </dl>
+
+                    <!-- Edit mode -->
+                    <form v-else class="space-y-4" @submit.prevent="submitEditTask">
+                        <div>
+                            <label for="edit-task-title" class="mb-1 block text-sm font-medium text-foreground">Title</label>
+                            <input
+                                id="edit-task-title"
+                                v-model="editTitle"
+                                type="text"
+                                maxlength="50"
+                                class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                placeholder="Task title"
+                            />
+                        </div>
+                        <div>
+                            <label for="edit-task-desc" class="mb-1 block text-sm font-medium text-foreground">Description</label>
+                            <textarea
+                                id="edit-task-desc"
+                                v-model="editDescription"
+                                rows="3"
+                                class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-none"
+                                placeholder="Task description"
+                            />
+                        </div>
+                        <div>
+                            <label for="edit-task-priority" class="mb-1 block text-sm font-medium text-foreground">Priority</label>
+                            <select
+                                id="edit-task-priority"
+                                v-model="editPriority"
+                                class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                            >
+                                <option value="Low">Low</option>
+                                <option value="Medium">Medium</option>
+                                <option value="High">High</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="mb-1 block text-sm font-medium text-foreground">Due date range</label>
+                            <div class="task-calendar-box rounded-md border border-input bg-background p-2">
+                                <DatePicker
+                                    :key="editCalendarKey"
+                                    v-model="editDueDateRangeForPicker"
+                                    is-range
+                                    is-inline
+                                    expanded
+                                    :masks="{ weekdays: 'WWW' }"
+                                    class="task-calendar-inline"
+                                />
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-end gap-2 pt-2">
+                            <button
+                                type="button"
+                                class="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
+                                @click="cancelEditing"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="submit"
+                                :disabled="editSubmitLoading"
+                                class="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:opacity-60"
+                            >
+                                <CheckCircle2 class="size-4" />
+                                {{ editSubmitLoading ? 'Saving…' : 'Save Changes' }}
+                            </button>
+                        </div>
+                    </form>
                 </div>
             </div>
         </Teleport>
@@ -719,7 +1030,6 @@ function toggleClock(): void {
                                     is-inline
                                     expanded
                                     :masks="{ weekdays: 'WWW' }"
-                                    :disabled-dates="taskDisabledDates"
                                     class="task-calendar-inline"
                                 />
                             </div>
@@ -754,6 +1064,58 @@ function toggleClock(): void {
                 </div>
             </div>
         </Teleport>
+        <!-- Delete Task Confirmation Modal -->
+        <AppModal v-model="showDeleteModal" title="Delete Task" tone="disapprove">
+            <p class="text-sm text-muted-foreground">Are you sure you want to delete this task? This action cannot be undone.</p>
+            <template #actions>
+                <button
+                    type="button"
+                    class="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
+                    @click="cancelDelete"
+                >
+                    Cancel
+                </button>
+                <button
+                    type="button"
+                    :disabled="taskActionLoading"
+                    class="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700 disabled:opacity-60"
+                    @click="confirmDelete"
+                >
+                    {{ taskActionLoading ? 'Deleting…' : 'Delete' }}
+                </button>
+            </template>
+        </AppModal>
+
+        <!-- Complete Task (Accomplishment Report) Modal -->
+        <AppModal v-model="showCompleteModal" title="Complete Task" tone="approve">
+            <p class="mb-3 text-sm text-muted-foreground">Write your accomplishment report for this task before marking it as complete.</p>
+            <label for="accomplishment-report" class="mb-1 block text-sm font-medium text-foreground">Accomplishment Report *</label>
+            <textarea
+                id="accomplishment-report"
+                v-model="accomplishmentReport"
+                rows="5"
+                class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-none"
+                placeholder="Describe what you accomplished for this task…"
+            />
+            <template #actions>
+                <button
+                    type="button"
+                    class="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
+                    @click="cancelComplete"
+                >
+                    Cancel
+                </button>
+                <button
+                    type="button"
+                    :disabled="completeSubmitLoading || !accomplishmentReport.trim()"
+                    class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-60"
+                    @click="confirmComplete"
+                >
+                    <CheckCircle2 class="size-4" />
+                    {{ completeSubmitLoading ? 'Completing…' : 'Complete Task' }}
+                </button>
+            </template>
+        </AppModal>
     </AppLayout>
 </template>
 
@@ -812,45 +1174,77 @@ function toggleClock(): void {
     min-height: 6rem;
 }
 
-/* Task view calendar: bar under date and popover */
-.task-view-calendar :deep(.vc-bars) {
-    width: 100%;
-}
-.task-view-calendar :deep(.vc-bar) {
-    height: 4px;
-    border-radius: 2px;
+/* Task view calendar: highlight range spans */
+.task-view-calendar :deep(.vc-highlight) {
+    opacity: 0.85;
 }
 
-/* Popover: show all tasks, each with visible priority color (green = low, orange = medium, red = high) */
-.task-view-calendar :deep(.vc-day-popover) {
-    max-height: min(70vh, 400px);
-    overflow-y: auto;
+/* Dots under date – rendered side-by-side when multiple tasks share a day */
+.task-view-calendar :deep(.vc-dots) {
+    display: flex;
+    justify-content: center;
+    gap: 3px;
+    margin-top: 2px;
 }
-.task-view-calendar :deep(.vc-day-popover-row) {
+.task-view-calendar :deep(.vc-dot) {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+}
+
+/* Custom task tooltip (positioned via Teleport to body) */
+.task-tooltip {
+    position: fixed;
+    z-index: 100;
+    transform: translate(-50%, -100%) translateY(-8px);
+    pointer-events: none;
+    min-width: 160px;
+    max-width: 280px;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.5rem;
+    border: 1px solid hsl(var(--border));
+    background: #fff;
+    box-shadow: 0 4px 16px hsl(0 0% 0% / 0.12);
+    font-size: 0.75rem;
+    line-height: 1.3;
+}
+
+.task-tooltip-row {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    min-height: 1.75rem;
-    padding: 0.25rem 0;
+    gap: 0.4rem;
+    padding: 0.2rem 0;
 }
-.task-view-calendar :deep(.vc-day-popover-row-indicator) {
+
+.task-tooltip-dot {
     flex-shrink: 0;
-    width: 16px;
-    min-width: 16px;
-    height: 6px;
-    border-radius: 3px;
-    overflow: hidden;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
 }
-.task-view-calendar :deep(.vc-day-popover-row-indicator span) {
-    display: block;
-    width: 100%;
-    height: 100%;
-    border-radius: 3px;
-    background: var(--vc-accent-500);
+
+.task-tooltip-priority {
+    flex-shrink: 0;
+    font-weight: 700;
+    color: hsl(var(--muted-foreground));
 }
-.task-view-calendar :deep(.vc-day-popover-row-label) {
+
+.task-tooltip-label {
     flex: 1;
     min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: hsl(var(--foreground));
+}
+
+.fade-enter-active,
+.fade-leave-active {
+    transition: opacity 0.1s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+    opacity: 0;
 }
 
 /* Clock icon spin animation on clock in/out */

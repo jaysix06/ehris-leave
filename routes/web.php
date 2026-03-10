@@ -11,7 +11,7 @@ use App\Http\Controllers\SelfService\CalendarController;
 use App\Http\Controllers\SelfService\IdCardController;
 use App\Http\Controllers\SelfService\LeaveApplicationController;
 use App\Http\Controllers\SelfService\TimeLogsController;
-use App\Http\Controllers\SelfService\TimezoneController;
+use App\Http\Controllers\SelfService\WfhTimeInOutController;
 use App\Http\Controllers\SurveyController;
 use App\Http\Controllers\Utilities\ActivityLogController;
 use App\Http\Controllers\Utilities\BusinessDepartmentController;
@@ -160,18 +160,20 @@ Route::get('api/employee-management/leave-requests/datatables', [LeaveRequestsCo
 Route::get('self-service', function () {
     return Inertia::render('SelfService');
 })->middleware(['auth', 'verified'])->name('self-service');
-Route::get('self-service/timezone', [TimezoneController::class, 'index'])
-    ->middleware(['auth', 'verified'])->name('self-service.timezone');
-Route::post('self-service/timezone/clock-in', [TimezoneController::class, 'clockIn'])
-    ->middleware(['auth', 'verified'])->name('self-service.timezone.clock-in');
-Route::post('self-service/timezone/clock-out', [TimezoneController::class, 'clockOut'])
-    ->middleware(['auth', 'verified'])->name('self-service.timezone.clock-out');
-Route::post('self-service/timezone/tasks', [TimezoneController::class, 'storeTask'])
-    ->middleware(['auth', 'verified'])->name('self-service.timezone.tasks.store');
-Route::put('self-service/timezone/tasks/{task}', [TimezoneController::class, 'updateTaskStatus'])
-    ->middleware(['auth', 'verified'])->name('self-service.timezone.tasks.update');
-Route::delete('self-service/timezone/tasks/{task}', [TimezoneController::class, 'destroyTask'])
-    ->middleware(['auth', 'verified'])->name('self-service.timezone.tasks.destroy');
+Route::get('self-service/wfh-time-in-out', [WfhTimeInOutController::class, 'index'])
+    ->middleware(['auth', 'verified'])->name('self-service.wfh-time-in-out');
+Route::post('self-service/wfh-time-in-out/clock-in', [WfhTimeInOutController::class, 'clockIn'])
+    ->middleware(['auth', 'verified'])->name('self-service.wfh-time-in-out.clock-in');
+Route::post('self-service/wfh-time-in-out/clock-out', [WfhTimeInOutController::class, 'clockOut'])
+    ->middleware(['auth', 'verified'])->name('self-service.wfh-time-in-out.clock-out');
+Route::post('self-service/wfh-time-in-out/tasks', [WfhTimeInOutController::class, 'storeTask'])
+    ->middleware(['auth', 'verified'])->name('self-service.wfh-time-in-out.tasks.store');
+Route::put('self-service/wfh-time-in-out/tasks/{task}', [WfhTimeInOutController::class, 'updateTaskStatus'])
+    ->middleware(['auth', 'verified'])->name('self-service.wfh-time-in-out.tasks.update');
+Route::patch('self-service/wfh-time-in-out/tasks/{task}', [WfhTimeInOutController::class, 'updateTask'])
+    ->middleware(['auth', 'verified'])->name('self-service.wfh-time-in-out.tasks.edit');
+Route::delete('self-service/wfh-time-in-out/tasks/{task}', [WfhTimeInOutController::class, 'destroyTask'])
+    ->middleware(['auth', 'verified'])->name('self-service.wfh-time-in-out.tasks.destroy');
 Route::get('self-service/calendar', [CalendarController::class, 'index'])
     ->middleware(['auth', 'verified'])->name('self-service.calendar');
 Route::get('api/self-service/calendar/events', [CalendarController::class, 'events'])
@@ -182,9 +184,6 @@ Route::delete('api/self-service/calendar/events/{event}', [CalendarController::c
     ->middleware(['auth'])->name('api.self-service.calendar.events.destroy');
 Route::get('self-service/time-logs', [TimeLogsController::class, 'index'])
     ->middleware(['auth', 'verified'])->name('self-service.time-logs');
-Route::get('self-service/wfh-time-in-out', function () {
-    return Inertia::render('SelfService/WfhTimeInOut');
-})->middleware(['auth', 'verified'])->name('self-service.wfh-time-in-out');
 Route::get('self-service/id-card', [IdCardController::class, 'show'])
     ->middleware(['auth', 'verified'])
     ->name('self-service.id-card');
