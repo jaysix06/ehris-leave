@@ -166,6 +166,12 @@ Route::post('self-service/timezone/clock-in', [TimezoneController::class, 'clock
     ->middleware(['auth', 'verified'])->name('self-service.timezone.clock-in');
 Route::post('self-service/timezone/clock-out', [TimezoneController::class, 'clockOut'])
     ->middleware(['auth', 'verified'])->name('self-service.timezone.clock-out');
+Route::post('self-service/timezone/tasks', [TimezoneController::class, 'storeTask'])
+    ->middleware(['auth', 'verified'])->name('self-service.timezone.tasks.store');
+Route::put('self-service/timezone/tasks/{task}', [TimezoneController::class, 'updateTaskStatus'])
+    ->middleware(['auth', 'verified'])->name('self-service.timezone.tasks.update');
+Route::delete('self-service/timezone/tasks/{task}', [TimezoneController::class, 'destroyTask'])
+    ->middleware(['auth', 'verified'])->name('self-service.timezone.tasks.destroy');
 Route::get('self-service/calendar', [CalendarController::class, 'index'])
     ->middleware(['auth', 'verified'])->name('self-service.calendar');
 Route::get('api/self-service/calendar/events', [CalendarController::class, 'events'])
