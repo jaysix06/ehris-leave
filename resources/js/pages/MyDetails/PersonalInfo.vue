@@ -89,6 +89,227 @@ const form = ref({
     email: '',
 });
 
+const genderOptions = ['Male', 'Female'];
+const civilStatusOptions = ['Single', 'Married', 'Widowed', 'Separated', 'Annulled', 'Others'];
+const bloodTypeOptions = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+const countryOptions = [
+    'Afghanistan',
+    'Albania',
+    'Algeria',
+    'Andorra',
+    'Angola',
+    'Antigua and Barbuda',
+    'Argentina',
+    'Armenia',
+    'Australia',
+    'Austria',
+    'Azerbaijan',
+    'Bahamas',
+    'Bahrain',
+    'Bangladesh',
+    'Barbados',
+    'Belarus',
+    'Belgium',
+    'Belize',
+    'Benin',
+    'Bhutan',
+    'Bolivia',
+    'Bosnia and Herzegovina',
+    'Botswana',
+    'Brazil',
+    'Brunei',
+    'Bulgaria',
+    'Burkina Faso',
+    'Burundi',
+    'Cabo Verde',
+    'Cambodia',
+    'Cameroon',
+    'Canada',
+    'Central African Republic',
+    'Chad',
+    'Chile',
+    'China',
+    'Colombia',
+    'Comoros',
+    'Congo',
+    'Costa Rica',
+    "Cote d'Ivoire",
+    'Croatia',
+    'Cuba',
+    'Cyprus',
+    'Czechia',
+    'Denmark',
+    'Djibouti',
+    'Dominica',
+    'Dominican Republic',
+    'Ecuador',
+    'Egypt',
+    'El Salvador',
+    'Equatorial Guinea',
+    'Eritrea',
+    'Estonia',
+    'Eswatini',
+    'Ethiopia',
+    'Fiji',
+    'Finland',
+    'France',
+    'Gabon',
+    'Gambia',
+    'Georgia',
+    'Germany',
+    'Ghana',
+    'Greece',
+    'Grenada',
+    'Guatemala',
+    'Guinea',
+    'Guinea-Bissau',
+    'Guyana',
+    'Haiti',
+    'Honduras',
+    'Hungary',
+    'Iceland',
+    'India',
+    'Indonesia',
+    'Iran',
+    'Iraq',
+    'Ireland',
+    'Israel',
+    'Italy',
+    'Jamaica',
+    'Japan',
+    'Jordan',
+    'Kazakhstan',
+    'Kenya',
+    'Kiribati',
+    'Kuwait',
+    'Kyrgyzstan',
+    'Laos',
+    'Latvia',
+    'Lebanon',
+    'Lesotho',
+    'Liberia',
+    'Libya',
+    'Liechtenstein',
+    'Lithuania',
+    'Luxembourg',
+    'Madagascar',
+    'Malawi',
+    'Malaysia',
+    'Maldives',
+    'Mali',
+    'Malta',
+    'Marshall Islands',
+    'Mauritania',
+    'Mauritius',
+    'Mexico',
+    'Micronesia',
+    'Moldova',
+    'Monaco',
+    'Mongolia',
+    'Montenegro',
+    'Morocco',
+    'Mozambique',
+    'Myanmar',
+    'Namibia',
+    'Nauru',
+    'Nepal',
+    'Netherlands',
+    'New Zealand',
+    'Nicaragua',
+    'Niger',
+    'Nigeria',
+    'North Korea',
+    'North Macedonia',
+    'Norway',
+    'Oman',
+    'Pakistan',
+    'Palau',
+    'Panama',
+    'Papua New Guinea',
+    'Paraguay',
+    'Peru',
+    'Philippines',
+    'Poland',
+    'Portugal',
+    'Qatar',
+    'Romania',
+    'Russia',
+    'Rwanda',
+    'Saint Kitts and Nevis',
+    'Saint Lucia',
+    'Saint Vincent and the Grenadines',
+    'Samoa',
+    'San Marino',
+    'Sao Tome and Principe',
+    'Saudi Arabia',
+    'Senegal',
+    'Serbia',
+    'Seychelles',
+    'Sierra Leone',
+    'Singapore',
+    'Slovakia',
+    'Slovenia',
+    'Solomon Islands',
+    'Somalia',
+    'South Africa',
+    'South Korea',
+    'South Sudan',
+    'Spain',
+    'Sri Lanka',
+    'Sudan',
+    'Suriname',
+    'Sweden',
+    'Switzerland',
+    'Syria',
+    'Taiwan',
+    'Tajikistan',
+    'Tanzania',
+    'Thailand',
+    'Timor-Leste',
+    'Togo',
+    'Tonga',
+    'Trinidad and Tobago',
+    'Tunisia',
+    'Turkey',
+    'Turkmenistan',
+    'Tuvalu',
+    'Uganda',
+    'Ukraine',
+    'United Arab Emirates',
+    'United Kingdom',
+    'United States',
+    'Uruguay',
+    'Uzbekistan',
+    'Vanuatu',
+    'Vatican City',
+    'Venezuela',
+    'Vietnam',
+    'Yemen',
+    'Zambia',
+    'Zimbabwe',
+];
+
+function optionsWithCurrent(options: string[], current: string): string[] {
+    const trimmed = current.trim();
+    if (trimmed === '' || options.includes(trimmed)) {
+        return options;
+    }
+    return [trimmed, ...options];
+}
+
+function copyResidentialToPermanent(): void {
+    form.value = {
+        ...form.value,
+        house_block_lotnum1: form.value.house_block_lotnum,
+        street_add1: form.value.street_add,
+        subdivision_village1: form.value.subdivision_village,
+        barangay1: form.value.barangay,
+        city_municipality1: form.value.city_municipality,
+        province1: form.value.province,
+        zip_code1: form.value.zip_code,
+    };
+}
+
 function openEdit(): void {
     const p = props.personalInfo ?? {};
     const c = props.contactInfo ?? {};
@@ -267,13 +488,42 @@ function submit(): void {
                     <div class="ehris-modal-section">
                         <h4>Basic Personal Details</h4>
                         <div class="ehris-modal-grid">
-                            <label class="ehris-modal-field"><span>Date of Birth</span><Input v-model="form.dob" /></label>
+                            <label class="ehris-modal-field">
+                                <span>Date of Birth</span>
+                                <Input v-model="form.dob" type="date" />
+                            </label>
                             <label class="ehris-modal-field"><span>Place of Birth</span><Input v-model="form.pob" /></label>
-                            <label class="ehris-modal-field"><span>Gender</span><Input v-model="form.gender" /></label>
-                            <label class="ehris-modal-field"><span>Civil Status</span><Input v-model="form.civil_stat" /></label>
-                            <label class="ehris-modal-field"><span>Height (m)</span><Input v-model="form.height" /></label>
-                            <label class="ehris-modal-field"><span>Weight (kg)</span><Input v-model="form.weight" /></label>
-                            <label class="ehris-modal-field"><span>Blood Type</span><Input v-model="form.blood_type" /></label>
+                            <label class="ehris-modal-field">
+                                <span>Gender</span>
+                                <div class="ehris-radio-group">
+                                    <label v-for="option in genderOptions" :key="option" class="ehris-radio-option">
+                                        <input v-model="form.gender" type="radio" name="gender" :value="option">
+                                        <span>{{ option }}</span>
+                                    </label>
+                                </div>
+                            </label>
+                            <label class="ehris-modal-field">
+                                <span>Civil Status</span>
+                                <select v-model="form.civil_stat" class="ehris-select">
+                                    <option value="" disabled>Select civil status</option>
+                                    <option v-for="option in optionsWithCurrent(civilStatusOptions, form.civil_stat)" :key="option" :value="option">{{ option }}</option>
+                                </select>
+                            </label>
+                            <label class="ehris-modal-field">
+                                <span>Height (m)</span>
+                                <Input v-model="form.height" type="number" inputmode="decimal" step="0.01" min="0" />
+                            </label>
+                            <label class="ehris-modal-field">
+                                <span>Weight (kg)</span>
+                                <Input v-model="form.weight" type="number" inputmode="decimal" step="0.1" min="0" />
+                            </label>
+                            <label class="ehris-modal-field">
+                                <span>Blood Type</span>
+                                <select v-model="form.blood_type" class="ehris-select">
+                                    <option value="" disabled>Select blood type</option>
+                                    <option v-for="option in optionsWithCurrent(bloodTypeOptions, form.blood_type)" :key="option" :value="option">{{ option }}</option>
+                                </select>
+                            </label>
                         </div>
                     </div>
 
@@ -282,7 +532,13 @@ function submit(): void {
                         <div class="ehris-modal-grid">
                             <label class="ehris-modal-field"><span>Citizenship</span><Input v-model="form.citizenship" /></label>
                             <label class="ehris-modal-field"><span>Dual Citizenship</span><Input v-model="form.dual_citizenship" /></label>
-                            <label class="ehris-modal-field"><span>Country</span><Input v-model="form.country" /></label>
+                            <label class="ehris-modal-field">
+                                <span>Country</span>
+                                <select v-model="form.country" class="ehris-select">
+                                    <option value="" disabled>Select country</option>
+                                    <option v-for="option in optionsWithCurrent(countryOptions, form.country)" :key="option" :value="option">{{ option }}</option>
+                                </select>
+                            </label>
                             <label class="ehris-modal-field"><span>UMID</span><Input v-model="form.umid" /></label>
                             <label class="ehris-modal-field"><span>Pag-IBIG</span><Input v-model="form.pag_ibig" /></label>
                             <label class="ehris-modal-field"><span>PhilHealth</span><Input v-model="form.philhealth" /></label>
@@ -311,6 +567,14 @@ function submit(): void {
 
                     <div class="ehris-modal-section">
                         <h4>Permanent Address</h4>
+                        <span
+                            class="ehris-copy-link"
+                            role="button"
+                            tabindex="0"
+                            @click="copyResidentialToPermanent"
+                            @keydown.enter.prevent="copyResidentialToPermanent"
+                            @keydown.space.prevent="copyResidentialToPermanent"
+                        >Copy residential address</span>
                         <div class="ehris-modal-grid">
                             <label class="ehris-modal-field"><span>House/Block/Lot</span><Input v-model="form.house_block_lotnum1" /></label>
                             <label class="ehris-modal-field"><span>Street</span><Input v-model="form.street_add1" /></label>
@@ -325,8 +589,26 @@ function submit(): void {
                     <div class="ehris-modal-section">
                         <h4>Contact</h4>
                         <div class="ehris-modal-grid">
-                            <label class="ehris-modal-field"><span>Telephone No.</span><Input v-model="form.phone_num" /></label>
-                            <label class="ehris-modal-field"><span>Mobile No.</span><Input v-model="form.mobile_num" /></label>
+                            <label class="ehris-modal-field">
+                                <span>Telephone No.</span>
+                                <Input
+                                    :model-value="form.phone_num"
+                                    inputmode="numeric"
+                                    pattern="[0-9]*"
+                                    maxlength="11"
+                                    @update:modelValue="(v) => { form.phone_num = String(v ?? '').replace(/\\D+/g, ''); }"
+                                />
+                            </label>
+                            <label class="ehris-modal-field">
+                                <span>Mobile No.</span>
+                                <Input
+                                    :model-value="form.mobile_num"
+                                    inputmode="numeric"
+                                    pattern="[0-9]*"
+                                    maxlength="11"
+                                    @update:modelValue="(v) => { form.mobile_num = String(v ?? '').replace(/\\D+/g, '').slice(0, 11); }"
+                                />
+                            </label>
                             <label class="ehris-modal-field"><span>Email Address</span><Input v-model="form.email" type="email" /></label>
                         </div>
                     </div>
@@ -469,6 +751,49 @@ function submit(): void {
 .ehris-modal-field span {
     font-weight: 600;
     color: hsl(var(--foreground));
+}
+
+.ehris-select {
+    border: 1px solid hsl(var(--border));
+    border-radius: 0.375rem;
+    padding: 0.25rem 0.75rem;
+    height: 2.25rem;
+    background: hsl(var(--card));
+    color: hsl(var(--foreground));
+    font-size: 0.875rem;
+}
+
+.ehris-radio-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.ehris-radio-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.875rem;
+    color: hsl(var(--foreground));
+}
+
+.ehris-radio-option input[type='radio'] {
+    accent-color: hsl(var(--primary));
+}
+
+.ehris-copy-link {
+    display: inline-flex;
+    margin-bottom: 0.5rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: hsl(var(--primary));
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+}
+
+.ehris-copy-link:hover {
+    color: hsl(var(--primary) / 0.85);
 }
 
 .ehris-form-error {

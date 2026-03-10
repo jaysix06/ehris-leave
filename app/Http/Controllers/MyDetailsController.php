@@ -402,6 +402,7 @@ class MyDetailsController extends Controller
                 'educationUpdateUrl' => route('my-details.education.store'),
                 'officialUpdateUrl' => route('my-details.official.store'),
                 'personalUpdateUrl' => route('my-details.personal.store'),
+                'canEditOfficialInfo' => $this->canEditOfficialInfo($authUser, $dbProfile),
                 'officialOptions' => $officialOptions,
             ],
             $data,
@@ -599,6 +600,11 @@ class MyDetailsController extends Controller
         if ($hrid === null) {
             return redirect()->route('my-details')
                 ->withErrors(['message' => 'Unable to identify employee.']);
+        }
+
+        if (! $this->canEditOfficialInfo($authUser, $profile)) {
+            return redirect()->route('my-details')
+                ->withErrors(['message' => 'Only HR Manager can edit official information.']);
         }
 
         $data = $request->validate([
@@ -800,12 +806,18 @@ class MyDetailsController extends Controller
 
     private function canEditOfficialRole(?User $authUser, ?User $profile): bool
     {
+        return $this->canEditOfficialInfo($authUser, $profile);
+    }
+
+    private function canEditOfficialInfo(?User $authUser, ?User $profile): bool
+    {
         $role = (string) ($authUser?->role ?? $profile?->role ?? '');
         if ($role === '') {
             return false;
         }
 
-        return (bool) preg_match('/\\bhr\\b/i', $role)
-            || str_contains(strtolower($role), 'human resources');
+        $normalized = strtolower(trim($role));
+        return str_contains($normalized, 'hr manager')
+            || str_contains($normalized, 'human resources manager');
     }
 }

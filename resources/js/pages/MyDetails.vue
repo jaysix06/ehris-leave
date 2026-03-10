@@ -78,6 +78,7 @@ const props = defineProps<{
     educationUpdateUrl?: string;
     officialUpdateUrl?: string;
     personalUpdateUrl?: string;
+    canEditOfficialInfo?: boolean;
     workExperience?: Record<string, unknown>[];
     eligibility?: Record<string, unknown>[];
     serviceRecord?: Record<string, unknown>[];
@@ -201,6 +202,7 @@ function sectionProps(index: number): Record<string, unknown> {
                 officialInfo: props.officialInfo,
                 officialUpdateUrl: props.officialUpdateUrl,
                 canEditOfficialRole: canEditOfficialRole.value,
+                canEditOfficialInfo: props.canEditOfficialInfo,
                 officialOptions: props.officialOptions,
             };
         case 1:
