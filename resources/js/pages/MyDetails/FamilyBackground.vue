@@ -116,7 +116,7 @@ function spouseScore(row: FamilyRow): number {
         row.business_add,
         row.tel_num,
     ];
-    return fields.reduce((score, field) => score + (val(field) !== '' ? 1 : 0), 0);
+    return fields.reduce<number>((score, field) => score + (val(field) !== '' ? 1 : 0), 0);
 }
 
 const props = defineProps<{
