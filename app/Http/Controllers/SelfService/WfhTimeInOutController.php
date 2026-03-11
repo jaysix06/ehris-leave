@@ -257,14 +257,29 @@ class WfhTimeInOutController extends Controller
 <title>Work From Home Individual Accomplishment Report</title>
 <style>
 @page { margin: 0.6in; }
-body { font-family: DejaVu Sans, Helvetica, sans-serif; font-size: 9pt; margin: 0; padding: 0; color: #000; }
+body { font-family: "Bookman Old Style", "DejaVu Serif", serif; font-size: 11pt; margin: 0; padding: 0; color: #000; }
+.page-border {
+    position: fixed;
+    top: 0.05in;
+    left: 0.05in;
+    right: 0.05in;
+    bottom: 0.05in;
+    border: 5px solid #000;
+    box-sizing: border-box;
+    z-index: 0;
+}
+.page-content {
+    position: relative;
+    z-index: 1;
+    padding: 0.25in 0.3in 0.3in 0.25in;
+}
 .header-image { width: 100%; max-width: 11in; height: auto; max-height: 2in; margin: 0 auto 0.25in; display: block; }
 .report-title { font-size: 11pt; font-weight: bold; text-align: center; margin: 0 0 0.1in; }
-.report-date { font-size: 10pt; text-align: center; margin: 0 0 0.15in; }
+.report-date { font-size: 11pt; text-align: center; margin: 0 0 0.15in; }
 .report-title-line { border: none; border-top: 1px solid #000; margin: 0 0 0.2in; }
-.employee-name { font-weight: bold; margin-bottom: 0.15in; }
-table { width: 100%; border-collapse: collapse; font-size: 9pt; }
-th, td { border: 1px solid #000; padding: 3px; }
+.employee-name { font-weight: 700; margin-bottom: 0.15in; font-size: 12pt; text-transform: uppercase; }
+table { width: 100%; border-collapse: collapse; font-size: 11pt; font-family: "Bookman Old Style", "DejaVu Serif", serif; }
+th, td { border: 1px solid #000; padding: 3px; font-size: 11pt; font-family: "Bookman Old Style", "DejaVu Serif", serif; }
 th { font-weight: bold; background-color: #f2f2f2; }
 th.col-task, td.col-task { text-align: left; }
 th.col-accomplishment, td.col-accomplishment { text-align: left; }
@@ -277,12 +292,14 @@ th.col-station, td.col-station { text-align: left; }
 </style>
 </head>
 <body>
+' . '<div class="page-border"></div>' . '
+<div class="page-content">
 ' . $headerImg . '
 <h1 class="report-title">WORK FROM HOME INDIVIDUAL ACCOMPLISHMENT REPORT</h1>
 <p class="report-date">' . $h($subtitle) . '</p>
 <hr class="report-title-line">
 <div class="content-wrap">
-<p class="employee-name">Name: ' . $h($employeeName) . '</p>
+<p class="employee-name">Name: ' . $h(mb_strtoupper($employeeName, 'UTF-8')) . '</p>
 <table>
 <thead><tr>
 <th class="col-task">Targeted Task/ Assignments/ Output</th>
@@ -296,6 +313,7 @@ th.col-station, td.col-station { text-align: left; }
 </div>
 ' . $footerImg . '
 <p class="footer-text">© ' . $h($year) . ' DepEd</p>
+</div>
 </body>
 </html>';
     }
