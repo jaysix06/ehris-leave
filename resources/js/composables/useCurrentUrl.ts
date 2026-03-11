@@ -18,9 +18,10 @@ export type UseCurrentUrlReturn = {
 };
 
 const page = usePage();
-const currentUrlReactive = computed(
-    () => new URL(page.url, window?.location.origin).pathname,
-);
+const currentUrlReactive = computed(() => {
+    const u = new URL(page.url, window?.location.origin);
+    return u.pathname + u.search;
+});
 
 export function useCurrentUrl(): UseCurrentUrlReturn {
     function isCurrentUrl(
@@ -31,13 +32,16 @@ export function useCurrentUrl(): UseCurrentUrlReturn {
         const urlString = toUrl(urlToCheck);
 
         if (!urlString.startsWith('http')) {
+            if (urlToCompare === '/my-details' && urlString === '/my-details?section=official-info') {
+                return true;
+            }
             return urlString === urlToCompare;
         }
 
         try {
             const absoluteUrl = new URL(urlString);
 
-            return absoluteUrl.pathname === urlToCompare;
+            return absoluteUrl.pathname + absoluteUrl.search === urlToCompare;
         } catch {
             return false;
         }
