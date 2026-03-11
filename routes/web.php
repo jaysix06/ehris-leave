@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Auth\PasswordResetOtpController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EmployeeManagement\IdCardPrintingController;
 use App\Http\Controllers\EmployeeManagement\LeaveRequestsController;
 use App\Http\Controllers\MessageController;
@@ -69,27 +70,7 @@ Route::get('email/verified-success', function (Request $request) {
     return Inertia::render('auth/EmailVerifiedSuccess');
 })->name('verification.success');
 
-Route::get('dashboard', function (Request $request) {
-    $activePopups = [];
-    $showPopups = false;
-
-    // Only fetch and show popups if this is right after login
-    if ($request->session()->get('show_popups_after_login', false)) {
-        $activePopups = \App\Models\PopupMessage::query()
-            ->where('status', 1) // 1 = Active
-            ->orderBy('created_at', 'desc')
-            ->get();
-
-        $showPopups = true;
-        // Clear the flag so popups don't show on subsequent dashboard visits
-        $request->session()->forget('show_popups_after_login');
-    }
-
-    return Inertia::render('Dashboard', [
-        'activePopups' => $activePopups,
-        'showPopups' => $showPopups,
-    ]);
-})->middleware(['auth', 'verified'])->name('dashboard');
+Route::get('dashboard', DashboardController::class)->middleware(['auth', 'verified'])->name('dashboard');
 
 Route::get('cot-rpms-summary', function () {
     return Inertia::render('CotRpmsSummary');
