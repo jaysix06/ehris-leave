@@ -174,7 +174,7 @@ Route::patch('self-service/wfh-time-in-out/tasks/{task}', [WfhTimeInOutControlle
     ->middleware(['auth', 'verified'])->name('self-service.wfh-time-in-out.tasks.edit');
 Route::delete('self-service/wfh-time-in-out/tasks/{task}', [WfhTimeInOutController::class, 'destroyTask'])
     ->middleware(['auth', 'verified'])->name('self-service.wfh-time-in-out.tasks.destroy');
-Route::get('self-service/wfh-time-in-out/export/pdf', [WfhTimeInOutController::class, 'exportPdf'])
+Route::match(['get', 'post'], 'self-service/wfh-time-in-out/export/pdf', [WfhTimeInOutController::class, 'exportPdf'])
     ->middleware(['auth', 'verified'])->name('self-service.wfh-time-in-out.export.pdf');
 Route::get('self-service/user-manuals', fn () => Inertia::render('SelfService/UserManuals'))
     ->middleware(['auth', 'verified'])->name('self-service.user-manuals');
