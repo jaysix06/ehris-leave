@@ -905,7 +905,7 @@ const getAjaxParams = computed(() => () => ({
 
                 <!-- Charts -->
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6 items-start">
-                    <div class="flex flex-col">
+                    <div class="flex flex-col relative z-[5]">
                         <h3 class="text-sm font-semibold text-muted-foreground mb-3">Employment Status</h3>
                         <div class="h-[160px]">
                             <Doughnut
@@ -922,7 +922,7 @@ const getAjaxParams = computed(() => () => ({
                             </div>
                         </div>
                         <!-- Custom Legend: Top 4 + Others -->
-                        <div class="mt-4">
+                        <div class="mt-4 relative">
                             <div class="flex flex-wrap gap-3 items-center mb-2">
                                 <template
                                     v-for="item in chartDataSafe.employmentStatus.legend.slice(0, 4)"
@@ -965,7 +965,7 @@ const getAjaxParams = computed(() => () => ({
                             >
                                 <div
                                     v-if="showEmploymentStatusOthers && chartDataSafe.employmentStatus.chart.length > 0"
-                                    class="mt-2 max-h-48 overflow-y-auto overflow-x-hidden border rounded-md bg-background"
+                                    class="absolute left-0 right-0 top-full mt-2 z-10 max-h-48 overflow-y-auto overflow-x-hidden border rounded-md bg-background shadow-md"
                                     style="max-height: 12rem;"
                                 >
                                 <table class="w-full text-sm" style="table-layout: fixed;">
@@ -1021,7 +1021,7 @@ const getAjaxParams = computed(() => () => ({
                             </transition>
                         </div>
                     </div>
-                    <div class="flex flex-col">
+                    <div class="flex flex-col relative z-[5]">
                         <h3 class="text-sm font-semibold text-muted-foreground mb-3">By School/Office</h3>
                         <div class="h-[160px]">
                             <Doughnut
@@ -1038,7 +1038,7 @@ const getAjaxParams = computed(() => () => ({
                             </div>
                         </div>
                         <!-- Custom Legend: Top 4 + Others -->
-                        <div class="mt-4">
+                        <div class="mt-4 relative">
                             <div class="flex flex-wrap gap-3 items-center mb-2">
                                 <template
                                     v-for="item in chartDataSafe.school.legend.slice(0, 4)"
@@ -1081,7 +1081,7 @@ const getAjaxParams = computed(() => () => ({
                             >
                                 <div
                                     v-if="showSchoolOthers && chartDataSafe.school.chart.length > 0"
-                                    class="mt-2 max-h-48 overflow-y-auto overflow-x-hidden border rounded-md bg-background"
+                                    class="absolute left-0 right-0 top-full mt-2 z-10 max-h-48 overflow-y-auto overflow-x-hidden border rounded-md bg-background shadow-md"
                                     style="max-height: 12rem;"
                                 >
                                 <table class="w-full text-sm" style="table-layout: fixed;">
@@ -1137,7 +1137,7 @@ const getAjaxParams = computed(() => () => ({
                             </transition>
                         </div>
                     </div>
-                    <div class="flex flex-col">
+                    <div class="flex flex-col relative z-10">
                         <h3 class="text-sm font-semibold text-muted-foreground mb-3">Male and Female Employee</h3>
                         <div class="h-[160px]">
                             <Doughnut
@@ -1167,7 +1167,7 @@ const getAjaxParams = computed(() => () => ({
                             </div>
                         </div>
                     </div>
-                    <div class="flex flex-col">
+                    <div class="flex flex-col relative z-10">
                         <h3 class="text-sm font-semibold text-muted-foreground mb-3">Teaching vs Non-Teaching Position</h3>
                         <div class="h-[160px]">
                             <Doughnut
@@ -1199,7 +1199,7 @@ const getAjaxParams = computed(() => () => ({
                     </div>
                 </div>
                 <div class="grid grid-cols-1 gap-6 mb-6">
-                    <div class="rounded-lg border p-4 bg-card">
+                    <div class="rounded-lg border p-4 bg-card relative z-0">
                         <h3 class="text-sm font-semibold text-muted-foreground mb-3">Count per Job Title (top 10)</h3>
                         <div class="h-[320px]">
                             <Bar
