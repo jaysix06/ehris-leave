@@ -184,7 +184,7 @@ class WfhTimeInOutController extends Controller
             : 'Tasks (Completed) - as of '.now()->format('F j, Y');
 
         $htmlTable = '<table><thead><tr>';
-        $htmlTable .= '<th>Title</th><th>Description</th><th>Priority</th><th>Due Date</th><th>Due Date End</th><th>Status</th>';
+        $htmlTable .= '<th>Title</th><th>Target</th><th>Priority</th><th>Due Date</th><th>Due Date End</th><th>Status</th>';
         $htmlTable .= '</tr></thead><tbody>';
         foreach ($tasks as $t) {
             $htmlTable .= '<tr>';
