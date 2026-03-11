@@ -628,9 +628,19 @@ onBeforeUnmount(() => {
                         <Users class="h-4 w-4 text-slate-500" />
                         <span>Employees</span>
                     </div>
-                    <button type="button" class="text-xs text-slate-500 hover:text-slate-700" @click="void refreshContacts()">
-                        Refresh
-                    </button>
+                    <div class="flex items-center gap-2">
+                        <button type="button" class="text-xs text-slate-500 hover:text-slate-700" @click="void refreshContacts()">
+                            Refresh
+                        </button>
+                        <button
+                            type="button"
+                            class="flex h-8 w-8 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-200 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-300 focus:ring-offset-2"
+                            aria-label="Close messages"
+                            @click="isOpen = false"
+                        >
+                            <X class="h-4 w-4" />
+                        </button>
+                    </div>
                 </header>
 
                 <div class="min-h-0 flex flex-1 flex-col sm:flex-row">
