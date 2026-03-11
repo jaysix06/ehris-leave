@@ -30,8 +30,8 @@ const props = defineProps<Props>();
 const pageTitle = 'My Time Logs';
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Self-Service', href: selfServiceRoutes.timezone().url },
-    { title: 'Timezone', href: selfServiceRoutes.timezone().url },
+    { title: 'Self-Service', href: selfServiceRoutes.wfhTimeInOut().url },
+    { title: 'WFH Time In/Out', href: selfServiceRoutes.wfhTimeInOut().url },
     { title: pageTitle },
 ];
 
@@ -86,7 +86,7 @@ watch(
             <div class="flex flex-wrap items-center justify-between gap-4">
                 <h1 class="text-2xl font-bold text-foreground">My Time Logs</h1>
                 <Link
-                    :href="selfServiceRoutes.timezone().url"
+                    :href="selfServiceRoutes.wfhTimeInOut().url"
                     class="text-sm font-medium text-primary hover:underline"
                 >
                     ← Back to Timezone

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, router } from '@inertiajs/vue3';
-import { ArrowRight, CheckCircle2, Clock, Eye, FolderOpen, ListPlus, Pause, Pencil, Play, Search, Trash2, X } from 'lucide-vue-next';
+import { ArrowRight, CheckCircle2, Download, Eye, FolderOpen, ListPlus, Pause, Pencil, Play, Search, Trash2, X } from 'lucide-vue-next';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Calendar as VCalendar, DatePicker } from 'v-calendar';
 import { toast } from 'vue3-toastify';
@@ -212,6 +212,14 @@ function normalizedStatus(t: TaskItem): string {
     return t.status === 'open' ? 'Not Started' : t.status;
 }
 
+function taskPriorityClasses(priority: string): string {
+    const p = (priority || '').toLowerCase();
+    if (p === 'high') return 'border-red-500/30 bg-red-500/10';
+    if (p === 'medium') return 'border-amber-500/30 bg-amber-500/10';
+    if (p === 'low') return 'border-emerald-500/30 bg-emerald-500/10';
+    return 'border-slate-500/20 bg-slate-500/10';
+}
+
 function updateTaskStatus(taskId: number, status: string, fromStatus?: string): void {
     taskActionLoading.value = true;
     router.put(`/self-service/wfh-time-in-out/tasks/${taskId}`, { status }, {
@@ -302,6 +310,26 @@ function confirmComplete(): void {
             toast.success('Task completed!');
         },
     });
+}
+
+function exportTasks(): void {
+    const tasks = tasksTab.value === 'open' ? sortedFilteredOpenTasks.value : sortedFilteredCompletedTasks.value;
+    const headers = ['Title', 'Description', 'Priority', 'Due Date', 'Due Date End', 'Status'];
+    const escape = (s: string) => {
+        const t = String(s ?? '').replace(/"/g, '""');
+        return t.includes(',') || t.includes('"') || t.includes('\n') ? `"${t}"` : t;
+    };
+    const rows = tasks.map((t) =>
+        [t.title, t.description ?? '', t.priority, t.due_date, t.due_date_end ?? '', t.status].map(escape).join(','),
+    );
+    const csv = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `tasks-${tasksTab.value}-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
 }
 
 // Create Task modal
@@ -537,7 +565,7 @@ function clockOut(): void {
 function toggleClock(): void {
     if (clockLoading.value) return;
     clockIconSpinning.value = true;
-    setTimeout(() => { clockIconSpinning.value = false; }, 600);
+    setTimeout(() => { clockIconSpinning.value = false; }, 1200);
     if (isClockedIn.value) clockOut();
     else clockIn();
 }
@@ -594,7 +622,7 @@ function toggleClock(): void {
 
                 <!-- Activity Logs card (right) – hours worked + Clock In button in empty space -->
                 <article
-                    class="flex min-h-0 flex-col justify-between gap-3 rounded-2xl p-4 text-white"
+                    class="flex min-h-0 flex-col justify-between gap-3 rounded-2xl p-4 text-white transition-colors duration-500 ease-in-out"
                     :class="isClockedIn ? 'bg-green-700' : 'bg-red-700'"
                 >
                     <Link
@@ -602,10 +630,25 @@ function toggleClock(): void {
                         class="flex flex-col gap-3 transition hover:opacity-95"
                     >
                         <span
-                            class="inline-block shrink-0"
-                            :class="{ 'clock-icon-spin': clockIconSpinning }"
+                            class="inline-flex size-10 shrink-0 items-center justify-center opacity-90"
+                            :class="{ 'clock-hands-spin': clockIconSpinning }"
                         >
-                            <Clock class="size-10 opacity-90" />
+                            <svg
+                                class="size-10"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                            >
+                                <circle cx="12" cy="12" r="10" />
+                                <g class="clock-hand clock-hand-minute">
+                                    <line x1="12" y1="12" x2="12" y2="4" />
+                                </g>
+                                <g class="clock-hand clock-hand-hour">
+                                    <line x1="12" y1="12" x2="18" y2="12" />
+                                </g>
+                            </svg>
                         </span>
                         <div>
                             <p class="text-sm font-medium opacity-90">You have worked</p>
@@ -665,18 +708,28 @@ function toggleClock(): void {
                                 Completed Tasks
                             </button>
                         </div>
-                        <button
-                            v-if="tasksTab === 'open'"
-                            type="button"
-                            class="inline-flex shrink-0 items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
-                            @click="openCreateTaskModal"
-                        >
-                            <ListPlus class="size-4" />
-                            Create Task
-                        </button>
+                        <div class="flex shrink-0 items-center gap-2">
+                            <button
+                                type="button"
+                                class="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs font-medium text-foreground shadow-sm transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                @click="exportTasks"
+                            >
+                                <Download class="size-4" />
+                                Export
+                            </button>
+                            <button
+                                v-if="tasksTab === 'open'"
+                                type="button"
+                                class="inline-flex shrink-0 items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
+                                @click="openCreateTaskModal"
+                            >
+                                <ListPlus class="size-4" />
+                                Create Task
+                            </button>
+                        </div>
                     </div>
                     <div class="mb-3 flex flex-wrap items-center gap-2">
-                        <div class="relative flex-1 min-w-[180px]">
+                        <div class="relative w-full max-w-[220px]">
                             <Search class="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                             <input
                                 v-model="taskSearchQuery"
@@ -705,11 +758,7 @@ function toggleClock(): void {
                                 :key="t.id"
                                 :class="[
                                     'flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm',
-                                    normalizedStatus(t) === 'In Progress'
-                                        ? 'border-blue-600/25 bg-blue-600/10'
-                                        : normalizedStatus(t) === 'On Hold'
-                                          ? 'border-amber-500/30 bg-amber-500/15'
-                                          : 'border-slate-500/20 bg-slate-500/10',
+                                    taskPriorityClasses(t.priority),
                                 ]"
                             >
                                 <div class="min-w-0 flex-1">
@@ -791,7 +840,10 @@ function toggleClock(): void {
                             <li
                                 v-for="t in sortedFilteredCompletedTasks"
                                 :key="t.id"
-                                class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/80 bg-muted/20 px-3 py-2 text-sm"
+                                :class="[
+                                    'flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm',
+                                    taskPriorityClasses(t.priority),
+                                ]"
                             >
                                 <div class="min-w-0 flex-1">
                                     <p class="font-medium text-foreground">{{ t.title }}</p>
@@ -1247,12 +1299,22 @@ function toggleClock(): void {
     opacity: 0;
 }
 
-/* Clock icon spin animation on clock in/out */
-@keyframes clock-turn {
+/* Clock hands animation on clock in/out – only the arms rotate, smooth ease-in-out */
+.clock-hand {
+    transform-origin: 12px 12px;
+}
+@keyframes clock-minute-turn {
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
 }
-.clock-icon-spin {
-    animation: clock-turn 0.6s ease-in-out;
+@keyframes clock-hour-turn {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+.clock-hands-spin .clock-hand-minute {
+    animation: clock-minute-turn 0.6s ease-in-out;
+}
+.clock-hands-spin .clock-hand-hour {
+    animation: clock-hour-turn 1.2s ease-in-out;
 }
 </style>
