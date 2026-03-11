@@ -41,7 +41,11 @@ class PasswordResetOtpController extends Controller
 
         RateLimiter::hit($throttleKey, 60);
 
-        $user = User::query()->where('email', $email)->first();
+        // Allow using either official DepEd email (email) or personal_email in the form.
+        $user = User::query()
+            ->whereRaw('LOWER(TRIM(email)) = ?', [$email])
+            ->orWhereRaw('LOWER(TRIM(personal_email)) = ?', [$email])
+            ->first();
 
         if ($user) {
             $existingOtp = DB::table('password_reset_otps')
@@ -81,7 +85,14 @@ class PasswordResetOtpController extends Controller
                 ]
             );
 
-            $user->notify(new PasswordResetOtpNotification($otp));
+            // Send OTP to the best available address:
+            // prefer personal_email (for recovery), otherwise fall back to login email.
+            $recipient = $user->personal_email ?: $user->email;
+            if (is_string($recipient) && trim($recipient) !== '') {
+                \Illuminate\Support\Facades\Mail::to($recipient)->send(
+                    new \App\Mail\PasswordResetOtpMail($otp)
+                );
+            }
         }
 
         $request->session()->put('otp_email', $email);
@@ -125,8 +136,16 @@ class PasswordResetOtpController extends Controller
         ]);
 
         $email = Str::lower(trim($email));
-        $otpRecord = DB::table('password_reset_otps')->where('email', $email)->first();
-        $user = User::query()->where('email', $email)->first();
+        $otpRecord = DB::table('password_reset_otps')
+            ->where('email', $email)
+            ->first();
+
+        // Match the same lookup logic used when sending the OTP:
+        // allow either official DepEd email or personal_email.
+        $user = User::query()
+            ->whereRaw('LOWER(TRIM(email)) = ?', [$email])
+            ->orWhereRaw('LOWER(TRIM(personal_email)) = ?', [$email])
+            ->first();
 
         if (! $otpRecord || ! $user || $otpRecord->used_at !== null || now()->greaterThan($otpRecord->expires_at)) {
             return back()
@@ -200,7 +219,12 @@ class PasswordResetOtpController extends Controller
             'password' => ['required', 'confirmed', Password::defaults()],
         ]);
 
-        $user = User::query()->where('email', $email)->first();
+        // Match the same lookup logic used when sending and verifying the OTP:
+        // allow either official DepEd email or personal_email.
+        $user = User::query()
+            ->whereRaw('LOWER(TRIM(email)) = ?', [Str::lower(trim($email))])
+            ->orWhereRaw('LOWER(TRIM(personal_email)) = ?', [Str::lower(trim($email))])
+            ->first();
 
         if (! $user) {
             return redirect()->route('password.request');
@@ -212,9 +236,9 @@ class PasswordResetOtpController extends Controller
         ])->save();
 
         // Log password reset activity - user resetting their own password via OTP
-        ActivityLogService::logPasswordReset($user->email);
+        ActivityLogService::logPasswordReset($user->email ?? $user->personal_email ?? '');
 
-        DB::table('password_reset_otps')->where('email', $email)->delete();
+        DB::table('password_reset_otps')->where('email', Str::lower(trim($email)))->delete();
         $request->session()->forget([
             'otp_email',
             'password_reset_verified_email',

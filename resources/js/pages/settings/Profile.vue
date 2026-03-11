@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Form, Head, Link, usePage } from '@inertiajs/vue3';
+import { ref, computed } from 'vue';
 import DeleteUser from '@/components/DeleteUser.vue';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
@@ -28,7 +29,33 @@ const breadcrumbItems: BreadcrumbItem[] = [
 ];
 
 const page = usePage();
-const user = page.props.auth.user;
+const user = page.props.auth.user as {
+    name: string;
+    email: string;
+    personal_email?: string | null;
+    avatar?: string | null;
+};
+
+const avatarInput = ref<HTMLInputElement | null>(null);
+const avatarPreview = ref<string | null>(null);
+
+const avatarUrl = computed(() => {
+    if (avatarPreview.value) return avatarPreview.value;
+    const filename = user?.avatar && user.avatar !== 'avatar-default.jpg' ? user.avatar : 'avatar-default.jpg';
+    return `/storage/avatars/${filename}`;
+});
+
+function triggerAvatarChange() {
+    avatarInput.value?.click();
+}
+
+function onAvatarChange(e: Event) {
+    const target = e.target as HTMLInputElement;
+    const file = target.files?.[0];
+    if (file) {
+        avatarPreview.value = URL.createObjectURL(file);
+    }
+}
 </script>
 
 <template>
@@ -42,14 +69,52 @@ const user = page.props.auth.user;
                 <Heading
                     variant="small"
                     title="Profile information"
-                    description="Update your name and email address"
+                    description="Update your name, email, and profile picture"
                 />
 
                 <Form
                     v-bind="ProfileController.update.form()"
                     class="space-y-6"
+                    enctype="multipart/form-data"
                     v-slot="{ errors, processing, recentlySuccessful }"
                 >
+                    <div class="flex flex-col gap-4 sm:flex-row sm:items-center">
+                        <div class="flex items-center gap-4">
+                            <div
+                                class="relative h-20 w-20 shrink-0 overflow-hidden rounded-full border border-border bg-muted"
+                            >
+                                <img
+                                    :src="avatarUrl"
+                                    :alt="user.name"
+                                    class="h-full w-full object-cover"
+                                    @error="($event as Event & { currentTarget: HTMLImageElement }).currentTarget.src = '/storage/avatars/avatar-default.jpg'"
+                                />
+                            </div>
+                            <div class="flex flex-col gap-1">
+                                <input
+                                    ref="avatarInput"
+                                    type="file"
+                                    name="avatar"
+                                    accept="image/jpeg,image/png,image/gif,image/webp"
+                                    class="hidden"
+                                    @change="onAvatarChange"
+                                />
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    @click="triggerAvatarChange"
+                                >
+                                    Change
+                                </Button>
+                                <p class="text-xs text-muted-foreground">
+                                    JPG, PNG, GIF or WebP. Max 2MB.
+                                </p>
+                            </div>
+                        </div>
+                        <InputError class="mt-2" :message="errors.avatar" />
+                    </div>
+
                     <div class="grid gap-2">
                         <Label for="name">Name</Label>
                         <Input
@@ -65,6 +130,20 @@ const user = page.props.auth.user;
                     </div>
 
                     <div class="grid gap-2">
+                        <Label for="personal_email">Personal email</Label>
+                        <Input
+                            id="personal_email"
+                            type="email"
+                            class="mt-1 block w-full"
+                            name="personal_email"
+                            :default-value="user.personal_email ?? ''"
+                            autocomplete="email"
+                            placeholder="Personal email address"
+                        />
+                        <InputError class="mt-2" :message="errors.personal_email" />
+                    </div>
+
+                    <div class="grid gap-2">
                         <Label for="email">Email address</Label>
                         <Input
                             id="email"
@@ -74,7 +153,7 @@ const user = page.props.auth.user;
                             :default-value="user.email"
                             required
                             autocomplete="username"
-                            placeholder="Email address"
+                            placeholder="Work / DepEd email address"
                         />
                         <InputError class="mt-2" :message="errors.email" />
                     </div>

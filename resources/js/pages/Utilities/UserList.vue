@@ -56,6 +56,21 @@ type DepartmentOption = {
 const dataTableWrapperRef = ref<HTMLElement | null>(null);
 const refreshTrigger = ref(0);
 
+const ROLE_OPTIONS = ['Employee', 'HR Manager', 'AO Manager', 'SDS Manager', 'System Admin'] as const;
+
+const JOB_TITLE_OPTIONS = [
+    'Teacher I',
+    'Teacher II',
+    'Teacher III',
+    'Master Teacher I',
+    'Master Teacher II',
+    'Principal I',
+    'Principal II',
+    'Head Teacher I',
+    'Head Teacher II',
+    'Administrative Officer',
+] as const;
+
 const state = reactive<{
     error: string | null;
     statusMessage: string | null;
@@ -166,7 +181,13 @@ const userColumns: DataTableColumn[] = [
         },
     },
     { key: 'hrid', label: 'HRID', width: '6rem', data: 'hrid', thClass: 'text-center', tdClass: 'text-center' },
-    { key: 'email', label: 'Email', width: '12rem', data: 'email' },
+    {
+        key: 'personal_email',
+        label: 'Personal email',
+        width: '14rem',
+        data: 'personal_email',
+    },
+    { key: 'email', label: 'Official email', width: '14rem', data: 'email' },
     { key: 'name', label: 'Name', width: '14rem', data: 'name' },
     { key: 'role', label: 'Role', width: '8rem', data: 'role' },
     { key: 'office', label: 'Office/School', width: '12rem', data: 'office' },
@@ -756,20 +777,13 @@ onBeforeUnmount(() => {
                     />
                 </div>
                 <div class="space-y-1">
-                    <label class="text-sm text-muted-foreground">Email</label>
+                    <label class="text-sm text-muted-foreground">Official email</label>
                     <input
                         v-model="editState.form.email"
                         type="email"
-                        class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        readonly
+                        class="w-full rounded-md border border-input bg-muted px-3 py-2 text-sm cursor-not-allowed text-muted-foreground"
                         placeholder="name@example.com"
-                    />
-                </div>
-                <div class="space-y-1">
-                    <label class="text-sm text-muted-foreground">Last name</label>
-                    <input
-                        v-model="editState.form.lastname"
-                        type="text"
-                        class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                     />
                 </div>
                 <div class="space-y-1">
@@ -789,13 +803,35 @@ onBeforeUnmount(() => {
                     />
                 </div>
                 <div class="space-y-1">
-                    <label class="text-sm text-muted-foreground">Extension</label>
+                    <label class="text-sm text-muted-foreground">Last name</label>
                     <input
-                        v-model="editState.form.extname"
+                        v-model="editState.form.lastname"
                         type="text"
                         class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                        placeholder="Jr., Sr., III"
                     />
+                </div>
+                <div class="space-y-1">
+                    <label class="text-sm text-muted-foreground">Extension</label>
+                    <select
+                        v-model="editState.form.extname"
+                        class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    >
+                        <option value="">None</option>
+                        <option value="Jr.">Jr.</option>
+                        <option value="Sr.">Sr.</option>
+                        <option value="II">II</option>
+                        <option value="III">III</option>
+                        <option value="IV">IV</option>
+                        <option
+                            v-if="
+                                editState.form.extname &&
+                                !['Jr.', 'Sr.', 'II', 'III', 'IV'].includes(editState.form.extname)
+                            "
+                            :value="editState.form.extname"
+                        >
+                            {{ editState.form.extname }}
+                        </option>
+                    </select>
                 </div>
                 <div class="space-y-1 sm:col-span-2">
                     <label class="text-sm text-muted-foreground">Full name</label>
@@ -817,19 +853,54 @@ onBeforeUnmount(() => {
                 </div>
                 <div class="space-y-1">
                     <label class="text-sm text-muted-foreground">Role</label>
-                    <input
+                    <select
                         v-model="editState.form.role"
-                        type="text"
                         class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                    />
+                    >
+                        <option
+                            v-if="
+                                editState.form.role &&
+                                !ROLE_OPTIONS.includes(editState.form.role as (typeof ROLE_OPTIONS)[number])
+                            "
+                            :value="editState.form.role"
+                        >
+                            {{ editState.form.role }}
+                        </option>
+                        <option
+                            v-for="role in ROLE_OPTIONS"
+                            :key="role"
+                            :value="role"
+                        >
+                            {{ role }}
+                        </option>
+                    </select>
                 </div>
                 <div class="space-y-1">
                     <label class="text-sm text-muted-foreground">Job title</label>
-                    <input
+                    <select
                         v-model="editState.form.job_title"
-                        type="text"
                         class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                    />
+                    >
+                        <option value="">—</option>
+                        <option
+                            v-if="
+                                editState.form.job_title &&
+                                !JOB_TITLE_OPTIONS.includes(
+                                    editState.form.job_title as (typeof JOB_TITLE_OPTIONS)[number],
+                                )
+                            "
+                            :value="editState.form.job_title"
+                        >
+                            {{ editState.form.job_title }}
+                        </option>
+                        <option
+                            v-for="title in JOB_TITLE_OPTIONS"
+                            :key="title"
+                            :value="title"
+                        >
+                            {{ title }}
+                        </option>
+                    </select>
                 </div>
                 <div class="space-y-1 sm:col-span-2">
                     <label class="text-sm text-muted-foreground">Office / School</label>
@@ -884,12 +955,12 @@ onBeforeUnmount(() => {
                 </div>
 
                 <div class="space-y-1">
-                    <label class="text-sm text-muted-foreground">Last name</label>
-                    <input v-model="createState.form.lastname" type="text" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
-                </div>
-                <div class="space-y-1">
                     <label class="text-sm text-muted-foreground">First name</label>
                     <input v-model="createState.form.firstname" type="text" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
+                </div>
+                <div class="space-y-1">
+                    <label class="text-sm text-muted-foreground">Last name</label>
+                    <input v-model="createState.form.lastname" type="text" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
                 </div>
                 <div class="space-y-1">
                     <label class="text-sm text-muted-foreground">Middle name</label>
@@ -897,21 +968,50 @@ onBeforeUnmount(() => {
                 </div>
                 <div class="space-y-1">
                     <label class="text-sm text-muted-foreground">Extension</label>
-                    <input
+                    <select
                         v-model="createState.form.extname"
-                        type="text"
                         class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                        placeholder="Jr., Sr., III"
-                    />
+                    >
+                        <option value="">None</option>
+                        <option value="Jr.">Jr.</option>
+                        <option value="Sr.">Sr.</option>
+                        <option value="II">II</option>
+                        <option value="III">III</option>
+                        <option value="IV">IV</option>
+                    </select>
                 </div>
 
                 <div class="space-y-1">
                     <label class="text-sm text-muted-foreground">Role</label>
-                    <input v-model="createState.form.role" type="text" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
+                    <select
+                        v-model="createState.form.role"
+                        class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    >
+                        <option value="Employee">Employee</option>
+                        <option value="HR Manager">HR Manager</option>
+                        <option value="AO Manager">AO Manager</option>
+                        <option value="SDS Manager">SDS Manager</option>
+                        <option value="System Admin">System Admin</option>
+                    </select>
                 </div>
                 <div class="space-y-1">
                     <label class="text-sm text-muted-foreground">Job title</label>
-                    <input v-model="createState.form.job_title" type="text" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
+                    <select
+                        v-model="createState.form.job_title"
+                        class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    >
+                        <option value="">—</option>
+                        <option value="Teacher I">Teacher I</option>
+                        <option value="Teacher II">Teacher II</option>
+                        <option value="Teacher III">Teacher III</option>
+                        <option value="Master Teacher I">Master Teacher I</option>
+                        <option value="Master Teacher II">Master Teacher II</option>
+                        <option value="Principal I">Principal I</option>
+                        <option value="Principal II">Principal II</option>
+                        <option value="Head Teacher I">Head Teacher I</option>
+                        <option value="Head Teacher II">Head Teacher II</option>
+                        <option value="Administrative Officer">Administrative Officer</option>
+                    </select>
                 </div>
 
                 <div class="space-y-1 sm:col-span-2">

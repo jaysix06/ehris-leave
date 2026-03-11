@@ -10,6 +10,7 @@ use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -34,7 +35,9 @@ class ProfileController extends Controller
         $user = $request->user();
         $changes = [];
 
-        $request->user()->fill($request->validated());
+        $validated = $request->validated();
+        unset($validated['avatar']);
+        $request->user()->fill($validated);
 
         if ($request->user()->isDirty('email')) {
             $request->user()->email_verified_at = null;
@@ -56,6 +59,23 @@ class ProfileController extends Controller
         }
         if ($request->user()->isDirty('extname')) {
             $changes[] = 'extname';
+        }
+        if ($request->user()->isDirty('personal_email')) {
+            $changes[] = 'personal_email';
+        }
+
+        if ($request->hasFile('avatar')) {
+            $file = $request->file('avatar');
+            $ext = strtolower($file->getClientOriginalExtension() ?: 'jpg');
+            if (! in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp'], true)) {
+                $ext = 'jpg';
+            }
+            $filename = (string) $user->userId.'_'.time().'.'.$ext;
+            $path = $file->storeAs('avatars', $filename, 'public');
+            if ($path !== false) {
+                $request->user()->avatar = $filename;
+                $changes[] = 'avatar';
+            }
         }
 
         $request->user()->save();

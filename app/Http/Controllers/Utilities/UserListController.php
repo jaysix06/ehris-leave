@@ -91,7 +91,7 @@ class UserListController extends Controller
         $orderDir = $request->input('order.0.dir', 'desc') === 'asc' ? 'asc' : 'desc';
 
         // Default: newest users first (by userId desc)
-        $columns = ['id', 'hrid', 'email', 'name', 'role', 'office', 'active', 'actions'];
+        $columns = ['id', 'hrid', 'personal_email', 'email', 'name', 'role', 'office', 'active', 'actions'];
         $orderColumn = $columns[$orderColumnIndex] ?? 'id';
 
         $baseQuery = DB::table('tbl_user as u')
@@ -175,11 +175,12 @@ class UserListController extends Controller
             ]))) ?: ($row->fullname ?? $row->email ?? '—');
 
             $active = (bool) $row->active;
-            $displayEmail = $active ? ($row->email ?? '—') : ($row->personal_email ?? $row->email ?? '—');
+            $displayEmail = $active ? ($row->email ?? $row->personal_email ?? '—') : ($row->personal_email ?? $row->email ?? '—');
 
             return [
                 'id' => $row->id,
                 'hrid' => $row->hrid ?? '—',
+                'personal_email' => $row->personal_email ?? '—',
                 'email' => $displayEmail,
                 'name' => $name,
                 'role' => $row->role ?? '—',
@@ -407,10 +408,26 @@ class UserListController extends Controller
                 $user->email_verified_at = now();
             }
 
-            // Generate official DepEd email: (firstname+lastname)@deped.gov.ph
+            // Generate official DepEd email:
+            //   (firstname + middlename) . '.' . lastname @deped.gov.ph
+            // Example: "Reagan Jade A. Balansag" -> "reaganjade.balansag@deped.gov.ph"
             $first = trim((string) ($user->firstname ?? ''));
+            $middle = trim((string) ($user->middlename ?? ''));
             $last = trim((string) ($user->lastname ?? ''));
-            $local = Str::lower(preg_replace('/[^a-z0-9]/i', '', $first.$last) ?: 'user'.$user->getKey());
+
+            $firstSegment = preg_replace('/[^a-z0-9]/i', '', $first.$middle);
+            $lastSegment = preg_replace('/[^a-z0-9]/i', '', $last);
+
+            if ($firstSegment !== '' && $lastSegment !== '') {
+                $local = Str::lower($firstSegment.'.'.$lastSegment);
+            } elseif ($firstSegment !== '') {
+                $local = Str::lower($firstSegment);
+            } elseif ($lastSegment !== '') {
+                $local = Str::lower($lastSegment);
+            } else {
+                $local = 'user'.$user->getKey();
+            }
+
             $officialEmail = $local.'@deped.gov.ph';
 
             // Set official login credentials on activation.

@@ -160,13 +160,19 @@ const handleDistrictChange = (event: Event) => {
 
                         <div class="grid gap-2 md:col-span-1">
                             <Label for="extname">Name extension (Jr., Sr.)</Label>
-                            <Input
+                            <select
                                 id="extname"
-                                type="text"
-                                :tabindex="4"
                                 name="extname"
-                                placeholder="e.g. Jr., Sr."
-                            />
+                                :tabindex="4"
+                                class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                            >
+                                <option value="">None</option>
+                                <option value="Jr.">Jr.</option>
+                                <option value="Sr.">Sr.</option>
+                                <option value="II">II</option>
+                                <option value="III">III</option>
+                                <option value="IV">IV</option>
+                            </select>
                             <InputError :message="errors.extname" />
                         </div>
                         <div class="grid gap-2 md:col-span-2">

@@ -43,8 +43,10 @@ Route::get('auth/status', function (Request $request) {
         ->header('Pragma', 'no-cache');
 })->name('auth.status');
 
-// Route::prefix('ehris')->group(function () {
-Route::middleware(['guest', 'throttle:5,1'])->group(function () {
+// Guest-only routes for OTP-based password reset. Rate limiting is handled in the
+// controller (PasswordResetOtpController::send) so we keep this group unthrottled
+// to avoid unexpected 429 errors when navigating between steps.
+Route::middleware(['guest'])->group(function () {
     Route::post('forgot-password/otp/send', [PasswordResetOtpController::class, 'send'])
         ->name('password.otp.send');
     Route::get('forgot-password/otp/verify', [PasswordResetOtpController::class, 'showVerify'])
@@ -338,6 +340,7 @@ Route::get('api/utilities/departments', [UserListController::class, 'departments
     ->name('utilities.departments');
 Route::patch('api/utilities/users/{user}/status', [UserListController::class, 'updateStatus'])
     ->middleware(['auth'])
+    ->withoutMiddleware([ValidateCsrfToken::class])
     ->name('utilities.user-list.update-status');
 Route::patch('api/utilities/users/{user}/reset-password', [UserListController::class, 'resetPassword'])
     ->middleware(['auth'])
