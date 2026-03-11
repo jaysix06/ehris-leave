@@ -393,7 +393,6 @@ const showUserManualModal = ref(false);
 
 // Create Task modal
 const showCreateTaskModal = ref(false);
-const showUserManualModal = ref(false);
 const taskTitle = ref('');
 const taskDescription = ref('');
 const taskPriority = ref<'Low' | 'Medium' | 'High'>('Low');
