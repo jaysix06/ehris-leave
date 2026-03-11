@@ -3,9 +3,11 @@ import { Head, Link, usePage } from '@inertiajs/vue3';
 import {
     ArrowRight,
     FileText,
+    Globe,
+    Mail,
     Megaphone,
     MessageSquareHeart,
-    QrCode,
+    Phone,
     Shield,
 } from 'lucide-vue-next';
 import { login, register } from '@/routes';
@@ -208,16 +210,28 @@ useSessionTrap({
                     </div>
 
                     <div>
-                        <h2 class="mb-2 font-semibold text-foreground">Contact</h2>
-                        <p class="text-muted-foreground">
-                            Contact No.: 088-545-0998 | 088-545-0990
-                        </p>
-                        <p class="text-muted-foreground">
-                            Email: ozamiz.city@deped.gov.ph
-                        </p> 
-                        <a href="https://www.facebook.com/depedtayoozamiz" target="_blank" class="text-muted-foreground">
-                            Facebook Page: www.fb.com/depedtayoozamiz
-                        </a>
+                        <h2 class="mb-3 flex items-center gap-2 font-semibold text-foreground">
+                            <Phone class="size-4 text-primary" />
+                            Contact
+                        </h2>
+                        <ul class="space-y-2.5">
+                            <li class="flex items-start gap-2 text-muted-foreground">
+                                <Phone class="mt-0.5 size-3.5 shrink-0 text-muted-foreground/60" />
+                                <span>088-545-0998 / 088-545-0990</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <Mail class="mt-0.5 size-3.5 shrink-0 text-muted-foreground/60" />
+                                <a href="mailto:ozamiz.city@deped.gov.ph" class="text-muted-foreground transition hover:text-primary">
+                                    ozamiz.city@deped.gov.ph
+                                </a>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <Globe class="mt-0.5 size-3.5 shrink-0 text-muted-foreground/60" />
+                                <a href="https://www.facebook.com/depedtayoozamiz" target="_blank" rel="noopener noreferrer" class="text-muted-foreground transition hover:text-primary">
+                                    fb.com/depedtayoozamiz
+                                </a>
+                            </li>
+                        </ul>
                     </div>
                 </div>
 
