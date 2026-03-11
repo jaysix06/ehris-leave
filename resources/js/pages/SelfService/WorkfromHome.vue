@@ -106,6 +106,7 @@ const tasksTab = ref<'open' | 'completed'>('open');
 // Search and sort (apply to both Tasks and Completed Tasks)
 const taskSearchQuery = ref('');
 const taskPrioritySort = ref<'High' | 'Medium' | 'Low'>('High');
+const taskStatusSort = ref<'Not Started' | 'In Progress' | 'On Hold'>('Not Started');
 
 const PRIORITY_ORDER: Record<'High' | 'Medium' | 'Low', number[]> = {
     High: [0, 1, 2],   // High first, then Medium, then Low
@@ -114,10 +115,24 @@ const PRIORITY_ORDER: Record<'High' | 'Medium' | 'Low', number[]> = {
 };
 const PRIORITY_RANK: Record<string, number> = { High: 0, Medium: 1, Low: 2 };
 
+const STATUS_ORDER: Record<'Not Started' | 'In Progress' | 'On Hold', number[]> = {
+    'Not Started': [0, 1, 2],   // Not Started, In Progress, On Hold
+    'In Progress': [1, 0, 2],   // In Progress first, then Not Started, then On Hold
+    'On Hold': [2, 0, 1],       // On Hold first, then Not Started, then In Progress
+};
+const STATUS_RANK: Record<string, number> = {
+    'Not Started': 0,
+    'In Progress': 1,
+    'On Hold': 2,
+    'Complete': 3,
+};
+
 function filterAndSortTasks(tasks: TaskItem[]): TaskItem[] {
     const q = taskSearchQuery.value.trim().toLowerCase();
-    const sortKey = taskPrioritySort.value;
-    const order = PRIORITY_ORDER[sortKey];
+    const priorityKey = taskPrioritySort.value;
+    const statusKey = taskStatusSort.value;
+    const priorityOrder = PRIORITY_ORDER[priorityKey];
+    const statusOrder = STATUS_ORDER[statusKey];
     let list = tasks;
     if (q) {
         list = list.filter(
@@ -127,8 +142,13 @@ function filterAndSortTasks(tasks: TaskItem[]): TaskItem[] {
         );
     }
     return [...list].sort((a, b) => {
-        const rankA = order[PRIORITY_RANK[a.priority] ?? 1];
-        const rankB = order[PRIORITY_RANK[b.priority] ?? 1];
+        const statusA = normalizedStatus(a);
+        const statusB = normalizedStatus(b);
+        const statusRankA = statusOrder[STATUS_RANK[statusA] ?? 0] ?? 99;
+        const statusRankB = statusOrder[STATUS_RANK[statusB] ?? 0] ?? 99;
+        if (statusRankA !== statusRankB) return statusRankA - statusRankB;
+        const rankA = priorityOrder[PRIORITY_RANK[a.priority] ?? 1];
+        const rankB = priorityOrder[PRIORITY_RANK[b.priority] ?? 1];
         return rankA - rankB;
     });
 }
@@ -210,14 +230,6 @@ function submitEditTask(): void {
 
 function normalizedStatus(t: TaskItem): string {
     return t.status === 'open' ? 'Not Started' : t.status;
-}
-
-function taskPriorityClasses(priority: string): string {
-    const p = (priority || '').toLowerCase();
-    if (p === 'high') return 'border-red-500/30 bg-red-500/10';
-    if (p === 'medium') return 'border-amber-500/30 bg-amber-500/10';
-    if (p === 'low') return 'border-emerald-500/30 bg-emerald-500/10';
-    return 'border-slate-500/20 bg-slate-500/10';
 }
 
 function updateTaskStatus(taskId: number, status: string, fromStatus?: string): void {
@@ -312,24 +324,11 @@ function confirmComplete(): void {
     });
 }
 
+// Export uses server PDF; layout refers to app/Models/generate_pdf.php
 function exportTasks(): void {
-    const tasks = tasksTab.value === 'open' ? sortedFilteredOpenTasks.value : sortedFilteredCompletedTasks.value;
-    const headers = ['Title', 'Description', 'Priority', 'Due Date', 'Due Date End', 'Status'];
-    const escape = (s: string) => {
-        const t = String(s ?? '').replace(/"/g, '""');
-        return t.includes(',') || t.includes('"') || t.includes('\n') ? `"${t}"` : t;
-    };
-    const rows = tasks.map((t) =>
-        [t.title, t.description ?? '', t.priority, t.due_date, t.due_date_end ?? '', t.status].map(escape).join(','),
-    );
-    const csv = [headers.join(','), ...rows].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `tasks-${tasksTab.value}-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const type = tasksTab.value === 'open' ? 'open' : 'completed';
+    const url = `/self-service/wfh-time-in-out/export/pdf?type=${encodeURIComponent(type)}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
 }
 
 // Create Task modal
@@ -738,17 +737,31 @@ function toggleClock(): void {
                                 class="w-full rounded-md border border-input bg-background py-1.5 pl-8 pr-3 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                             />
                         </div>
-                        <div class="flex items-center gap-2">
-                            <label for="task-priority-sort" class="text-xs font-medium text-muted-foreground">Sort by priority</label>
-                            <select
-                                id="task-priority-sort"
-                                v-model="taskPrioritySort"
-                                class="rounded-md border border-input bg-background px-2 py-1.5 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                            >
-                                <option value="High">High first</option>
-                                <option value="Medium">Medium first</option>
-                                <option value="Low">Low first</option>
-                            </select>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <div class="flex items-center gap-2">
+                                <label for="task-status-sort" class="text-xs font-medium text-muted-foreground">Sort by status</label>
+                                <select
+                                    id="task-status-sort"
+                                    v-model="taskStatusSort"
+                                    class="rounded-md border border-input bg-background px-2 py-1.5 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                >
+                                    <option value="Not Started">Not Started first</option>
+                                    <option value="In Progress">In Progress first</option>
+                                    <option value="On Hold">On Hold first</option>
+                                </select>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <label for="task-priority-sort" class="text-xs font-medium text-muted-foreground">Sort by priority</label>
+                                <select
+                                    id="task-priority-sort"
+                                    v-model="taskPrioritySort"
+                                    class="rounded-md border border-input bg-background px-2 py-1.5 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                >
+                                    <option value="High">High first</option>
+                                    <option value="Medium">Medium first</option>
+                                    <option value="Low">Low first</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
                     <div v-if="tasksTab === 'open'" class="min-h-[120px]">
@@ -758,7 +771,11 @@ function toggleClock(): void {
                                 :key="t.id"
                                 :class="[
                                     'flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm',
-                                    taskPriorityClasses(t.priority),
+                                    normalizedStatus(t) === 'In Progress'
+                                        ? 'border-blue-600/25 bg-blue-600/10'
+                                        : normalizedStatus(t) === 'On Hold'
+                                          ? 'border-amber-500/30 bg-amber-500/15'
+                                          : 'border-slate-500/20 bg-slate-500/10',
                                 ]"
                             >
                                 <div class="min-w-0 flex-1">
@@ -840,10 +857,7 @@ function toggleClock(): void {
                             <li
                                 v-for="t in sortedFilteredCompletedTasks"
                                 :key="t.id"
-                                :class="[
-                                    'flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm',
-                                    taskPriorityClasses(t.priority),
-                                ]"
+                                class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/80 bg-muted/20 px-3 py-2 text-sm"
                             >
                                 <div class="min-w-0 flex-1">
                                     <p class="font-medium text-foreground">{{ t.title }}</p>

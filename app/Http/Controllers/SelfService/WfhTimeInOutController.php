@@ -7,12 +7,14 @@ use App\Models\Attendance;
 use App\Models\Employee;
 use App\Models\SelfServiceTask;
 use App\Models\User;
+use App\Services\WfhTaskListPdf;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class WfhTimeInOutController extends Controller
 {
@@ -149,6 +151,84 @@ class WfhTimeInOutController extends Controller
         $task->update($data);
 
         return redirect()->route('self-service.wfh-time-in-out')->with('successMessage', 'Task updated.');
+    }
+
+    /**
+     * Export tasks as PDF. Layout and structure refer to app/Models/generate_pdf.php.
+     */
+    public function exportPdf(Request $request): StreamedResponse
+    {
+        $request->validate(['type' => ['required', 'string', 'in:open,completed']]);
+        $user = $request->user();
+        if (! $user) {
+            abort(403);
+        }
+
+        $type = $request->input('type');
+        $openStatuses = ['Not Started', 'In Progress', 'On Hold', 'open'];
+        $completedStatuses = ['Complete', 'completed'];
+
+        $query = SelfServiceTask::where('user_id', $user->getKey())
+            ->whereIn('status', $type === 'completed' ? $completedStatuses : $openStatuses);
+
+        if ($type === 'completed') {
+            $query->orderByDesc('updated_at');
+        } else {
+            $query->orderBy('due_date');
+        }
+
+        $tasks = $query->get();
+
+        $subtitle = $type === 'open'
+            ? 'Tasks (Open) - as of '.now()->format('F j, Y')
+            : 'Tasks (Completed) - as of '.now()->format('F j, Y');
+
+        $htmlTable = '<table><thead><tr>';
+        $htmlTable .= '<th>Title</th><th>Description</th><th>Priority</th><th>Due Date</th><th>Due Date End</th><th>Status</th>';
+        $htmlTable .= '</tr></thead><tbody>';
+        foreach ($tasks as $t) {
+            $htmlTable .= '<tr>';
+            $htmlTable .= '<td>'.e($t->title).'</td>';
+            $htmlTable .= '<td>'.e($t->description ?? '').'</td>';
+            $htmlTable .= '<td>'.e($t->priority).'</td>';
+            $htmlTable .= '<td>'.e($t->due_date?->format('Y-m-d') ?? '').'</td>';
+            $htmlTable .= '<td>'.e($t->due_date_end?->format('Y-m-d') ?? '').'</td>';
+            $htmlTable .= '<td>'.e($t->status).'</td>';
+            $htmlTable .= '</tr>';
+        }
+        $htmlTable .= '</tbody></table>';
+
+        // Table styles refer to app/Models/generate_pdf.php (lines 144–147)
+        $styles = '<style>
+            table { border-collapse: collapse; width: 100%; font-family: Calibri; font-size: 9pt; }
+            td { border: 1px solid #040303; padding: 2px; }
+            th { font-weight: bold; border: 1px solid #050505; background-color: #f2f2f2; text-align: center; }
+        </style>';
+        $finalHtml = $styles.$htmlTable;
+
+        $pdf = new WfhTaskListPdf('L', 'in', 'A4', true, 'UTF-8', false, $subtitle);
+        $pdf->SetTitle('Tasklist Report');
+        $pdf->SetKeywords('DEPED Tasklist Report');
+        $pdf->SetMargins(0.6, 3.0, 0.6);
+        $pdf->SetFooterMargin(defined('PDF_MARGIN_FOOTER') ? PDF_MARGIN_FOOTER + 1 : 1.5);
+        $pdf->SetAutoPageBreak(true, 1.5);
+        $pdf->AddPage();
+        $pdf->writeHTML($finalHtml, true, false, true, false, '');
+
+        $filename = 'tasklist_report_'.$type.'_'.now()->format('Y-m-d').'.pdf';
+
+        $pdfString = $pdf->Output('', 'S');
+
+        return response()->streamDownload(
+            function () use ($pdfString): void {
+                echo $pdfString;
+            },
+            $filename,
+            [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+            ]
+        );
     }
 
     public function destroyTask(Request $request, SelfServiceTask $task): RedirectResponse
