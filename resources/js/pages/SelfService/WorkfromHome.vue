@@ -274,7 +274,6 @@ function confirmDelete(): void {
         onFinish: () => { taskActionLoading.value = false; },
         onSuccess: () => {
             closeViewModal();
-            toast.success('Task deleted.');
         },
     });
 }

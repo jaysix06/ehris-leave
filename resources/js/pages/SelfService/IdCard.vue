@@ -22,6 +22,11 @@ const idPhotoFile = ref<File | null>(null);
 const signatureFile = ref<File | null>(null);
 const idPhotoInput = ref<HTMLInputElement | null>(null);
 const signatureInput = ref<HTMLInputElement | null>(null);
+const PRINT_DPI = 300;
+const PASSPORT_PHOTO_WIDTH_IN = 2;
+const PASSPORT_PHOTO_HEIGHT_IN = 2;
+const SIGNATURE_PLACEHOLDER_WIDTH_PX = 160;
+const SIGNATURE_PLACEHOLDER_HEIGHT_PX = 64;
 
 function readFileAsDataUrl(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -32,25 +37,150 @@ function readFileAsDataUrl(file: File): Promise<string> {
     });
 }
 
-function onIdPhotoChange(event: Event) {
+function loadImageFromFile(file: File): Promise<HTMLImageElement> {
+    return new Promise((resolve, reject) => {
+        const image = new Image();
+        const objectUrl = URL.createObjectURL(file);
+
+        image.onload = () => {
+            URL.revokeObjectURL(objectUrl);
+            resolve(image);
+        };
+        image.onerror = (error) => {
+            URL.revokeObjectURL(objectUrl);
+            reject(error);
+        };
+        image.src = objectUrl;
+    });
+}
+
+function getCenterCropRect(sourceWidth: number, sourceHeight: number, targetAspectRatio: number) {
+    const sourceAspectRatio = sourceWidth / sourceHeight;
+
+    if (sourceAspectRatio > targetAspectRatio) {
+        const croppedWidth = sourceHeight * targetAspectRatio;
+        return {
+            sx: (sourceWidth - croppedWidth) / 2,
+            sy: 0,
+            sw: croppedWidth,
+            sh: sourceHeight,
+        };
+    }
+
+    const croppedHeight = sourceWidth / targetAspectRatio;
+    return {
+        sx: 0,
+        sy: (sourceHeight - croppedHeight) / 2,
+        sw: sourceWidth,
+        sh: croppedHeight,
+    };
+}
+
+async function cropImageFileToPrintSize(file: File, outputWidthInches: number, outputHeightInches: number): Promise<File> {
+    const image = await loadImageFromFile(file);
+    const outputWidthPx = Math.round(outputWidthInches * PRINT_DPI);
+    const outputHeightPx = Math.round(outputHeightInches * PRINT_DPI);
+    const targetAspectRatio = outputWidthPx / outputHeightPx;
+    const { sx, sy, sw, sh } = getCenterCropRect(image.width, image.height, targetAspectRatio);
+    const canvas = document.createElement('canvas');
+
+    canvas.width = outputWidthPx;
+    canvas.height = outputHeightPx;
+
+    const context = canvas.getContext('2d');
+    if (!context) {
+        throw new Error('Unable to initialize image cropper.');
+    }
+
+    context.drawImage(image, sx, sy, sw, sh, 0, 0, outputWidthPx, outputHeightPx);
+
+    const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob(
+            (result) => {
+                if (!result) {
+                    reject(new Error('Unable to generate cropped image.'));
+                    return;
+                }
+
+                resolve(result);
+            },
+            file.type && file.type.startsWith('image/') ? file.type : 'image/jpeg',
+            0.92,
+        );
+    });
+
+    return new File([blob], file.name, { type: blob.type || file.type, lastModified: Date.now() });
+}
+
+async function cropImageFileToFixedSizePx(file: File, outputWidthPx: number, outputHeightPx: number): Promise<File> {
+    const image = await loadImageFromFile(file);
+    const targetAspectRatio = outputWidthPx / outputHeightPx;
+    const { sx, sy, sw, sh } = getCenterCropRect(image.width, image.height, targetAspectRatio);
+    const canvas = document.createElement('canvas');
+
+    canvas.width = outputWidthPx;
+    canvas.height = outputHeightPx;
+
+    const context = canvas.getContext('2d');
+    if (!context) {
+        throw new Error('Unable to initialize image cropper.');
+    }
+
+    context.drawImage(image, sx, sy, sw, sh, 0, 0, outputWidthPx, outputHeightPx);
+
+    const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob(
+            (result) => {
+                if (!result) {
+                    reject(new Error('Unable to generate cropped image.'));
+                    return;
+                }
+
+                resolve(result);
+            },
+            file.type && file.type.startsWith('image/') ? file.type : 'image/jpeg',
+            0.92,
+        );
+    });
+
+    return new File([blob], file.name, { type: blob.type || file.type, lastModified: Date.now() });
+}
+
+async function onIdPhotoChange(event: Event): Promise<void> {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
-    if (!file || !file.type.startsWith('image/')) return;
-    idPhotoFile.value = file;
-    readFileAsDataUrl(file).then((url) => {
-        idPhotoPreview.value = url;
-    });
+    if (!file || !file.type.startsWith('image/')) {
+        return;
+    }
+
+    try {
+        const croppedFile = await cropImageFileToPrintSize(file, PASSPORT_PHOTO_WIDTH_IN, PASSPORT_PHOTO_HEIGHT_IN);
+        idPhotoFile.value = croppedFile;
+        idPhotoPreview.value = await readFileAsDataUrl(croppedFile);
+    } catch {
+        idPhotoFile.value = file;
+        idPhotoPreview.value = await readFileAsDataUrl(file);
+    }
+
     input.value = '';
 }
 
-function onSignatureChange(event: Event) {
+async function onSignatureChange(event: Event): Promise<void> {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
-    if (!file || !file.type.startsWith('image/')) return;
-    signatureFile.value = file;
-    readFileAsDataUrl(file).then((url) => {
-        signaturePreview.value = url;
-    });
+    if (!file || !file.type.startsWith('image/')) {
+        return;
+    }
+
+    try {
+        const croppedFile = await cropImageFileToFixedSizePx(file, SIGNATURE_PLACEHOLDER_WIDTH_PX, SIGNATURE_PLACEHOLDER_HEIGHT_PX);
+        signatureFile.value = croppedFile;
+        signaturePreview.value = await readFileAsDataUrl(croppedFile);
+    } catch {
+        signatureFile.value = file;
+        signaturePreview.value = await readFileAsDataUrl(file);
+    }
+
     input.value = '';
 }
 
@@ -238,7 +368,7 @@ function applyChanges() {
                                 class="w-full h-full object-cover"
                             />
                         </div>
-                        <span class="text-xs text-muted-foreground">Crop. 8x10</span>
+                        <span class="text-xs text-muted-foreground">Auto-cropped to passport size (2in x 2in)</span>
                         <input
                             ref="idPhotoInput"
                             type="file"
@@ -278,6 +408,7 @@ function applyChanges() {
                             <Upload class="size-4" />
                             Choose File
                         </button>
+                        <span class="text-xs text-muted-foreground">Auto-cropped to signature placeholder size</span>
                         <div class="text-center">
                             <p class="font-semibold text-lg">{{ fullName || '—' }}</p>
                             <p class="text-sm text-muted-foreground">Email: {{ displayEmail || '—' }}</p>

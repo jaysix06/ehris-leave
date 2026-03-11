@@ -15,6 +15,7 @@ use App\Http\Controllers\SelfService\TimeLogsController;
 use App\Http\Controllers\SelfService\WfhTimeInOutController;
 use App\Http\Controllers\SurveyController;
 use App\Http\Controllers\Utilities\ActivityLogController;
+use App\Http\Controllers\Utilities\AnnouncementManagementController;
 use App\Http\Controllers\Utilities\BusinessDepartmentController;
 use App\Http\Controllers\Utilities\JobTitleMonthlySalaryController;
 use App\Http\Controllers\Utilities\LeaveTypeController;
@@ -22,6 +23,7 @@ use App\Http\Controllers\Utilities\PopupMessageController;
 use App\Http\Controllers\Utilities\ReportingManagerController;
 use App\Http\Controllers\Utilities\SurveyManagementController;
 use App\Http\Controllers\Utilities\UserListController;
+use App\Models\Announcement;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -30,8 +32,16 @@ use Inertia\Inertia;
 use Laravel\Fortify\Features;
 
 Route::get('/', function () {
+    $announcements = Announcement::query()
+        ->active()
+        ->select(['id', 'title', 'content', 'links', 'created_at'])
+        ->orderByDesc('created_at')
+        ->limit(10)
+        ->get();
+
     return Inertia::render('Welcome', [
         'canRegister' => Features::enabled(Features::registration()),
+        'announcements' => $announcements,
     ]);
 })->middleware('guest')->name('home');
 
@@ -494,6 +504,18 @@ Route::put('utilities/pop-up-management/{popupMessage}', [PopupMessageController
 Route::delete('utilities/pop-up-management/{popupMessage}', [PopupMessageController::class, 'destroy'])
     ->middleware(['auth', 'verified'])
     ->name('utilities.pop-up-management.destroy');
+Route::get('utilities/announcement-management', [AnnouncementManagementController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('utilities.announcement-management');
+Route::post('utilities/announcement-management', [AnnouncementManagementController::class, 'store'])
+    ->middleware(['auth', 'verified'])
+    ->name('utilities.announcement-management.store');
+Route::put('utilities/announcement-management/{announcement}', [AnnouncementManagementController::class, 'update'])
+    ->middleware(['auth', 'verified'])
+    ->name('utilities.announcement-management.update');
+Route::delete('utilities/announcement-management/{announcement}', [AnnouncementManagementController::class, 'destroy'])
+    ->middleware(['auth', 'verified'])
+    ->name('utilities.announcement-management.destroy');
 Route::get('utilities/leave-types', [LeaveTypeController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('utilities.leave-types.index');

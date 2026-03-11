@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, usePage } from '@inertiajs/vue3';
 import {
     ArrowRight,
     FileText,
@@ -10,13 +10,33 @@ import {
 } from 'lucide-vue-next';
 import { login, register } from '@/routes';
 import { useSessionTrap } from '@/composables/useSessionTrap';
+import { computed } from 'vue';
 
-const announcements = [
-    {
-        title: 'eHRIS Scheduled Maintenance on Saturday',
-        date: 'February 28, 2026',
-    },
-];
+type AnnouncementLink = {
+    label: string;
+    url: string;
+};
+
+type AnnouncementItem = {
+    id: number;
+    title: string;
+    content: string | null;
+    links: AnnouncementLink[] | null;
+    created_at: string;
+};
+
+const page = usePage();
+const announcements = computed(() => (page.props.announcements ?? []) as AnnouncementItem[]);
+
+const formatDate = (dateString: string): string => {
+    const date = new Date(dateString);
+
+    return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+    });
+};
 
 useSessionTrap({
     mode: 'guest',
@@ -66,8 +86,8 @@ useSessionTrap({
 
             <section class="border-t border-border bg-card/50">
                 <div class="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6 lg:px-8 lg:py-16">
-                    <div class="grid gap-10 lg:grid-cols-2">
-                        <div aria-labelledby="announcements-title">
+                    <div class="grid gap-10 lg:grid-cols-2 lg:items-start">
+                        <div aria-labelledby="announcements-title" class="lg:flex lg:min-h-[32rem] lg:flex-col">
                             <div class="mb-6 flex items-start gap-3">
                                 <div class="mt-0.5 inline-flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                                     <Megaphone class="size-5" />
@@ -82,10 +102,10 @@ useSessionTrap({
                                 </div>
                             </div>
 
-                            <div class="grid gap-4">
+                            <div class="grid gap-4 lg:max-h-[24rem] lg:overflow-y-auto lg:pr-2">
                                 <article
                                     v-for="item in announcements"
-                                    :key="item.title"
+                                    :key="item.id"
                                     class="flex items-start gap-4 rounded-xl border border-border bg-card p-5 shadow-sm transition hover:border-primary/30"
                                 >
                                     <div class="mt-0.5 inline-flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
@@ -95,10 +115,26 @@ useSessionTrap({
                                         <p class="text-sm font-semibold leading-snug text-foreground">
                                             {{ item.title }}
                                         </p>
+                                        <p v-if="item.content" class="mt-1 whitespace-pre-line text-xs text-muted-foreground">
+                                            {{ item.content }}
+                                        </p>
+                                        <ul v-if="item.links && item.links.length > 0" class="mt-2 space-y-1 text-xs">
+                                            <li v-for="(link, index) in item.links" :key="`${item.id}-${index}`">
+                                                <a :href="link.url" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline">
+                                                    {{ link.label || link.url }}
+                                                </a>
+                                            </li>
+                                        </ul>
                                         <time class="mt-1 block text-xs text-muted-foreground">
-                                            {{ item.date }}
+                                            {{ formatDate(item.created_at) }}
                                         </time>
                                     </div>
+                                </article>
+                                <article
+                                    v-if="announcements.length === 0"
+                                    class="rounded-xl border border-dashed border-border bg-card p-5 text-sm text-muted-foreground"
+                                >
+                                    No announcements available right now.
                                 </article>
                             </div>
                         </div>

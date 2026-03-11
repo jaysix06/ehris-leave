@@ -53,7 +53,7 @@ const NAV_ACCESS_BY_ROLE: Record<string, RoleAccessRule> = {
         allow: ['dashboard', 'employee-management', 'self-service', 'request-status', 'my-details', 'survey'],
     },
     sds: {
-        allow: ['dashboard', 'request-status', 'my-details', 'reports', 'survey'],
+        allow: ['dashboard', 'employee-management' ,'self-service', 'request-status', 'my-details', 'reports', 'survey', 'utilities.employee-list', 'utilities.job-title-monthly-salary', 'utilities.reporting-manager', 'utilities.survey-management', 'utilities.pop-up-management', 'utilities.announcement-management'],
     },
     employee: {
         allow: ['dashboard', 'self-service', 'request-status', 'my-details', 'survey'],
@@ -445,6 +445,11 @@ const mainNavItems = computed<NavItem[]>(() => {
                 key: 'utilities.pop-up-management',
                 title: 'Pop Up Management',
                 href: utilitiesRoutes.popUpManagement(),
+            },
+            {
+                key: 'utilities.announcement-management',
+                title: 'Announcement Management',
+                href: utilitiesRoutes.announcementManagement(),
             },
         ],
     },
