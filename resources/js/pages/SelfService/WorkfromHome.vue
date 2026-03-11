@@ -324,11 +324,18 @@ function confirmComplete(): void {
     });
 }
 
-// Export: POST JSON to server; server builds HTML in PHP (no Blade) and returns PDF
+// Export: POST JSON to server; server builds HTML in PHP (no Blade) and returns PDF.
+// Falls back to GET (open in new tab) when POST fails (e.g. 419 CSRF on other devices/sessions).
 const exportPdfLoading = ref(false);
 function exportTasks(): void {
     const type = tasksTab.value === 'open' ? 'open' : 'completed';
     const url = '/self-service/wfh-time-in-out/export/pdf';
+    const getFallbackUrl = `${url}?type=${encodeURIComponent(type)}`;
+
+    function fallbackToGet(): void {
+        window.open(getFallbackUrl, '_blank', 'noopener,noreferrer');
+    }
+
     exportPdfLoading.value = true;
     const csrfToken = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
     fetch(url, {
@@ -343,12 +350,23 @@ function exportTasks(): void {
         credentials: 'same-origin',
     })
         .then(async (res) => {
-            if (!res.ok) throw new Error(res.statusText);
+            if (!res.ok) {
+                const msg = `Export failed (${res.status}). Trying open in new tab.`;
+                if (res.status === 419) {
+                    toast.warn('Session expired or CSRF issue. Opening export in new tab.');
+                } else {
+                    toast.warn(msg);
+                }
+                fallbackToGet();
+                return null;
+            }
             const disposition = res.headers.get('Content-Disposition');
             const blob = await res.blob();
             return { blob, disposition };
         })
-        .then(({ blob, disposition }) => {
+        .then((result) => {
+            if (!result) return;
+            const { blob, disposition } = result;
             let filename = `tasklist_report_${type}_${new Date().toISOString().slice(0, 10)}.pdf`;
             if (disposition) {
                 const m = disposition.match(/filename="?([^";\n]+)"?/);
@@ -361,7 +379,10 @@ function exportTasks(): void {
             a.click();
             URL.revokeObjectURL(u);
         })
-        .catch(() => toast.error('Failed to export PDF.'))
+        .catch(() => {
+            toast.warn('Export request failed. Opening in new tab.');
+            fallbackToGet();
+        })
         .finally(() => {
             exportPdfLoading.value = false;
         });
