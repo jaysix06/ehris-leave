@@ -179,26 +179,36 @@ class WfhTimeInOutController extends Controller
 
         $tasks = $query->get();
 
+        // Subtitle matches template: date range (e.g. "September 01, 2025-March 09, 2026")
         $subtitle = $type === 'open'
-            ? 'Tasks (Open) - as of '.now()->format('F j, Y')
-            : 'Tasks (Completed) - as of '.now()->format('F j, Y');
+            ? 'Tasks (Open) - as of '.now()->format('F d, Y')
+            : '('.now()->format('F d, Y').')';
 
-        $htmlTable = '<table><thead><tr>';
-        $htmlTable .= '<th>Title</th><th>Target</th><th>Priority</th><th>Due Date</th><th>Due Date End</th><th>Status</th>';
+        [$employeeName, $station] = $this->getEmployeeNameAndStationForPdf($user);
+
+        // Template-style table: Targeted Task/Assignments/Output, Actual Accomplishment/Output, Date, Priority, Station
+        $htmlTable = '<p style="margin-bottom:8px;"><strong>Name: '.e($employeeName).'</strong></p>';
+        $htmlTable .= '<table><thead><tr>';
+        $htmlTable .= '<th>Targeted Task/ Assignments/ Output</th><th>Actual Accomplishment/Output</th><th>Date</th><th>Priority</th><th>Station</th>';
         $htmlTable .= '</tr></thead><tbody>';
         foreach ($tasks as $t) {
+            $start = $t->due_date?->format('m/d/Y') ?? '';
+            $end = ($t->due_date_end && $t->due_date_end != $t->due_date)
+                ? $t->due_date_end->format('m/d/Y')
+                : $start;
+            $dateRange = $start.'-'.$end;
+            $accomplishment = $t->accomplishment_report ?? $t->description ?? '';
             $htmlTable .= '<tr>';
             $htmlTable .= '<td>'.e($t->title).'</td>';
-            $htmlTable .= '<td>'.e($t->description ?? '').'</td>';
+            $htmlTable .= '<td>'.e($accomplishment).'</td>';
+            $htmlTable .= '<td>'.e($dateRange).'</td>';
             $htmlTable .= '<td>'.e($t->priority).'</td>';
-            $htmlTable .= '<td>'.e($t->due_date?->format('Y-m-d') ?? '').'</td>';
-            $htmlTable .= '<td>'.e($t->due_date_end?->format('Y-m-d') ?? '').'</td>';
-            $htmlTable .= '<td>'.e($t->status).'</td>';
+            $htmlTable .= '<td>'.e($station).'</td>';
             $htmlTable .= '</tr>';
         }
         $htmlTable .= '</tbody></table>';
 
-        // Table styles refer to app/Models/generate_pdf.php (lines 144–147)
+        // Table styles to match DepEd accomplishment report template
         $styles = '<style>
             table { border-collapse: collapse; width: 100%; font-family: Calibri; font-size: 9pt; }
             td { border: 1px solid #040303; padding: 2px; }
@@ -384,5 +394,31 @@ class WfhTimeInOutController extends Controller
         }
 
         return 0;
+    }
+
+    /** @return array{0: string, 1: string} [displayName, station] */
+    private function getEmployeeNameAndStationForPdf($user): array
+    {
+        if (! $user) {
+            return ['', ''];
+        }
+        $hrid = $this->resolveHrid($user);
+        if ($hrid > 0) {
+            $emp = Employee::query()
+                ->where('hrid', $hrid)
+                ->first();
+            if ($emp) {
+                $first = $emp->firstname ?? '';
+                $last = $emp->lastname ?? '';
+                $middle = $emp->middlename ?? '';
+                $name = trim(trim($first).' '.trim($middle).' '.trim($last));
+                if ($name !== '') {
+                    $station = $emp->office ?? '';
+
+                    return [$name, $station];
+                }
+            }
+        }
+        return [$user->name ?? $user->email ?? 'N/A', ''];
     }
 }

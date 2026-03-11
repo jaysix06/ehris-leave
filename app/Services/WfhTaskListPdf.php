@@ -2,7 +2,13 @@
 
 namespace App\Services;
 
-use TCPDF;
+// Ensure TCPDF (tecnickcom/tcpdf) is loaded. Class name is TCPDF, not ICPDF.
+if (! class_exists('\\TCPDF', false)) {
+    $tcpdfPath = base_path('vendor/tecnickcom/tcpdf/tcpdf.php');
+    if (is_file($tcpdfPath)) {
+        require_once $tcpdfPath;
+    }
+}
 
 /**
  * TCPDF subclass for WFH Task List / Accomplishment Report PDF export.
@@ -13,8 +19,10 @@ use TCPDF;
  * "WORK FROM HOME INDIVIDUAL ACCOMPLISHMENT REPORT" title, custom subtitle,
  * footer image and "© DepEd | Page X/Y", and the same table CSS.
  * This class implements that design within the Laravel application.
+ *
+ * Extends global TCPDF from tecnickcom/tcpdf (no namespace).
  */
-class WfhTaskListPdf extends TCPDF
+class WfhTaskListPdf extends \TCPDF
 {
     protected string $reportSubtitle;
 
@@ -33,7 +41,11 @@ class WfhTaskListPdf extends TCPDF
 
     public function Header(): void
     {
-        $logoFile = public_path('assets/img/header.png');
+        // Use header image from Accomplishment Report Templates (matches DepEd template: seal, Republic, DepEd, Region, Division, line)
+        $headerFile = public_path('Accomplishment Report Templates/header.jpg');
+        if (! is_file($headerFile)) {
+            $headerFile = public_path('assets/img/header.png');
+        }
         $imageWidth = 11;
         $pageWidth = 11.5;
         $leftMargin = 1.5;
@@ -41,8 +53,9 @@ class WfhTaskListPdf extends TCPDF
         $printableWidth = $pageWidth - $leftMargin - $rightMargin;
         $xCenter = (($printableWidth - $imageWidth) / 2) + $leftMargin;
 
-        if (is_file($logoFile)) {
-            $this->Image($logoFile, $xCenter, 0.5, $imageWidth, 2.0, 'PNG', '', 'T', false, 300, '', false, false, 0, false, false, true, false, false);
+        if (is_file($headerFile)) {
+            $type = strtolower(pathinfo($headerFile, PATHINFO_EXTENSION)) === 'jpg' ? 'JPEG' : 'PNG';
+            $this->Image($headerFile, $xCenter, 0.5, $imageWidth, 2.0, $type, '', 'T', false, 300, '', false, false, 0, false, false, true, false, false);
         }
 
         $this->SetFont('helvetica', 'B', 10);
@@ -56,19 +69,24 @@ class WfhTaskListPdf extends TCPDF
 
     public function Footer(): void
     {
-        $footerImageFile = public_path('assets/img/footer.png');
+        // Use footer image from Accomplishment Report Templates (matches DepEd template: logos, contact info, doc ref)
+        $footerImageFile = public_path('Accomplishment Report Templates/footer.jpg');
+        if (! is_file($footerImageFile)) {
+            $footerImageFile = public_path('assets/img/footer.png');
+        }
         $pageWidth = $this->getPageWidth();
         $footerHeight = 1;
         $yPos = $this->getPageHeight() - $footerHeight - 0.3;
 
         if (is_file($footerImageFile)) {
+            $type = strtolower(pathinfo($footerImageFile, PATHINFO_EXTENSION)) === 'jpg' ? 'JPEG' : 'PNG';
             $this->Image(
                 $footerImageFile,
                 0,
                 $yPos,
                 $pageWidth,
                 $footerHeight,
-                '',
+                $type,
                 '',
                 '',
                 false,
