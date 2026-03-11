@@ -176,6 +176,8 @@ Route::delete('self-service/wfh-time-in-out/tasks/{task}', [WfhTimeInOutControll
     ->middleware(['auth', 'verified'])->name('self-service.wfh-time-in-out.tasks.destroy');
 Route::get('self-service/wfh-time-in-out/export/pdf', [WfhTimeInOutController::class, 'exportPdf'])
     ->middleware(['auth', 'verified'])->name('self-service.wfh-time-in-out.export.pdf');
+Route::get('self-service/user-manuals', fn () => Inertia::render('SelfService/UserManuals'))
+    ->middleware(['auth', 'verified'])->name('self-service.user-manuals');
 Route::get('self-service/calendar', [CalendarController::class, 'index'])
     ->middleware(['auth', 'verified'])->name('self-service.calendar');
 Route::get('api/self-service/calendar/events', [CalendarController::class, 'events'])
