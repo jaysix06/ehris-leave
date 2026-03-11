@@ -64,8 +64,12 @@ const NAV_ACCESS_BY_ROLE: Record<string, RoleAccessRule> = {
  * Normalize nav keys so config values like `Request Status`, `request_status`,
  * or `request-status` all resolve to the same comparable form.
  */
-const normalizeNavKey = (value: string): string =>
-    value.trim() === '*'
+const normalizeNavKey = (value: unknown): string => {
+    if (typeof value !== 'string') {
+        return '';
+    }
+
+    return value.trim() === '*'
         ? '*'
         : value
               .trim()
@@ -76,6 +80,7 @@ const normalizeNavKey = (value: string): string =>
               .replace(/[^a-z0-9.-]+/g, '')
               .replace(/-+/g, '-')
               .replace(/^-|-$/g, '');
+};
 const normalizeRole = (value: string): string => value.trim().toLowerCase().replace(/\s+/g, ' ');
 
 /**
@@ -380,15 +385,15 @@ const mainNavItems = computed<NavItem[]>(() => {
         title: 'My Details',
         icon: BookUser,
         children: [
-            { title: 'Official Info', href: myDetails({ query: { section: 'official-info' } }) },
-            { title: 'Personal Info', href: myDetails({ query: { section: 'personal-info' } }) },
-            { title: 'Family Background', href: myDetails({ query: { section: 'family-background' } }) },
-            { title: 'Education Background', href: myDetails({ query: { section: 'education-background' } }) },
-            { title: 'Eligibility', href: myDetails({ query: { section: 'eligibility' } }) },
-            { title: 'Work Experience', href: myDetails({ query: { section: 'work-experience' } }) },
-            { title: 'Voluntary Work', href: myDetails({ query: { section: 'voluntary-work' } }) },
-            { title: 'Training', href: myDetails({ query: { section: 'training' } }) },
-            { title: 'Others', href: myDetails({ query: { section: 'others' } }) },
+            { key: 'my-details.official-info', title: 'Official Info', href: myDetails({ query: { section: 'official-info' } }) },
+            { key: 'my-details.personal-info', title: 'Personal Info', href: myDetails({ query: { section: 'personal-info' } }) },
+            { key: 'my-details.family-background', title: 'Family Background', href: myDetails({ query: { section: 'family-background' } }) },
+            { key: 'my-details.education-background', title: 'Education Background', href: myDetails({ query: { section: 'education-background' } }) },
+            { key: 'my-details.eligibility', title: 'Eligibility', href: myDetails({ query: { section: 'eligibility' } }) },
+            { key: 'my-details.work-experience', title: 'Work Experience', href: myDetails({ query: { section: 'work-experience' } }) },
+            { key: 'my-details.voluntary-work', title: 'Voluntary Work', href: myDetails({ query: { section: 'voluntary-work' } }) },
+            { key: 'my-details.training', title: 'Training', href: myDetails({ query: { section: 'training' } }) },
+            { key: 'my-details.others', title: 'Others', href: myDetails({ query: { section: 'others' } }) },
         ],
     },
     {
