@@ -206,7 +206,7 @@ function submitEditTask(): void {
     if (!title) { toast.error('Task title is required.'); return; }
     if (title.length > 50) { toast.error('Task title must be at most 50 characters.'); return; }
     const description = editDescription.value.trim();
-    if (!description) { toast.error('Task description is required.'); return; }
+    if (!description) { toast.error('Task target is required.'); return; }
     const range = editDueDateRange.value;
     if (!range?.start) { toast.error('Task due date is required.'); return; }
     const end = range.end && range.end >= range.start ? range.end : range.start;
@@ -493,7 +493,7 @@ function submitCreateTask(): void {
     }
     const description = taskDescription.value.trim();
     if (!description) {
-        toast.error('Task description is required.');
+        toast.error('Task target is required.');
         return;
     }
     const range = taskDueDateRange.value;
@@ -929,7 +929,7 @@ function toggleClock(): void {
                             <dd class="mt-0.5 font-medium text-foreground">{{ viewTask.title }}</dd>
                         </div>
                         <div>
-                            <dt class="font-medium text-muted-foreground">Description</dt>
+                            <dt class="font-medium text-muted-foreground">Target</dt>
                             <dd class="mt-0.5 text-foreground">{{ viewTask.description || '—' }}</dd>
                         </div>
                         <div>
@@ -966,13 +966,13 @@ function toggleClock(): void {
                             />
                         </div>
                         <div>
-                            <label for="edit-task-desc" class="mb-1 block text-sm font-medium text-foreground">Description</label>
+                            <label for="edit-task-desc" class="mb-1 block text-sm font-medium text-foreground">Target</label>
                             <textarea
                                 id="edit-task-desc"
                                 v-model="editDescription"
                                 rows="3"
                                 class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-none"
-                                placeholder="Task description"
+                                placeholder="Task target"
                             />
                         </div>
                         <div>
@@ -1075,13 +1075,13 @@ function toggleClock(): void {
                             </select>
                         </div>
                         <div>
-                            <label for="task-description" class="block text-sm font-medium text-foreground">Task Description *</label>
+                            <label for="task-description" class="block text-sm font-medium text-foreground">Task Target *</label>
                             <textarea
                                 id="task-description"
                                 v-model="taskDescription"
                                 rows="4"
                                 class="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-none"
-                                placeholder="Enter task description"
+                                placeholder="Enter task target"
                                 required
                             />
                         </div>
