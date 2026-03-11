@@ -7,11 +7,12 @@ use App\Models\Attendance;
 use App\Models\Employee;
 use App\Models\SelfServiceTask;
 use App\Models\User;
-use App\Services\WfhTaskListPdf;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Http\Response as HttpResponse;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -154,9 +155,9 @@ class WfhTimeInOutController extends Controller
     }
 
     /**
-     * Export tasks as PDF. Layout and structure refer to app/Models/generate_pdf.php.
+     * Export tasks as PDF (DomPDF, HTML built in PHP — no Blade). Accepts GET ?type= or POST JSON { type }.
      */
-    public function exportPdf(Request $request): StreamedResponse
+    public function exportPdf(Request $request): HttpResponse
     {
         $request->validate(['type' => ['required', 'string', 'in:open,completed']]);
         $user = $request->user();
@@ -179,66 +180,124 @@ class WfhTimeInOutController extends Controller
 
         $tasks = $query->get();
 
-        // Subtitle matches template: date range (e.g. "September 01, 2025-March 09, 2026")
-        $subtitle = $type === 'open'
-            ? 'Tasks (Open) - as of '.now()->format('F d, Y')
-            : '('.now()->format('F d, Y').')';
-
+        $subtitle = $this->getReportDateRangeSubtitle($tasks);
         [$employeeName, $station] = $this->getEmployeeNameAndStationForPdf($user);
 
-        // Template-style table: Targeted Task/Assignments/Output, Actual Accomplishment/Output, Date, Priority, Station
-        $htmlTable = '<p style="margin-bottom:8px;"><strong>Name: '.e($employeeName).'</strong></p>';
-        $htmlTable .= '<table><thead><tr>';
-        $htmlTable .= '<th>Targeted Task/ Assignments/ Output</th><th>Actual Accomplishment/Output</th><th>Date</th><th>Priority</th><th>Station</th>';
-        $htmlTable .= '</tr></thead><tbody>';
-        foreach ($tasks as $t) {
+        $tasksForView = $tasks->map(function ($t) use ($station) {
             $start = $t->due_date?->format('m/d/Y') ?? '';
             $end = ($t->due_date_end && $t->due_date_end != $t->due_date)
                 ? $t->due_date_end->format('m/d/Y')
                 : $start;
-            $dateRange = $start.'-'.$end;
-            $accomplishment = $t->accomplishment_report ?? $t->description ?? '';
-            $htmlTable .= '<tr>';
-            $htmlTable .= '<td>'.e($t->title).'</td>';
-            $htmlTable .= '<td>'.e($accomplishment).'</td>';
-            $htmlTable .= '<td>'.e($dateRange).'</td>';
-            $htmlTable .= '<td>'.e($t->priority).'</td>';
-            $htmlTable .= '<td>'.e($station).'</td>';
-            $htmlTable .= '</tr>';
-        }
-        $htmlTable .= '</tbody></table>';
+            return [
+                'title' => $t->title,
+                'accomplishment' => $t->accomplishment_report ?? $t->description ?? '',
+                'date_range' => $start . '-' . $end,
+                'priority' => $t->priority,
+            ];
+        })->all();
 
-        // Table styles to match DepEd accomplishment report template
-        $styles = '<style>
-            table { border-collapse: collapse; width: 100%; font-family: Calibri; font-size: 9pt; }
-            td { border: 1px solid #040303; padding: 2px; }
-            th { font-weight: bold; border: 1px solid #050505; background-color: #f2f2f2; text-align: center; }
-        </style>';
-        $finalHtml = $styles.$htmlTable;
+        [$headerImageDataUri, $footerImageDataUri] = $this->getWfhPdfTemplateImageDataUris();
 
-        $pdf = new WfhTaskListPdf('L', 'in', 'A4', true, 'UTF-8', false, $subtitle);
-        $pdf->SetTitle('Tasklist Report');
-        $pdf->SetKeywords('DEPED Tasklist Report');
-        $pdf->SetMargins(0.6, 3.0, 0.6);
-        $pdf->SetFooterMargin(defined('PDF_MARGIN_FOOTER') ? PDF_MARGIN_FOOTER + 1 : 1.5);
-        $pdf->SetAutoPageBreak(true, 1.5);
-        $pdf->AddPage();
-        $pdf->writeHTML($finalHtml, true, false, true, false, '');
-
-        $filename = 'tasklist_report_'.$type.'_'.now()->format('Y-m-d').'.pdf';
-
-        $pdfString = $pdf->Output('', 'S');
-
-        return response()->streamDownload(
-            function () use ($pdfString): void {
-                echo $pdfString;
-            },
-            $filename,
-            [
-                'Content-Type' => 'application/pdf',
-                'Content-Disposition' => 'attachment; filename="'.$filename.'"',
-            ]
+        $html = $this->buildWfhPdfHtml(
+            $headerImageDataUri,
+            $footerImageDataUri,
+            $subtitle,
+            $employeeName,
+            $station,
+            $tasksForView
         );
+
+        $filename = 'tasklist_report_' . $type . '_' . now()->format('Y-m-d') . '.pdf';
+
+        $pdf = Pdf::loadHTML($html)->setPaper('a4', 'landscape');
+
+        return $pdf->download($filename);
+    }
+
+    /**
+     * Build full HTML for WFH Accomplishment Report (no Blade).
+     *
+     * @param  array<int, array{title: string, accomplishment: string, date_range: string, priority: string}>  $tasks
+     */
+    private function buildWfhPdfHtml(
+        ?string $headerImageDataUri,
+        ?string $footerImageDataUri,
+        string $subtitle,
+        string $employeeName,
+        string $station,
+        array $tasks
+    ): string {
+        $h = fn (string $s) => htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
+        $headerImg = ($headerImageDataUri !== null && $headerImageDataUri !== '')
+            ? '<img src="' . $h($headerImageDataUri) . '" alt="Header" class="header-image">'
+            : '';
+        $footerImg = ($footerImageDataUri !== null && $footerImageDataUri !== '')
+            ? '<img src="' . $h($footerImageDataUri) . '" alt="Footer" class="footer-image">'
+            : '';
+
+        $rows = '';
+        foreach ($tasks as $task) {
+            $rows .= '<tr>';
+            $rows .= '<td class="col-task">' . $h($task['title']) . '</td>';
+            $rows .= '<td class="col-accomplishment">' . $h($task['accomplishment']) . '</td>';
+            $rows .= '<td class="col-date">' . $h($task['date_range']) . '</td>';
+            $rows .= '<td class="col-priority">' . $h($task['priority']) . '</td>';
+            $rows .= '<td class="col-station">' . $h($station) . '</td>';
+            $rows .= '</tr>';
+        }
+        if ($rows === '') {
+            $rows = '<tr><td colspan="5" style="text-align: center;">No tasks in this report.</td></tr>';
+        }
+
+        $year = date('Y');
+        return '<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Work From Home Individual Accomplishment Report</title>
+<style>
+@page { margin: 0.6in; }
+body { font-family: DejaVu Sans, Helvetica, sans-serif; font-size: 9pt; margin: 0; padding: 0; color: #000; }
+.header-image { width: 100%; max-width: 11in; height: auto; max-height: 2in; margin: 0 auto 0.25in; display: block; }
+.report-title { font-size: 11pt; font-weight: bold; text-align: center; margin: 0 0 0.1in; }
+.report-date { font-size: 10pt; text-align: center; margin: 0 0 0.15in; }
+.report-title-line { border: none; border-top: 1px solid #000; margin: 0 0 0.2in; }
+.employee-name { font-weight: bold; margin-bottom: 0.15in; }
+table { width: 100%; border-collapse: collapse; font-size: 9pt; }
+th, td { border: 1px solid #000; padding: 3px; }
+th { font-weight: bold; background-color: #f2f2f2; }
+th.col-task, td.col-task { text-align: left; }
+th.col-accomplishment, td.col-accomplishment { text-align: left; }
+th.col-date, td.col-date { text-align: center; }
+th.col-priority, td.col-priority { text-align: center; }
+th.col-station, td.col-station { text-align: left; }
+.footer-image { position: fixed; bottom: 0; left: 0; width: 100%; max-height: 1in; height: auto; display: block; }
+.footer-text { position: fixed; bottom: 0.35in; left: 0; right: 0; font-size: 8pt; font-style: italic; color: #666; text-align: center; }
+.content-wrap { padding-bottom: 1.2in; }
+</style>
+</head>
+<body>
+' . $headerImg . '
+<h1 class="report-title">WORK FROM HOME INDIVIDUAL ACCOMPLISHMENT REPORT</h1>
+<p class="report-date">' . $h($subtitle) . '</p>
+<hr class="report-title-line">
+<div class="content-wrap">
+<p class="employee-name">Name: ' . $h($employeeName) . '</p>
+<table>
+<thead><tr>
+<th class="col-task">Targeted Task/ Assignments/ Output</th>
+<th class="col-accomplishment">Actual Accomplishment/Output</th>
+<th class="col-date">Date</th>
+<th class="col-priority">Priority</th>
+<th class="col-station">Station</th>
+</tr></thead>
+<tbody>' . $rows . '</tbody>
+</table>
+</div>
+' . $footerImg . '
+<p class="footer-text">© ' . $h($year) . ' DepEd</p>
+</body>
+</html>';
     }
 
     public function destroyTask(Request $request, SelfServiceTask $task): RedirectResponse
@@ -394,6 +453,75 @@ class WfhTimeInOutController extends Controller
         }
 
         return 0;
+    }
+
+    /**
+     * Get WFH PDF header/footer images as data URIs for DomPDF (no temp files, no path issues).
+     *
+     * @return array{0: string|null, 1: string|null} [headerImageDataUri, footerImageDataUri]
+     */
+    private function getWfhPdfTemplateImageDataUris(): array
+    {
+        $base = rtrim(public_path(), '/\\');
+        $headerPath = $base . '/Accomplishment Report Templates/header.jpg';
+        if (! is_file($headerPath)) {
+            $headerPath = $base . \DIRECTORY_SEPARATOR . 'Accomplishment Report Templates' . \DIRECTORY_SEPARATOR . 'header.jpg';
+        }
+        if (! is_file($headerPath)) {
+            $headerPath = $base . '/assets/img/header.png';
+        }
+        $footerPath = $base . '/Accomplishment Report Templates/footer.jpg';
+        if (! is_file($footerPath)) {
+            $footerPath = $base . \DIRECTORY_SEPARATOR . 'Accomplishment Report Templates' . \DIRECTORY_SEPARATOR . 'footer.jpg';
+        }
+        if (! is_file($footerPath)) {
+            $footerPath = $base . '/assets/img/footer.png';
+        }
+
+        $headerDataUri = null;
+        if ($headerPath !== '' && is_file($headerPath)) {
+            $content = @file_get_contents($headerPath);
+            if ($content !== false) {
+                $mime = (strtolower(pathinfo($headerPath, PATHINFO_EXTENSION)) === 'png') ? 'image/png' : 'image/jpeg';
+                $headerDataUri = 'data:' . $mime . ';base64,' . base64_encode($content);
+            }
+        }
+
+        $footerDataUri = null;
+        if ($footerPath !== '' && is_file($footerPath)) {
+            $content = @file_get_contents($footerPath);
+            if ($content !== false) {
+                $mime = (strtolower(pathinfo($footerPath, PATHINFO_EXTENSION)) === 'png') ? 'image/png' : 'image/jpeg';
+                $footerDataUri = 'data:' . $mime . ';base64,' . base64_encode($content);
+            }
+        }
+
+        return [$headerDataUri, $footerDataUri];
+    }
+
+    /**
+     * Build report date range subtitle for PDF header: (September 01, 2025-March 09, 2026).
+     *
+     * @param  \Illuminate\Support\Collection<int, \App\Models\SelfServiceTask>  $tasks
+     */
+    private function getReportDateRangeSubtitle($tasks): string
+    {
+        if ($tasks->isEmpty()) {
+            return '('.now()->format('F d, Y').')';
+        }
+        $minDate = $tasks->min(function ($t) {
+            return $t->due_date;
+        });
+        $maxDate = $tasks->max(function ($t) {
+            return $t->due_date_end ?? $t->due_date;
+        });
+        if (! $minDate || ! $maxDate) {
+            return '('.now()->format('F d, Y').')';
+        }
+        $from = $minDate instanceof \Carbon\Carbon ? $minDate : Carbon::parse($minDate);
+        $to = $maxDate instanceof \Carbon\Carbon ? $maxDate : Carbon::parse($maxDate);
+
+        return '('.$from->format('F d, Y').'-'.$to->format('F d, Y').')';
     }
 
     /** @return array{0: string, 1: string} [displayName, station] */

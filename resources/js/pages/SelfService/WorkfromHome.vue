@@ -324,11 +324,47 @@ function confirmComplete(): void {
     });
 }
 
-// Export uses server PDF; layout refers to app/Models/generate_pdf.php
+// Export: POST JSON to server; server builds HTML in PHP (no Blade) and returns PDF
+const exportPdfLoading = ref(false);
 function exportTasks(): void {
     const type = tasksTab.value === 'open' ? 'open' : 'completed';
-    const url = `/self-service/wfh-time-in-out/export/pdf?type=${encodeURIComponent(type)}`;
-    window.open(url, '_blank', 'noopener,noreferrer');
+    const url = '/self-service/wfh-time-in-out/export/pdf';
+    exportPdfLoading.value = true;
+    const csrfToken = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
+    fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/pdf',
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRF-TOKEN': csrfToken,
+        },
+        body: JSON.stringify({ type }),
+        credentials: 'same-origin',
+    })
+        .then(async (res) => {
+            if (!res.ok) throw new Error(res.statusText);
+            const disposition = res.headers.get('Content-Disposition');
+            const blob = await res.blob();
+            return { blob, disposition };
+        })
+        .then(({ blob, disposition }) => {
+            let filename = `tasklist_report_${type}_${new Date().toISOString().slice(0, 10)}.pdf`;
+            if (disposition) {
+                const m = disposition.match(/filename="?([^";\n]+)"?/);
+                if (m) filename = m[1].trim();
+            }
+            const u = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = u;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(u);
+        })
+        .catch(() => toast.error('Failed to export PDF.'))
+        .finally(() => {
+            exportPdfLoading.value = false;
+        });
 }
 
 // Create Task modal
@@ -710,11 +746,12 @@ function toggleClock(): void {
                         <div class="flex shrink-0 items-center gap-2">
                             <button
                                 type="button"
-                                class="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs font-medium text-foreground shadow-sm transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                class="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs font-medium text-foreground shadow-sm transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-60 disabled:pointer-events-none"
+                                :disabled="exportPdfLoading"
                                 @click="exportTasks"
                             >
                                 <Download class="size-4" />
-                                Export
+                                {{ exportPdfLoading ? 'Exporting…' : 'Export' }}
                             </button>
                             <button
                                 v-if="tasksTab === 'open'"
