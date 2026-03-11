@@ -6,6 +6,15 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { toast } from 'vue3-toastify';
 import { useSidebar } from '@/components/ui/sidebar/utils';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { formatPhilippineMobile } from '@/utils/phPhone';
 import EducationBackground from '@/pages/MyDetails/EducationBackground.vue';
 import Eligibility from '@/pages/MyDetails/Eligibility.vue';
@@ -41,6 +50,18 @@ const tabs = [
     'Others',
 ];
 
+const sectionSlugs = [
+    'official-info',
+    'personal-info',
+    'family-background',
+    'education-background',
+    'eligibility',
+    'work-experience',
+    'voluntary-work',
+    'training',
+    'others',
+];
+
 const sectionComponents = [
     OfficialInfo,
     PersonalInfo,
@@ -53,8 +74,30 @@ const sectionComponents = [
     Others,
 ] as const;
 
-const activeTab = ref(0);
+const page = usePage();
+function getTabIndexFromUrl(url: string): number {
+    try {
+        const search = new URL(url, window.location.origin).searchParams.get('section');
+        if (!search) return 0;
+        const idx = sectionSlugs.indexOf(search);
+        return idx >= 0 ? idx : 0;
+    } catch {
+        return 0;
+    }
+}
+const activeTab = ref(getTabIndexFromUrl(page.url));
 const avatarImageError = ref(false);
+
+const exportModalOpen = ref(false);
+const exportIncludePhoto = ref(true);
+const exportIncludeSignature = ref(true);
+
+function setActiveTab(index: number): void {
+    activeTab.value = index;
+    const slug = sectionSlugs[index];
+    const url = slug ? `/my-details?section=${slug}` : '/my-details';
+    window.history.replaceState(window.history.state, '', url);
+}
 
 type Profile = {
     hrId?: number | null;
@@ -104,11 +147,17 @@ const props = defineProps<{
     };
 }>();
 
-const page = usePage();
 const authUser = computed(() => page.props.auth.user);
 const flash = computed(() => page.props.flash as { success?: string; error?: string } | undefined);
 const lastToastedSuccess = ref<string | null>(null);
 const lastToastedError = ref<string | null>(null);
+
+watch(
+    () => page.url,
+    (url) => {
+        activeTab.value = getTabIndexFromUrl(url);
+    },
+);
 
 watch(
     () => flash.value?.success,
@@ -178,13 +227,9 @@ const currentHrid = computed<number | null>(() => {
 });
 
 const employeeEmail = computed(() => {
-    if (props.profile?.email) return props.profile.email;
     const c = props.contactInfo;
-    if (c?.email) return String(c.email);
-    const o = props.officialInfo;
-    if (o?.email) return String(o.email);
-    const authEmail = authUser.value?.email;
-    return typeof authEmail === 'string' && authEmail.length > 0 ? authEmail : 'N/A';
+    const email = c?.email != null ? String(c.email).trim() : '';
+    return email !== '' ? email : 'N/A';
 });
 
 const avatarSrc = computed(() => {
@@ -295,7 +340,19 @@ const refreshMyDetails = () => {
 };
 
 const exportPdsExcel = () => {
-    window.location.href = '/my-details/pds-export';
+    exportIncludePhoto.value = true;
+    exportIncludeSignature.value = true;
+    exportModalOpen.value = true;
+};
+
+const confirmExportPdsExcel = () => {
+    const params = new URLSearchParams();
+    params.set('includePhoto', exportIncludePhoto.value ? '1' : '0');
+    params.set('includeSignature', exportIncludeSignature.value ? '1' : '0');
+
+    toast.info('Preparing PDS export...', { autoClose: 1500 });
+    exportModalOpen.value = false;
+    window.location.href = `/my-details/pds-export?${params.toString()}`;
 };
 
 const onMyDetailsUpdated = (event: { hrid?: number | string } = {}) => {
@@ -358,7 +415,7 @@ onBeforeUnmount(() => {
                     type="button"
                     class="ehris-tab"
                     :class="{ 'is-active': activeTab === index }"
-                    @click="activeTab = index"
+                    @click="setActiveTab(index)"
                 >
                     {{ tab }}
                 </button>
@@ -414,6 +471,51 @@ onBeforeUnmount(() => {
                     Export PDS Excel
                 </button>
             </div>
+
+            <Dialog :open="exportModalOpen" @update:open="(v) => { exportModalOpen = v; }">
+                <DialogContent :show-close-button="true" class="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Export PDS Excel</DialogTitle>
+                    </DialogHeader>
+
+                    <div class="space-y-3">
+                        <p class="text-sm text-muted-foreground">
+                            Choose what to include in the exported file.
+                        </p>
+
+                        <label class="flex items-start gap-3 rounded-md border p-3">
+                            <input
+                                v-model="exportIncludePhoto"
+                                type="checkbox"
+                                class="mt-0.5 size-4 rounded border-input text-primary focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
+                            >
+                            <span class="space-y-0.5">
+                                <span class="block text-sm font-medium">Include photo</span>
+                                <span class="block text-xs text-muted-foreground">Embeds your passport photo in the PDS.</span>
+                            </span>
+                        </label>
+
+                        <label class="flex items-start gap-3 rounded-md border p-3">
+                            <input
+                                v-model="exportIncludeSignature"
+                                type="checkbox"
+                                class="mt-0.5 size-4 rounded border-input text-primary focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
+                            >
+                            <span class="space-y-0.5">
+                                <span class="block text-sm font-medium">Include eSignature</span>
+                                <span class="block text-xs text-muted-foreground">Embeds your signature in the PDS.</span>
+                            </span>
+                        </label>
+                    </div>
+
+                    <DialogFooter class="mt-4">
+                        <DialogClose as-child>
+                            <Button type="button" variant="ghost">Cancel</Button>
+                        </DialogClose>
+                        <Button type="button" @click="confirmExportPdsExcel">Export</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             <component
                 :is="sectionComponents[activeTab]"

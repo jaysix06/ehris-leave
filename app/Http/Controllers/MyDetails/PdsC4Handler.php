@@ -379,21 +379,54 @@ class PdsC4Handler
         $contentTypesPath = $extractRoot.'/[Content_Types].xml';
         $contentTypesXml = is_file($contentTypesPath) ? (file_get_contents($contentTypesPath) ?: '') : '';
 
+        $hasPhoto = $passportPhotoPath && is_file($passportPhotoPath);
+        $hasSignature = $signaturePath && is_file($signaturePath);
+        $photoAnchor = $this->findAnchorForShapeName($drawingXml, 'Text Box 100');
+
+        // When eSignature is included, clear signature-related instruction text
+        // (both worksheet cells and drawing text) to avoid overlap.
+        if ($hasSignature) {
+            $sheet4Xml = file_get_contents($sheet4Path) ?: '';
+            if ($sheet4Xml !== '') {
+                $sharedStringsPath = $extractRoot.'/xl/sharedStrings.xml';
+                $sharedStrings = is_file($sharedStringsPath) ? $this->loadSharedStrings($sharedStringsPath) : [];
+                $sheet4Xml = $this->removeInstructionTextFromWorksheet($sheet4Xml, $sharedStrings);
+                file_put_contents($sheet4Path, $sheet4Xml);
+            }
+
+            $drawingXml = $this->removeSignatureInstructionTextFromDrawing($drawingXml);
+        }
+
+        // If both toggles are off, strip all pictures from this sheet's drawing.
+        if (! $hasPhoto && ! $hasSignature) {
+            $drawingXml = $this->removeAllPicturesFromDrawing($drawingXml);
+        }
+
+        // Remove template/old photo images in the photo box region.
+        // Only remove the placeholder text box when we are inserting an actual photo.
+        if ($hasPhoto) {
+            $drawingXml = $this->removeDrawingTextBoxByName($drawingXml, 'Text Box 100');
+        }
+        $drawingXml = $this->removeDrawingPictureByName($drawingXml, 'PDS Passport Photo');
+        $drawingXml = $this->removeDrawingPicturesInAnchorBox($drawingXml, 9, 12, 49, 54);
+
+        // Remove template/old signature images in the signature box region.
+        $drawingXml = $this->removeDrawingPictureByName($drawingXml, 'PDS Signature');
+        $drawingXml = $this->removeDrawingPicturesInAnchorBox($drawingXml, 5, 8, 59, 61);
+
         $updated = false;
-        if ($passportPhotoPath && is_file($passportPhotoPath)) {
+        if ($hasPhoto) {
             $prepared = $this->preparePassportPhoto($passportPhotoPath, $tempRoot);
             if ($prepared !== null) {
                 $mediaName = $this->nextMediaFilename($mediaDir, 'png');
                 if (@copy($prepared, $mediaDir.'/'.$mediaName)) {
                     $rid = $this->appendDrawingRelationship($drawingRelsXml, '../media/'.$mediaName, 'image');
-                    $anchor = $this->findAnchorForShapeName($drawingXml, 'Text Box 100');
-                    $drawingXml = $this->removeDrawingTextBoxByName($drawingXml, 'Text Box 100');
                     $drawingXml = $this->appendPictureToDrawing(
                         $drawingXml,
                         $rid,
                         'PDS Passport Photo',
-                        $anchor['from'] ?? ['col' => 9, 'colOff' => 0, 'row' => 49, 'rowOff' => 0],
-                        $anchor['to'] ?? ['col' => 12, 'colOff' => 0, 'row' => 54, 'rowOff' => 0]
+                        $photoAnchor['from'] ?? ['col' => 9, 'colOff' => 0, 'row' => 49, 'rowOff' => 0],
+                        $photoAnchor['to'] ?? ['col' => 12, 'colOff' => 0, 'row' => 54, 'rowOff' => 0]
                     );
                     $contentTypesXml = $this->ensureContentTypeForExtension($contentTypesXml, 'png', 'image/png');
                     $updated = true;
@@ -401,7 +434,7 @@ class PdsC4Handler
             }
         }
 
-        if ($signaturePath && is_file($signaturePath)) {
+        if ($hasSignature) {
             $prepared = $this->prepareSignatureImage($signaturePath, $tempRoot);
             if ($prepared !== null) {
                 $mediaName = $this->nextMediaFilename($mediaDir, 'png');
@@ -412,7 +445,9 @@ class PdsC4Handler
                         $rid,
                         'PDS Signature',
                         ['col' => 5, 'colOff' => 0, 'row' => 59, 'rowOff' => 0],
-                        ['col' => 8, 'colOff' => 0, 'row' => 61, 'rowOff' => 0]
+                        // Enlarged to approximately 3.07" (W) x 0.85" (H)
+                        // from approximately 2.83" (W) x 0.73" (H).
+                        ['col' => 8, 'colOff' => 219456, 'row' => 61, 'rowOff' => 109728]
                     );
                     $contentTypesXml = $this->ensureContentTypeForExtension($contentTypesXml, 'png', 'image/png');
                     $updated = true;
@@ -420,8 +455,8 @@ class PdsC4Handler
             }
         }
 
+        file_put_contents($drawingPath, $drawingXml);
         if ($updated) {
-            file_put_contents($drawingPath, $drawingXml);
             file_put_contents($drawingRelsPath, $drawingRelsXml);
             if ($contentTypesXml !== '' && is_file($contentTypesPath)) {
                 file_put_contents($contentTypesPath, $contentTypesXml);
@@ -523,6 +558,7 @@ class PdsC4Handler
         $target = str_replace('\\', '/', $target);
         if (str_starts_with($target, '/')) {
             $target = ltrim($target, '/');
+
             return dirname($worksheetDir).'/'.$target;
         }
 
@@ -664,6 +700,16 @@ class PdsC4Handler
         $prst->setAttribute('prst', 'rect');
         $prst->appendChild($dom->createElementNS('http://schemas.openxmlformats.org/drawingml/2006/main', 'a:avLst'));
         $spPr->appendChild($prst);
+        if ($name === 'PDS Passport Photo') {
+            $ln = $dom->createElementNS('http://schemas.openxmlformats.org/drawingml/2006/main', 'a:ln');
+            $ln->setAttribute('w', '25400');
+            $solidFill = $dom->createElementNS('http://schemas.openxmlformats.org/drawingml/2006/main', 'a:solidFill');
+            $srgb = $dom->createElementNS('http://schemas.openxmlformats.org/drawingml/2006/main', 'a:srgbClr');
+            $srgb->setAttribute('val', '000000');
+            $solidFill->appendChild($srgb);
+            $ln->appendChild($solidFill);
+            $spPr->appendChild($ln);
+        }
         $pic->appendChild($spPr);
 
         $twoCell->appendChild($pic);
@@ -699,6 +745,7 @@ class PdsC4Handler
         $readAnchor = function (\DOMElement $anchor) use ($xpath): array {
             $get = function (string $tag) use ($xpath, $anchor): int {
                 $node = $xpath->query('xdr:'.$tag, $anchor)->item(0);
+
                 return $node ? (int) $node->nodeValue : 0;
             };
 
@@ -714,6 +761,179 @@ class PdsC4Handler
             'from' => $readAnchor($from),
             'to' => $readAnchor($to),
         ];
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function loadSharedStrings(string $sharedStringsPath): array
+    {
+        $sharedStrings = [];
+        $dom = new \DOMDocument('1.0', 'UTF-8');
+        if (! @$dom->load($sharedStringsPath)) {
+            return [];
+        }
+
+        $xpath = new \DOMXPath($dom);
+        foreach ($xpath->query("//*[local-name()='si']") as $si) {
+            $sharedStrings[] = trim((string) $si->textContent);
+        }
+
+        return $sharedStrings;
+    }
+
+    private function isSignatureInstructionText(string $text): bool
+    {
+        $t = mb_strtolower(trim($text));
+        if ($t === '') {
+            return false;
+        }
+
+        $phrases = [
+            'wet signature',
+            'e-signature',
+            'esignature',
+            're-signature',
+            'digital certificate',
+            'notary public',
+            'signa',
+        ];
+
+        foreach ($phrases as $phrase) {
+            if (str_contains($t, $phrase)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function isPhotoPlaceholderText(string $text): bool
+    {
+        $t = mb_strtolower(trim($text));
+        if ($t === '') {
+            return false;
+        }
+
+        return str_contains($t, 'passport-sized')
+            || str_contains($t, 'unfiltered')
+            || str_contains($t, 'digital picture')
+            || str_contains($t, 'taken within')
+            || str_contains($t, '4.5 cm')
+            || str_contains($t, '3.5 cm');
+    }
+
+    private function isInstructionText(string $text): bool
+    {
+        return $this->isSignatureInstructionText($text) || $this->isPhotoPlaceholderText($text);
+    }
+
+    /**
+     * Blank any worksheet cells that contain signature instruction text.
+     *
+     * @param  array<int, string>  $sharedStrings
+     */
+    private function removeInstructionTextFromWorksheet(string $worksheetXml, array $sharedStrings): string
+    {
+        $dom = new \DOMDocument('1.0', 'UTF-8');
+        if (! @$dom->loadXML($worksheetXml)) {
+            return $worksheetXml;
+        }
+
+        $xpath = new \DOMXPath($dom);
+        foreach ($xpath->query("//*[local-name()='sheetData']//*[local-name()='c']") as $cell) {
+            if (! $cell instanceof \DOMElement) {
+                continue;
+            }
+
+            $type = $cell->getAttribute('t');
+            $value = '';
+
+            if ($type === 's') {
+                $vNode = $xpath->query("*[local-name()='v']", $cell)->item(0);
+                $stringIndex = $vNode ? (int) trim((string) $vNode->textContent) : -1;
+                $value = ($stringIndex >= 0 && isset($sharedStrings[$stringIndex])) ? $sharedStrings[$stringIndex] : '';
+            } elseif ($type === 'inlineStr') {
+                $value = trim((string) $xpath->query("string(*[local-name()='is'])", $cell));
+            } else {
+                $vNode = $xpath->query("*[local-name()='v']", $cell)->item(0);
+                $value = $vNode ? trim((string) $vNode->textContent) : '';
+            }
+
+            if (! $this->isSignatureInstructionText($value)) {
+                continue;
+            }
+
+            foreach ($xpath->query("*[local-name()='v' or local-name()='is']", $cell) as $child) {
+                if ($child instanceof \DOMNode) {
+                    $cell->removeChild($child);
+                }
+            }
+            $cell->removeAttribute('t');
+        }
+
+        return $dom->saveXML() ?: $worksheetXml;
+    }
+
+    private function blankSharedStringsByMatcher(string $sharedStringsPath): void
+    {
+        $dom = new \DOMDocument('1.0', 'UTF-8');
+        if (! @$dom->load($sharedStringsPath)) {
+            return;
+        }
+
+        $xpath = new \DOMXPath($dom);
+        foreach ($xpath->query("//*[local-name()='si']") as $si) {
+            if (! $si instanceof \DOMElement) {
+                continue;
+            }
+
+            $text = trim((string) $si->textContent);
+            if (! $this->isSignatureInstructionText($text)) {
+                continue;
+            }
+
+            foreach ($xpath->query(".//*[local-name()='t']", $si) as $tNode) {
+                if ($tNode instanceof \DOMNode) {
+                    $tNode->textContent = '';
+                }
+            }
+        }
+
+        file_put_contents($sharedStringsPath, $dom->saveXML() ?: '');
+    }
+
+    private function removeSignatureInstructionTextFromDrawing(string $drawingXml): string
+    {
+        $dom = new \DOMDocument('1.0', 'UTF-8');
+        $dom->preserveWhiteSpace = false;
+        $dom->formatOutput = false;
+        if (! $this->safelyLoadXml($dom, $drawingXml)) {
+            return $drawingXml;
+        }
+        $xpath = new \DOMXPath($dom);
+        $xpath->registerNamespace('xdr', 'http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing');
+        $xpath->registerNamespace('a', 'http://schemas.openxmlformats.org/drawingml/2006/main');
+        $txBodies = $xpath->query('//xdr:txBody');
+        if ($txBodies === false) {
+            return $dom->saveXML() ?: $drawingXml;
+        }
+        foreach ($txBodies as $txBody) {
+            if (! $txBody instanceof \DOMElement) {
+                continue;
+            }
+            $text = trim((string) $txBody->textContent);
+            if (! $this->isInstructionText($text)) {
+                continue;
+            }
+            foreach ($xpath->query('.//a:t', $txBody) as $tNode) {
+                if ($tNode instanceof \DOMNode) {
+                    $tNode->textContent = '';
+                }
+            }
+        }
+
+        return $dom->saveXML() ?: $drawingXml;
     }
 
     private function removeDrawingTextBoxByName(string $drawingXml, string $name): string
@@ -733,6 +953,110 @@ class PdsC4Handler
                 if ($node instanceof \DOMNode) {
                     $node->parentNode?->removeChild($node);
                 }
+            }
+        }
+
+        return $dom->saveXML() ?: $drawingXml;
+    }
+
+    private function removeDrawingPictureByName(string $drawingXml, string $name): string
+    {
+        $dom = new \DOMDocument('1.0', 'UTF-8');
+        $dom->preserveWhiteSpace = false;
+        $dom->formatOutput = false;
+        if (! $this->safelyLoadXml($dom, $drawingXml)) {
+            return $drawingXml;
+        }
+
+        $xpath = new \DOMXPath($dom);
+        $xpath->registerNamespace('xdr', 'http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing');
+        $nodes = $xpath->query("//xdr:twoCellAnchor[xdr:pic/xdr:nvPicPr/xdr:cNvPr[@name='{$name}']]");
+        if ($nodes !== false) {
+            foreach ($nodes as $node) {
+                if ($node instanceof \DOMNode) {
+                    $node->parentNode?->removeChild($node);
+                }
+            }
+        }
+
+        return $dom->saveXML() ?: $drawingXml;
+    }
+
+    private function removeAllPicturesFromDrawing(string $drawingXml): string
+    {
+        $dom = new \DOMDocument('1.0', 'UTF-8');
+        $dom->preserveWhiteSpace = false;
+        $dom->formatOutput = false;
+        if (! $this->safelyLoadXml($dom, $drawingXml)) {
+            return $drawingXml;
+        }
+
+        $xpath = new \DOMXPath($dom);
+        $xpath->registerNamespace('xdr', 'http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing');
+        $nodes = $xpath->query('//xdr:twoCellAnchor[xdr:pic]');
+        if ($nodes !== false) {
+            foreach ($nodes as $node) {
+                if ($node instanceof \DOMNode) {
+                    $node->parentNode?->removeChild($node);
+                }
+            }
+        }
+
+        return $dom->saveXML() ?: $drawingXml;
+    }
+
+    /**
+     * Remove any picture anchors that overlap a given cell box.
+     */
+    private function removeDrawingPicturesInAnchorBox(
+        string $drawingXml,
+        int $fromCol,
+        int $toCol,
+        int $fromRow,
+        int $toRow
+    ): string {
+        $dom = new \DOMDocument('1.0', 'UTF-8');
+        $dom->preserveWhiteSpace = false;
+        $dom->formatOutput = false;
+        if (! $this->safelyLoadXml($dom, $drawingXml)) {
+            return $drawingXml;
+        }
+
+        $xpath = new \DOMXPath($dom);
+        $xpath->registerNamespace('xdr', 'http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing');
+
+        $anchors = $xpath->query('//xdr:twoCellAnchor[xdr:pic]');
+        if ($anchors === false) {
+            return $dom->saveXML() ?: $drawingXml;
+        }
+
+        $toInt = fn (?string $v): int => is_string($v) ? (int) trim($v) : 0;
+
+        foreach (iterator_to_array($anchors) as $anchor) {
+            if (! $anchor instanceof \DOMElement) {
+                continue;
+            }
+
+            $from = $xpath->query('xdr:from', $anchor)->item(0);
+            $to = $xpath->query('xdr:to', $anchor)->item(0);
+            if (! $from instanceof \DOMElement || ! $to instanceof \DOMElement) {
+                continue;
+            }
+
+            $aFromCol = $toInt($xpath->query('xdr:col', $from)->item(0)?->nodeValue);
+            $aFromRow = $toInt($xpath->query('xdr:row', $from)->item(0)?->nodeValue);
+            $aToCol = $toInt($xpath->query('xdr:col', $to)->item(0)?->nodeValue);
+            $aToRow = $toInt($xpath->query('xdr:row', $to)->item(0)?->nodeValue);
+
+            $overlaps = ! (
+                $aToCol < $fromCol
+                || $aFromCol > $toCol
+                || $aToRow < $fromRow
+                || $aFromRow > $toRow
+            );
+
+            if ($overlaps) {
+                $anchor->parentNode?->removeChild($anchor);
             }
         }
 
@@ -786,6 +1110,7 @@ class PdsC4Handler
         $srcHeight = imagesy($image);
         if ($srcWidth <= 0 || $srcHeight <= 0) {
             imagedestroy($image);
+
             return null;
         }
 
@@ -807,6 +1132,7 @@ class PdsC4Handler
         $dst = imagecreatetruecolor($targetWidth, $targetHeight);
         if ($dst === false) {
             imagedestroy($image);
+
             return null;
         }
         imagealphablending($dst, false);
@@ -841,8 +1167,8 @@ class PdsC4Handler
             return $sourcePath;
         }
 
-        $maxWidth = 800;
-        $maxHeight = 250;
+        $maxWidth = 260;
+        $maxHeight = 90;
         $image = $this->loadImageResource($sourcePath);
         if (! $image) {
             return null;
@@ -852,6 +1178,7 @@ class PdsC4Handler
         $srcHeight = imagesy($image);
         if ($srcWidth <= 0 || $srcHeight <= 0) {
             imagedestroy($image);
+
             return null;
         }
 
@@ -862,6 +1189,7 @@ class PdsC4Handler
         $dst = imagecreatetruecolor($targetWidth, $targetHeight);
         if ($dst === false) {
             imagedestroy($image);
+
             return null;
         }
         imagealphablending($dst, false);
@@ -900,6 +1228,7 @@ class PdsC4Handler
     private function loadImageResource(string $path): mixed
     {
         $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+
         return match ($ext) {
             'jpg', 'jpeg' => @imagecreatefromjpeg($path),
             'png' => @imagecreatefrompng($path),

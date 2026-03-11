@@ -173,8 +173,18 @@ const mainNavItems = computed<NavItem[]>(() => {
     },
     {
         title: 'My Details',
-        href: myDetails(),
         icon: BookUser,
+        children: [
+            { title: 'Official Info', href: myDetails({ query: { section: 'official-info' } }) },
+            { title: 'Personal Info', href: myDetails({ query: { section: 'personal-info' } }) },
+            { title: 'Family Background', href: myDetails({ query: { section: 'family-background' } }) },
+            { title: 'Education Background', href: myDetails({ query: { section: 'education-background' } }) },
+            { title: 'Eligibility', href: myDetails({ query: { section: 'eligibility' } }) },
+            { title: 'Work Experience', href: myDetails({ query: { section: 'work-experience' } }) },
+            { title: 'Voluntary Work', href: myDetails({ query: { section: 'voluntary-work' } }) },
+            { title: 'Training', href: myDetails({ query: { section: 'training' } }) },
+            { title: 'Others', href: myDetails({ query: { section: 'others' } }) },
+        ],
     },
     {
         title: 'Utilities',
