@@ -238,19 +238,27 @@ onMounted(() => {
                                     <div class="ehris-edu-field ehris-edu-field-period">
                                         <label class="ehris-edu-label">Period of attendance — From</label>
                                         <Input
-                                            v-model="row.from_year"
+                                            :model-value="row.from_year"
                                             type="text"
                                             class="ehris-edu-input"
+                                            inputmode="numeric"
+                                            pattern="[0-9]*"
+                                            maxlength="4"
                                             placeholder="e.g. 2011"
+                                            @update:modelValue="(v) => { row.from_year = String(v ?? '').replace(/\\D+/g, '').slice(0, 4); }"
                                         />
                                     </div>
                                     <div class="ehris-edu-field ehris-edu-field-period">
                                         <label class="ehris-edu-label">To</label>
                                         <Input
-                                            v-model="row.to_year"
+                                            :model-value="row.to_year"
                                             type="text"
                                             class="ehris-edu-input"
+                                            inputmode="numeric"
+                                            pattern="[0-9]*"
+                                            maxlength="4"
                                             placeholder="e.g. 2015"
+                                            @update:modelValue="(v) => { row.to_year = String(v ?? '').replace(/\\D+/g, '').slice(0, 4); }"
                                         />
                                     </div>
                                 </div>
@@ -266,10 +274,14 @@ onMounted(() => {
                                 <div class="ehris-edu-field ehris-edu-field-inline">
                                     <label class="ehris-edu-label">Year graduated</label>
                                     <Input
-                                        v-model="row.year_graduated"
+                                        :model-value="row.year_graduated"
                                         type="text"
                                         class="ehris-edu-input ehris-edu-input-year"
+                                        inputmode="numeric"
+                                        pattern="[0-9]*"
+                                        maxlength="4"
                                         placeholder="e.g. 2019"
+                                        @update:modelValue="(v) => { row.year_graduated = String(v ?? '').replace(/\\D+/g, '').slice(0, 4); }"
                                     />
                                 </div>
                                 <div class="ehris-edu-field ehris-edu-field-full">

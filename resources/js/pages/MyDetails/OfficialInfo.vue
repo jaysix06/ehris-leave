@@ -25,6 +25,34 @@ function valInput(v: unknown): string {
     return String(v);
 }
 
+function normalizeDateToIso(v: unknown): string {
+    const raw = valInput(v).trim();
+    if (raw === '') {
+        return '';
+    }
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+        return raw;
+    }
+
+    const ymdSlash = raw.match(/^(\d{4})\/(\d{2})\/(\d{2})$/);
+    if (ymdSlash) {
+        return `${ymdSlash[1]}-${ymdSlash[2]}-${ymdSlash[3]}`;
+    }
+
+    const dmySlash = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (dmySlash) {
+        return `${dmySlash[3]}-${dmySlash[2]}-${dmySlash[1]}`;
+    }
+
+    const dmyDash = raw.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+    if (dmyDash) {
+        return `${dmyDash[3]}-${dmyDash[2]}-${dmyDash[1]}`;
+    }
+
+    return '';
+}
+
 const props = defineProps<{
     officialInfo?: Record<string, unknown> | null;
     officialUpdateUrl?: string;
@@ -105,8 +133,8 @@ function openEdit(): void {
         employ_status: valInput(o.employ_status),
         salary_grade: valInput(o.salary_grade),
         step: valInput(o.step),
-        date_of_joining: valInput(o.date_of_joining),
-        date_of_promotion: valInput(o.date_of_promotion),
+        date_of_joining: normalizeDateToIso(o.date_of_joining),
+        date_of_promotion: normalizeDateToIso(o.date_of_promotion),
         year_experience: valInput(o.year_experience),
         role: valInput(o.role),
         division_code: valInput(o.division_office_name ?? o.division_code),
@@ -354,11 +382,11 @@ function submit(): void {
                         </label>
                         <label class="ehris-modal-field">
                             <span>Date of Joining</span>
-                            <Input v-model="form.date_of_joining" />
+                            <Input v-model="form.date_of_joining" type="date" />
                         </label>
                         <label class="ehris-modal-field">
                             <span>Date of Promotion</span>
-                            <Input v-model="form.date_of_promotion" />
+                            <Input v-model="form.date_of_promotion" type="date" />
                         </label>
                         <label class="ehris-modal-field">
                             <span>Years of Experience</span>
