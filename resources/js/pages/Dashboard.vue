@@ -10,6 +10,7 @@ import {
     LinearScale,
     PointElement,
     Tooltip,
+    type TooltipItem,
 } from 'chart.js';
 import {
     Activity,
@@ -280,8 +281,9 @@ const attendanceTimelineOptions = computed(() => {
                 titleFont: { family: 'Manrope', weight: 'bold' as const },
                 bodyFont: { family: 'Manrope' },
                 callbacks: {
-                    label(context: { parsed: { y: number } }): string {
-                        return context.parsed.y > 0 ? 'Present' : 'Absent/Leave/WFH';
+                    label(context: TooltipItem<'line'>): string {
+                        const value = context.parsed.y ?? 0;
+                        return value > 0 ? 'Present' : 'Absent/Leave/WFH';
                     },
                 },
             },
