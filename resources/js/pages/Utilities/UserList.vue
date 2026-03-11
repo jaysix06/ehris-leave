@@ -959,12 +959,12 @@ onBeforeUnmount(() => {
                     <input v-model="createState.form.firstname" type="text" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
                 </div>
                 <div class="space-y-1">
-                    <label class="text-sm text-muted-foreground">Last name</label>
-                    <input v-model="createState.form.lastname" type="text" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
-                </div>
-                <div class="space-y-1">
                     <label class="text-sm text-muted-foreground">Middle name</label>
                     <input v-model="createState.form.middlename" type="text" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
+                </div>
+                <div class="space-y-1">
+                    <label class="text-sm text-muted-foreground">Last name</label>
+                    <input v-model="createState.form.lastname" type="text" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
                 </div>
                 <div class="space-y-1">
                     <label class="text-sm text-muted-foreground">Extension</label>

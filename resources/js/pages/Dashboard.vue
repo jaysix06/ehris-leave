@@ -1,46 +1,43 @@
 <script setup lang="ts">
+import { Head, Link, usePage } from '@inertiajs/vue3';
 import {
     ArcElement,
     BarElement,
     CategoryScale,
     Chart as ChartJS,
     Legend,
+    LineElement,
     LinearScale,
+    PointElement,
     Tooltip,
+    type TooltipItem,
 } from 'chart.js';
-import { Head, Link, usePage } from '@inertiajs/vue3';
 import {
     Activity,
     ArrowRight,
     CalendarRange,
     ClipboardCheck,
-    CreditCard,
-    FileText,
     IdCard,
-    LayoutGrid,
     Settings,
     UserCircle,
     Users,
-    UsersRound,
 } from 'lucide-vue-next';
-import { Bar, Doughnut } from 'vue-chartjs';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import type { Component } from 'vue';
+import { Bar, Doughnut, Line } from 'vue-chartjs';
 import AppLayout from '@/layouts/AppLayout.vue';
 import {
     dashboard,
-    employeeManagement,
     myDetails,
-    reports,
-    requestStatus,
-    selfService,
     utilities,
 } from '@/routes';
-import { leaveApplication, idCard as selfServiceIdCard } from '@/routes/self-service';
-import { employeeListing } from '@/routes/reports';
+import {
+    idCard as selfServiceIdCard,
+    wfhTimeInOut as selfServiceWFHAttendance,
+} from '@/routes/self-service';
 import type { BreadcrumbItem } from '@/types';
-import type { Component } from 'vue';
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend);
+ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, LineElement, PointElement, Tooltip, Legend);
 
 const pageTitle = 'Dashboard';
 
@@ -52,6 +49,66 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 const page = usePage();
+const authUserRole = computed(() => String((page.props.auth?.user as Record<string, unknown> | undefined)?.role ?? '').trim().toLowerCase());
+const isEmployeeOrTeacher = computed(() => ['employee', 'teacher'].includes(authUserRole.value));
+const canViewOverviewMetrics = computed(() => !['employee', 'teacher'].includes(authUserRole.value));
+
+type DashboardAttendance = {
+    isClockedIn: boolean;
+    hoursWorkedThisWeek: string;
+    lastTimeIn: string | null;
+    lastTimeOut: string | null;
+};
+type DashboardAttendanceTrends = {
+    recentTimeline: number[];
+    monthlyLateCount: number;
+    monthlyUndertimeCount: number;
+};
+const dashboardAttendance = computed<DashboardAttendance>(() => {
+    const source = (page.props.dashboardAttendance as Partial<DashboardAttendance> | undefined) ?? {};
+    return {
+        isClockedIn: Boolean(source.isClockedIn),
+        hoursWorkedThisWeek: typeof source.hoursWorkedThisWeek === 'string' ? source.hoursWorkedThisWeek : '00:00:00',
+        lastTimeIn: typeof source.lastTimeIn === 'string' ? source.lastTimeIn : null,
+        lastTimeOut: typeof source.lastTimeOut === 'string' ? source.lastTimeOut : null,
+    };
+});
+const dashboardAttendanceTrends = computed<DashboardAttendanceTrends>(() => {
+    const source = (page.props.dashboardAttendanceTrends as Partial<DashboardAttendanceTrends> | undefined) ?? {};
+    return {
+        recentTimeline: Array.isArray(source.recentTimeline) && source.recentTimeline.length === 7
+            ? source.recentTimeline.map(value => (Number(value) > 0 ? 1 : 0))
+            : [0, 0, 0, 0, 0, 0, 0],
+        monthlyLateCount: Number.isFinite(Number(source.monthlyLateCount)) ? Number(source.monthlyLateCount) : 0,
+        monthlyUndertimeCount: Number.isFinite(Number(source.monthlyUndertimeCount)) ? Number(source.monthlyUndertimeCount) : 0,
+    };
+});
+const clockStatusLabel = computed(() => (dashboardAttendance.value.isClockedIn ? 'Clocked In' : 'Clocked Out'));
+const clockStatusClass = computed(() =>
+    dashboardAttendance.value.isClockedIn
+        ? 'border-emerald-200 bg-emerald-500/10 text-emerald-700 dark:border-emerald-900/70 dark:text-emerald-300'
+        : 'border-slate-200 bg-slate-500/10 text-slate-700 dark:border-slate-700 dark:text-slate-300',
+);
+
+function formatClockStamp(value: string | null): string {
+    if (!value) {
+        return '-';
+    }
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+        return '-';
+    }
+
+    return date.toLocaleString('en-US', {
+        month: 'short',
+        day: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+    });
+}
 const showPopups = computed(() => (page.props.showPopups ?? false) as boolean);
 const activePopups = computed(() => (page.props.activePopups ?? []) as Array<{
     id: number;
@@ -64,7 +121,6 @@ const activePopups = computed(() => (page.props.activePopups ?? []) as Array<{
 const dismissedPopups = ref<number[]>([]);
 
 const visiblePopups = computed(() => {
-    // Only show popups if showPopups flag is true (after login)
     if (!showPopups.value) {
         return [];
     }
@@ -109,30 +165,43 @@ const stats: StatItem[] = [
 // ---------------------------------------------------------------------------
 // Charts — Monthly Leave Trend (Bar)
 // ---------------------------------------------------------------------------
-const leaveMonthlyData = computed(() => {
+const durationToHours = (value: string): number => {
+    const [rawHours, rawMinutes, rawSeconds] = value.split(':');
+    const hours = Number.parseInt(rawHours ?? '0', 10);
+    const minutes = Number.parseInt(rawMinutes ?? '0', 10);
+    const seconds = Number.parseInt(rawSeconds ?? '0', 10);
+
+    if (Number.isNaN(hours) || Number.isNaN(minutes) || Number.isNaN(seconds)) {
+        return 0;
+    }
+
+    return Math.round((hours + (minutes / 60) + (seconds / 3600)) * 100) / 100;
+};
+
+const expectedWeeklyHours = 40;
+const workedWeeklyHours = computed(() => durationToHours(dashboardAttendance.value.hoursWorkedThisWeek));
+const recentAttendanceTimeline = computed(() => dashboardAttendanceTrends.value.recentTimeline);
+const monthlyLateCount = computed(() => dashboardAttendanceTrends.value.monthlyLateCount);
+const monthlyUndertimeCount = computed(() => dashboardAttendanceTrends.value.monthlyUndertimeCount);
+
+const workHoursTrendData = computed(() => {
     void themeKey.value;
+
     return {
-        labels: ['Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'],
+        labels: ['Worked Hours', 'Expected Hours'],
         datasets: [
             {
-                label: 'Approved',
-                data: [12, 19, 8, 15, 22, 14],
-                backgroundColor: cssVar('--chart-2'),
-                borderRadius: 6,
-                borderSkipped: false as const,
-            },
-            {
-                label: 'Pending',
-                data: [3, 5, 2, 8, 4, 6],
-                backgroundColor: cssVar('--chart-3'),
-                borderRadius: 6,
+                label: 'Hours',
+                data: [workedWeeklyHours.value, expectedWeeklyHours],
+                backgroundColor: [cssVar('--chart-1'), cssVar('--chart-3')],
+                borderRadius: 8,
                 borderSkipped: false as const,
             },
         ],
     };
 });
 
-const leaveMonthlyOptions = computed(() => {
+const workHoursTrendOptions = computed(() => {
     void themeKey.value;
     const mutedFg = cssVar('--muted-foreground');
     const border = cssVar('--border');
@@ -141,17 +210,7 @@ const leaveMonthlyOptions = computed(() => {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
-            legend: {
-                position: 'top' as const,
-                align: 'end' as const,
-                labels: {
-                    color: mutedFg,
-                    usePointStyle: true,
-                    pointStyle: 'rectRounded' as const,
-                    padding: 16,
-                    font: { size: 12, family: 'Manrope', weight: 'bold' as const },
-                },
-            },
+            legend: { display: false },
             tooltip: {
                 backgroundColor: cssVar('--card'),
                 titleColor: cssVar('--foreground'),
@@ -167,40 +226,112 @@ const leaveMonthlyOptions = computed(() => {
         scales: {
             x: {
                 grid: { display: false },
-                ticks: { color: mutedFg, font: { size: 12, family: 'Manrope' } },
+                ticks: { color: mutedFg, font: { size: 12, family: 'Manrope', weight: 'bold' as const } },
                 border: { display: false },
             },
             y: {
+                beginAtZero: true,
+                suggestedMax: expectedWeeklyHours,
                 grid: { color: border },
-                ticks: { color: mutedFg, font: { size: 12, family: 'Manrope' }, stepSize: 5 },
+                ticks: { color: mutedFg, font: { size: 12, family: 'Manrope' } },
                 border: { display: false },
             },
         },
     };
 });
 
-// ---------------------------------------------------------------------------
-// Charts — Leave Status (Doughnut)
-// ---------------------------------------------------------------------------
-const leaveStatusData = computed(() => {
+const attendanceTimelineData = computed(() => {
     void themeKey.value;
+
     return {
-        labels: ['Approved', 'Pending', 'Rejected'],
+        labels: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
         datasets: [
             {
-                data: [45, 18, 5],
-                backgroundColor: [cssVar('--chart-2'), cssVar('--chart-3'), cssVar('--chart-5')],
-                borderWidth: 0,
-                spacing: 3,
-                borderRadius: 4,
+                label: 'Attendance',
+                data: recentAttendanceTimeline.value,
+                borderColor: cssVar('--chart-2'),
+                backgroundColor: cssVar('--chart-2'),
+                tension: 0.35,
+                pointRadius: 3,
+                pointHoverRadius: 4,
+                fill: false,
             },
         ],
     };
 });
 
-const leaveStatusOptions = computed(() => {
+const attendanceTimelineOptions = computed(() => {
     void themeKey.value;
     const mutedFg = cssVar('--muted-foreground');
+    const border = cssVar('--border');
+
+    return {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { display: false },
+            tooltip: {
+                backgroundColor: cssVar('--card'),
+                titleColor: cssVar('--foreground'),
+                bodyColor: mutedFg,
+                borderColor: border,
+                borderWidth: 1,
+                cornerRadius: 8,
+                padding: 10,
+                titleFont: { family: 'Manrope', weight: 'bold' as const },
+                bodyFont: { family: 'Manrope' },
+                callbacks: {
+                    label(context: TooltipItem<'line'>): string {
+                        const value = context.parsed.y ?? 0;
+                        return value > 0 ? 'Present' : 'Absent/Leave/WFH';
+                    },
+                },
+            },
+        },
+        scales: {
+            x: {
+                grid: { display: false },
+                ticks: { color: mutedFg, font: { size: 12, family: 'Manrope' } },
+                border: { display: false },
+            },
+            y: {
+                min: 0,
+                max: 1,
+                ticks: {
+                    color: mutedFg,
+                    stepSize: 1,
+                    callback(value: string | number): string {
+                        return Number(value) === 1 ? 'Present' : 'Absent';
+                    },
+                    font: { size: 12, family: 'Manrope' },
+                },
+                grid: { color: border },
+                border: { display: false },
+            },
+        },
+    };
+});
+
+const leaveOverviewData = computed(() => {
+    void themeKey.value;
+
+    return {
+        labels: ['Vacation', 'Sick', 'Emergency'],
+        datasets: [
+            {
+                data: [0, 0, 0],
+                backgroundColor: [cssVar('--chart-3'), cssVar('--chart-4'), cssVar('--chart-5')],
+                borderColor: cssVar('--card'),
+                borderWidth: 2,
+            },
+        ],
+    };
+});
+
+const leaveOverviewOptions = computed(() => {
+    void themeKey.value;
+    const mutedFg = cssVar('--muted-foreground');
+
     return {
         responsive: true,
         maintainAspectRatio: false,
@@ -212,113 +343,130 @@ const leaveStatusOptions = computed(() => {
                     color: mutedFg,
                     usePointStyle: true,
                     pointStyle: 'circle' as const,
-                    padding: 16,
+                    padding: 14,
                     font: { size: 12, family: 'Manrope', weight: 'bold' as const },
                 },
             },
-            tooltip: {
-                backgroundColor: cssVar('--card'),
-                titleColor: cssVar('--foreground'),
-                bodyColor: mutedFg,
-                borderColor: cssVar('--border'),
-                borderWidth: 1,
-                cornerRadius: 8,
-                padding: 10,
-                titleFont: { family: 'Manrope', weight: 'bold' as const },
-                bodyFont: { family: 'Manrope' },
+            tooltip: { enabled: false },
+        },
+    };
+});
+
+const requestStatusData = computed(() => {
+    void themeKey.value;
+
+    return {
+        labels: ['Pending', 'Approved', 'Rejected'],
+        datasets: [
+            {
+                label: 'Requests',
+                data: [0, 0, 0],
+                backgroundColor: [cssVar('--chart-3'), cssVar('--chart-2'), cssVar('--chart-5')],
+                borderRadius: 8,
+                borderSkipped: false as const,
+            },
+        ],
+    };
+});
+
+const requestStatusOptions = computed(() => {
+    void themeKey.value;
+    const mutedFg = cssVar('--muted-foreground');
+    const border = cssVar('--border');
+
+    return {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { display: false },
+            tooltip: { enabled: false },
+        },
+        scales: {
+            x: {
+                grid: { display: false },
+                ticks: { color: mutedFg, font: { size: 12, family: 'Manrope', weight: 'bold' as const } },
+                border: { display: false },
+            },
+            y: {
+                beginAtZero: true,
+                suggestedMax: 3,
+                grid: { color: border },
+                ticks: { color: mutedFg, font: { size: 12, family: 'Manrope' } },
+                border: { display: false },
             },
         },
     };
 });
 
-const leaveStatusTotal = computed(() => {
-    const ds = leaveStatusData.value.datasets[0];
-    return (ds.data as number[]).reduce((sum, n) => sum + n, 0);
+// ---------------------------------------------------------------------------
+// Action Cards
+// ---------------------------------------------------------------------------
+interface ActionCard {
+    title: string;
+    description: string;
+    icon: Component;
+    href: string;
+    color: string;
+}
+
+const actionCards = computed<ActionCard[]>(() => {
+    const cards: ActionCard[] = [];
+
+    if (isEmployeeOrTeacher.value) {
+        cards.push({
+            title: 'WFH Attendance',
+            description: 'Log your daily time in/out and accomplishment report.',
+            icon: Activity,
+            href: selfServiceWFHAttendance().url,
+            color: 'text-cyan-600 bg-cyan-500/10 dark:text-cyan-400 dark:bg-cyan-400/10',
+        });
+    }
+
+    cards.push(
+        // {
+        //     title: 'Leave Application',
+        //     description: 'Apply for leave or check your balance.',
+        //     icon: CalendarRange,
+        //     href: selfServiceLeaveApplication().url,
+        //     color: 'text-emerald-600 bg-emerald-500/10 dark:text-emerald-400 dark:bg-emerald-400/10',
+        // },
+        {
+            title: 'My ID Card',
+            description: 'View or download your employee ID card.',
+            icon: IdCard,
+            href: selfServiceIdCard().url,
+            color: 'text-blue-600 bg-blue-500/10 dark:text-blue-400 dark:bg-blue-400/10',
+        },
+        {
+            title: 'My Details',
+            description: 'View and update your personal information.',
+            icon: UserCircle,
+            href: myDetails().url,
+            color: 'text-violet-600 bg-violet-500/10 dark:text-violet-400 dark:bg-violet-400/10',
+        },
+        // {
+        //     title: 'Request Status',
+        //     description: 'Track your pending and completed requests.',
+        //     icon: FileClock,
+        //     href: requestStatusMyRequests().url,
+        //     color: 'text-amber-600 bg-amber-500/10 dark:text-amber-400 dark:bg-amber-400/10',
+        // },
+    );
+
+    if (canViewOverviewMetrics.value) {
+        cards.push({
+            title: 'Utilities',
+            description: 'Manage leave types, reporting managers, and system settings.',
+            icon: Settings,
+            href: utilities().url,
+            color: 'text-slate-600 bg-slate-500/10 dark:text-slate-400 dark:bg-slate-400/10',
+        });
+    }
+
+    return cards;
 });
 
-// ---------------------------------------------------------------------------
-// Quick Actions
-// ---------------------------------------------------------------------------
-interface QuickAction { title: string; description: string; icon: Component; href: string; color: string }
-
-const quickActions: QuickAction[] = [
-    {
-        title: 'Apply for Leave',
-        description: 'Submit a new leave application',
-        icon: CalendarRange,
-        href: leaveApplication().url,
-        color: 'text-emerald-600 bg-emerald-500/10 dark:text-emerald-400 dark:bg-emerald-400/10',
-    },
-    {
-        title: 'My ID Card',
-        description: 'View or update your ID card',
-        icon: IdCard,
-        href: selfServiceIdCard().url,
-        color: 'text-blue-600 bg-blue-500/10 dark:text-blue-400 dark:bg-blue-400/10',
-    },
-    {
-        title: 'My Details',
-        description: 'View your personal information',
-        icon: UserCircle,
-        href: myDetails().url,
-        color: 'text-violet-600 bg-violet-500/10 dark:text-violet-400 dark:bg-violet-400/10',
-    },
-    {
-        title: 'Request Status',
-        description: 'Track your pending requests',
-        icon: ClipboardCheck,
-        href: requestStatus().url,
-        color: 'text-amber-600 bg-amber-500/10 dark:text-amber-400 dark:bg-amber-400/10',
-    },
-];
-
-// ---------------------------------------------------------------------------
-// Explore Cards
-// ---------------------------------------------------------------------------
-interface PageCard { title: string; description: string; icon: Component; href: string; color: string; links: { label: string; href: string }[] }
-
-const pageCards: PageCard[] = [
-    {
-        title: 'Self-Service',
-        description: 'Access your personal HR services including leave applications, ID card, service record, and more.',
-        icon: CreditCard,
-        href: selfService().url,
-        color: 'text-emerald-600 bg-emerald-500/10 dark:text-emerald-400 dark:bg-emerald-400/10',
-        links: [
-            { label: 'Leave Application', href: leaveApplication().url },
-            { label: 'ID Card', href: selfServiceIdCard().url },
-        ],
-    },
-    {
-        title: 'Employee Management',
-        description: 'Manage employee profiles, PSIPOP updates, ID card printing, and DepEd email requests.',
-        icon: UsersRound,
-        href: employeeManagement().url,
-        color: 'text-blue-600 bg-blue-500/10 dark:text-blue-400 dark:bg-blue-400/10',
-        links: [],
-    },
-    {
-        title: 'Reports',
-        description: 'Generate and export employee listings, summary statistics, and other HR reports.',
-        icon: FileText,
-        href: reports().url,
-        color: 'text-violet-600 bg-violet-500/10 dark:text-violet-400 dark:bg-violet-400/10',
-        links: [
-            { label: 'Employee Listing', href: employeeListing().url },
-        ],
-    },
-    {
-        title: 'Utilities',
-        description: 'Configure system settings such as leave types, reporting managers, user list, and activity logs.',
-        icon: Settings,
-        href: utilities().url,
-        color: 'text-amber-600 bg-amber-500/10 dark:text-amber-400 dark:bg-amber-400/10',
-        links: [
-            { label: 'Reporting Manager', href: '/utilities/reporting-manager' },
-            { label: 'Activity Log', href: '/utilities/activity-log' },
-        ],
-    },
-];
+const footerNavItems = [];
 </script>
 
 <template>
@@ -365,8 +513,8 @@ const pageCards: PageCard[] = [
         </div>
 
         <div class="ehris-page">
-            <!-- Stats Overview -->
-            <section>
+            <!-- Stats Overview (admin/HR/manager roles) -->
+            <section v-if="canViewOverviewMetrics">
                 <div class="mb-4">
                     <h2 class="text-xl font-bold text-foreground">Overview</h2>
                     <p class="mt-1 text-sm text-muted-foreground">Summary of key HR metrics for today.</p>
@@ -389,114 +537,156 @@ const pageCards: PageCard[] = [
                 </div>
             </section>
 
-            <!-- Charts -->
-            <section class="grid grid-cols-1 gap-4 lg:grid-cols-[1.6fr_1fr]">
-                <div class="ehris-card flex flex-col">
-                    <div class="mb-4">
-                        <h3 class="text-lg font-bold text-foreground">Monthly Leave Trend</h3>
-                        <p class="mt-0.5 text-sm text-muted-foreground">Leave applications over the last 6 months.</p>
-                    </div>
-                    <div class="relative min-h-[280px] flex-1">
-                        <Bar :key="`bar-${themeKey}`" :data="leaveMonthlyData" :options="leaveMonthlyOptions" />
-                    </div>
-                </div>
-
-                <div class="ehris-card flex flex-col items-center">
-                    <div class="mb-4 w-full">
-                        <h3 class="text-lg font-bold text-foreground">Leave Status</h3>
-                        <p class="mt-0.5 text-sm text-muted-foreground">Distribution of all leave requests.</p>
-                    </div>
-                    <div class="relative flex flex-1 items-center justify-center">
-                        <div class="relative h-[230px] w-[230px]">
-                            <Doughnut :key="`doughnut-${themeKey}`" :data="leaveStatusData" :options="leaveStatusOptions" />
-                            <div class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-                                <span class="text-3xl font-bold text-foreground">{{ leaveStatusTotal }}</span>
-                                <span class="text-xs text-muted-foreground">Total</span>
-                            </div>
+            <!-- Clock In/Out Status (employees/teachers) -->
+            <section v-if="isEmployeeOrTeacher" class="ehris-card">
+                <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div class="flex items-center gap-4">
+                        <div class="flex size-12 shrink-0 items-center justify-center rounded-xl" :class="clockStatusClass">
+                            <Activity class="size-6" />
+                        </div>
+                        <div>
+                            <p class="text-sm text-muted-foreground">Today's Status</p>
+                            <p class="text-2xl font-bold text-foreground">{{ clockStatusLabel }}</p>
                         </div>
                     </div>
-                    <div class="mt-3 flex w-full justify-center gap-6">
-                        <div v-for="(label, i) in leaveStatusData.labels" :key="label" class="text-center">
-                            <p class="text-lg font-bold text-foreground">{{ leaveStatusData.datasets[0].data[i] }}</p>
-                            <p class="text-xs text-muted-foreground">{{ label }}</p>
+
+                    <div class="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+                        <div>
+                            <span class="text-muted-foreground">Time In: </span>
+                            <span class="font-medium text-foreground">{{ formatClockStamp(dashboardAttendance.lastTimeIn) }}</span>
+                        </div>
+                        <div>
+                            <span class="text-muted-foreground">Time Out: </span>
+                            <span class="font-medium text-foreground">{{ formatClockStamp(dashboardAttendance.lastTimeOut) }}</span>
+                        </div>
+                        <div>
+                            <span class="text-muted-foreground">This Week: </span>
+                            <span class="font-medium text-foreground">{{ dashboardAttendance.hoursWorkedThisWeek }}</span>
                         </div>
                     </div>
-                </div>
-            </section>
 
-            <!-- Quick Actions -->
-            <section>
-                <div class="mb-4">
-                    <h2 class="text-xl font-bold text-foreground">Quick Actions</h2>
-                    <p class="mt-1 text-sm text-muted-foreground">Common tasks you can perform right away.</p>
-                </div>
-
-                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                     <Link
-                        v-for="action in quickActions"
-                        :key="action.title"
-                        :href="action.href"
-                        class="ehris-card group flex items-start gap-4 transition-colors hover:border-primary/30"
+                        :href="selfServiceWFHAttendance().url"
+                        class="inline-flex items-center gap-1.5 text-sm font-medium text-primary transition hover:underline lg:ml-4"
                     >
-                        <div class="flex size-10 shrink-0 items-center justify-center rounded-lg" :class="action.color">
-                            <component :is="action.icon" class="size-5" />
-                        </div>
-                        <div class="min-w-0 flex-1">
-                            <p class="font-semibold text-foreground group-hover:text-primary">{{ action.title }}</p>
-                            <p class="mt-0.5 text-sm text-muted-foreground">{{ action.description }}</p>
-                        </div>
-                        <ArrowRight class="mt-0.5 size-4 shrink-0 text-muted-foreground opacity-0 transition group-hover:translate-x-0.5 group-hover:text-primary group-hover:opacity-100" />
+                        Open WFH Attendance
+                        <ArrowRight class="size-3.5" />
                     </Link>
                 </div>
             </section>
 
-            <!-- Page Overview Cards -->
+            <!-- Action Cards -->
             <section>
-                <div class="mb-4">
-                    <h2 class="text-xl font-bold text-foreground">Explore</h2>
-                    <p class="mt-1 text-sm text-muted-foreground">Navigate to the main sections of the system.</p>
-                </div>
-
-                <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    <div
-                        v-for="card in pageCards"
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <Link
+                        v-for="card in actionCards"
                         :key="card.title"
-                        class="ehris-card flex flex-col"
+                        :href="card.href"
+                        class="group relative flex items-start gap-4 rounded-2xl border border-border/80 bg-card p-5 shadow-sm transition-all hover:border-primary/30 hover:shadow-md"
                     >
-                        <div class="flex items-start gap-4">
-                            <div class="flex size-11 shrink-0 items-center justify-center rounded-xl" :class="card.color">
-                                <component :is="card.icon" class="size-5" />
-                            </div>
-                            <div class="min-w-0 flex-1">
-                                <h3 class="text-lg font-bold text-foreground">{{ card.title }}</h3>
-                                <p class="mt-1 text-sm leading-relaxed text-muted-foreground">{{ card.description }}</p>
-                            </div>
+                        <div class="flex size-11 shrink-0 items-center justify-center rounded-xl" :class="card.color">
+                            <component :is="card.icon" class="size-5" />
                         </div>
-
-                        <div v-if="card.links.length" class="mt-4 flex flex-wrap gap-2">
-                            <Link
-                                v-for="link in card.links"
-                                :key="link.label"
-                                :href="link.href"
-                                class="inline-flex items-center gap-1 rounded-md border border-border/80 bg-muted/50 px-2.5 py-1 text-xs font-medium text-muted-foreground transition hover:border-primary/30 hover:bg-primary/5 hover:text-primary"
-                            >
-                                <LayoutGrid class="size-3" />
-                                {{ link.label }}
-                            </Link>
+                        <div class="min-w-0 flex-1">
+                            <p class="font-semibold text-foreground group-hover:text-primary">{{ card.title }}</p>
+                            <p class="mt-1 text-sm leading-relaxed text-muted-foreground">{{ card.description }}</p>
                         </div>
-
-                        <div class="mt-auto pt-4">
-                            <Link
-                                :href="card.href"
-                                class="inline-flex items-center gap-1.5 text-sm font-medium text-primary transition hover:underline"
-                            >
-                                View {{ card.title }}
-                                <ArrowRight class="size-3.5" />
-                            </Link>
-                        </div>
-                    </div>
+                        <ArrowRight class="mt-1 size-4 shrink-0 text-muted-foreground/40 transition-all group-hover:translate-x-0.5 group-hover:text-primary" />
+                    </Link>
                 </div>
             </section>
+
+            <section class="space-y-4">
+
+                <div class="grid grid-cols-1 gap-4 xl:grid-cols-3">
+                    <article class="ehris-card xl:col-span-2">
+                        <div class="mb-4">
+                            <h3 class="text-lg font-bold text-foreground">Work Hours &amp; Attendance Trends</h3>
+                            <p class="mt-0.5 text-sm text-muted-foreground">Hours this week, recent activity, and monthly counts.</p>
+                        </div>
+
+                        <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                            <div>
+                                <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Hours This Week vs Expected</p>
+                                <div class="min-h-[220px]">
+                                    <Bar :key="`work-hours-${themeKey}`" :data="workHoursTrendData" :options="workHoursTrendOptions" />
+                                </div>
+                            </div>
+                            <div>
+                                <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Recent 7-Day Timeline</p>
+                                <div class="min-h-[220px]">
+                                    <Line :key="`work-timeline-${themeKey}`" :data="attendanceTimelineData" :options="attendanceTimelineOptions" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-4 grid grid-cols-2 gap-3 sm:max-w-sm">
+                            <div class="rounded-xl border border-border bg-muted/25 px-4 py-3">
+                                <p class="text-xs uppercase tracking-wide text-muted-foreground">Late Count (Month)</p>
+                                <p class="mt-1 text-xl font-bold text-foreground">{{ monthlyLateCount }}</p>
+                            </div>
+                            <div class="rounded-xl border border-border bg-muted/25 px-4 py-3">
+                                <p class="text-xs uppercase tracking-wide text-muted-foreground">Undertime (Month)</p>
+                                <p class="mt-1 text-xl font-bold text-foreground">{{ monthlyUndertimeCount }}</p>
+                            </div>
+                        </div>
+                    </article>
+
+                    <article class="ehris-card relative">
+                        <div class="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-background/70 backdrop-blur-[1px]">
+                            <span class="rounded-md border border-border bg-card px-3 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                Under Construction
+                            </span>
+                        </div>
+                        <div class="mb-4">
+                            <h3 class="text-lg font-bold text-foreground">Leave Overview</h3>
+                            <p class="mt-0.5 text-sm text-muted-foreground">Under construction.</p>
+                        </div>
+                        <div class="relative mx-auto h-[220px] w-[220px]">
+                            <Doughnut :key="`leave-overview-${themeKey}`" :data="leaveOverviewData" :options="leaveOverviewOptions" />
+                        </div>
+                        <ul class="mt-4 space-y-2 text-sm text-muted-foreground">
+                            <li>Leave balance by type: N/A</li>
+                            <li>Upcoming approved leaves: N/A</li>
+                            <li>Recent leave history: N/A</li>
+                        </ul>
+                    </article>
+                </div>
+
+                <article class="ehris-card relative">
+                    <div class="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-background/70 backdrop-blur-[1px]">
+                        <span class="rounded-md border border-border bg-card px-3 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            Under Construction
+                        </span>
+                    </div>
+                    <div class="mb-4">
+                        <h3 class="text-lg font-bold text-foreground">Request &amp; Ticket Status</h3>
+                        <p class="mt-0.5 text-sm text-muted-foreground">Under construction.</p>
+                    </div>
+
+                    <div class="grid grid-cols-1 gap-4 lg:grid-cols-[1.2fr_1fr]">
+                        <div class="min-h-[220px]">
+                            <Bar :key="`request-status-${themeKey}`" :data="requestStatusData" :options="requestStatusOptions" />
+                        </div>
+
+                        <div class="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-1">
+                            <div class="rounded-xl border border-border bg-muted/25 px-4 py-3">
+                                <p class="text-xs uppercase tracking-wide text-muted-foreground">My Open Requests</p>
+                                <p class="mt-1 text-xl font-bold text-foreground">N/A</p>
+                            </div>
+                            <div class="rounded-xl border border-border bg-muted/25 px-4 py-3">
+                                <p class="text-xs uppercase tracking-wide text-muted-foreground">Latest Requests</p>
+                                <p class="mt-1 text-xl font-bold text-foreground">N/A</p>
+                            </div>
+                            <div class="rounded-xl border border-border bg-muted/25 px-4 py-3">
+                                <p class="text-xs uppercase tracking-wide text-muted-foreground">Needs Action</p>
+                                <p class="mt-1 text-xl font-bold text-foreground">N/A</p>
+                            </div>
+                        </div>
+                    </div>
+                </article>
+            </section>
+
         </div>
     </AppLayout>
 </template>

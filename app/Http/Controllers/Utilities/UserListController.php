@@ -408,27 +408,13 @@ class UserListController extends Controller
                 $user->email_verified_at = now();
             }
 
-            // Generate official DepEd email:
-            //   (firstname + middlename) . '.' . lastname @deped.gov.ph
-            // Example: "Reagan Jade A. Balansag" -> "reaganjade.balansag@deped.gov.ph"
-            $first = trim((string) ($user->firstname ?? ''));
-            $middle = trim((string) ($user->middlename ?? ''));
-            $last = trim((string) ($user->lastname ?? ''));
-
-            $firstSegment = preg_replace('/[^a-z0-9]/i', '', $first.$middle);
-            $lastSegment = preg_replace('/[^a-z0-9]/i', '', $last);
-
-            if ($firstSegment !== '' && $lastSegment !== '') {
-                $local = Str::lower($firstSegment.'.'.$lastSegment);
-            } elseif ($firstSegment !== '') {
-                $local = Str::lower($firstSegment);
-            } elseif ($lastSegment !== '') {
-                $local = Str::lower($lastSegment);
-            } else {
-                $local = 'user'.$user->getKey();
-            }
-
-            $officialEmail = $local.'@deped.gov.ph';
+            // Generate official DepEd email: firstname.lastname@deped.gov.ph (no middle name).
+            // Example: "Reagan Jade" + "Balansag" -> "reaganjade.balansag@deped.gov.ph"
+            $officialEmail = $this->buildOfficialDepedEmail(
+                (string) ($user->firstname ?? ''),
+                (string) ($user->lastname ?? ''),
+                $user->getKey()
+            );
 
             // Set official login credentials on activation.
             // Default password is fixed so it can be communicated to the user.
@@ -482,12 +468,6 @@ class UserListController extends Controller
 
         $data = $request->validate([
             'hrId' => ['nullable', 'integer'],
-            'email' => [
-                'nullable',
-                'email',
-                'max:255',
-                Rule::unique('tbl_user', 'email')->ignore($user->getKey(), $user->getKeyName()),
-            ],
             'lastname' => ['nullable', 'string', 'max:255'],
             'firstname' => ['nullable', 'string', 'max:255'],
             'middlename' => ['nullable', 'string', 'max:255'],
@@ -504,6 +484,17 @@ class UserListController extends Controller
         }
 
         $user->fill($data);
+
+        // When editing first/last name for an active user, recompute official DepEd email
+        // so it stays in sync (firstname.lastname@deped.gov.ph, no middle name).
+        if ($user->active) {
+            $user->email = $this->buildOfficialDepedEmail(
+                (string) ($user->firstname ?? ''),
+                (string) ($user->lastname ?? ''),
+                $user->getKey()
+            );
+        }
+
         $user->save();
 
         $office = null;
@@ -614,5 +605,32 @@ class UserListController extends Controller
         if (! in_array((string) ($auth->role ?? ''), $allowedRoles, true)) {
             abort(403);
         }
+    }
+
+    /**
+     * Build official DepEd email from first name and last name only: firstname.lastname@deped.gov.ph
+     * Middle name is not used. Example: "Reagan Jade" + "Balansag" -> "reaganjade.balansag@deped.gov.ph"
+     *
+     * @param  int  $userId  Fallback when no name parts (e.g. "user123@deped.gov.ph")
+     */
+    private function buildOfficialDepedEmail(string $firstname, string $lastname, int $userId): string
+    {
+        $first = trim($firstname);
+        $last = trim($lastname);
+
+        $firstSegment = preg_replace('/[^a-z0-9]/i', '', $first);
+        $lastSegment = preg_replace('/[^a-z0-9]/i', '', $last);
+
+        if ($firstSegment !== '' && $lastSegment !== '') {
+            $local = Str::lower($firstSegment.'.'.$lastSegment);
+        } elseif ($firstSegment !== '') {
+            $local = Str::lower($firstSegment);
+        } elseif ($lastSegment !== '') {
+            $local = Str::lower($lastSegment);
+        } else {
+            $local = 'user'.$userId;
+        }
+
+        return $local.'@deped.gov.ph';
     }
 }

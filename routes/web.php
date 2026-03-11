@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Auth\PasswordResetOtpController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EmployeeManagement\IdCardPrintingController;
 use App\Http\Controllers\EmployeeManagement\LeaveRequestsController;
 use App\Http\Controllers\MessageController;
@@ -14,6 +15,7 @@ use App\Http\Controllers\SelfService\TimeLogsController;
 use App\Http\Controllers\SelfService\WfhTimeInOutController;
 use App\Http\Controllers\SurveyController;
 use App\Http\Controllers\Utilities\ActivityLogController;
+use App\Http\Controllers\Utilities\AnnouncementManagementController;
 use App\Http\Controllers\Utilities\BusinessDepartmentController;
 use App\Http\Controllers\Utilities\JobTitleMonthlySalaryController;
 use App\Http\Controllers\Utilities\LeaveTypeController;
@@ -21,6 +23,7 @@ use App\Http\Controllers\Utilities\PopupMessageController;
 use App\Http\Controllers\Utilities\ReportingManagerController;
 use App\Http\Controllers\Utilities\SurveyManagementController;
 use App\Http\Controllers\Utilities\UserListController;
+use App\Models\Announcement;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -29,8 +32,25 @@ use Inertia\Inertia;
 use Laravel\Fortify\Features;
 
 Route::get('/', function () {
+    // Skip DB query when running in console (e.g. php artisan wayfinder:generate)
+    // so the Wayfinder Vite plugin does not fail if DB is unavailable or migrations not run.
+    $announcements = collect();
+    if (! app()->runningInConsole()) {
+        try {
+            $announcements = Announcement::query()
+                ->active()
+                ->select(['id', 'title', 'content', 'links', 'created_at'])
+                ->orderByDesc('created_at')
+                ->limit(10)
+                ->get();
+        } catch (\Throwable) {
+            // Table may not exist yet; show no announcements
+        }
+    }
+
     return Inertia::render('Welcome', [
         'canRegister' => Features::enabled(Features::registration()),
+        'announcements' => $announcements,
     ]);
 })->middleware('guest')->name('home');
 
@@ -71,27 +91,7 @@ Route::get('email/verified-success', function (Request $request) {
     return Inertia::render('auth/EmailVerifiedSuccess');
 })->name('verification.success');
 
-Route::get('dashboard', function (Request $request) {
-    $activePopups = [];
-    $showPopups = false;
-
-    // Only fetch and show popups if this is right after login
-    if ($request->session()->get('show_popups_after_login', false)) {
-        $activePopups = \App\Models\PopupMessage::query()
-            ->where('status', 1) // 1 = Active
-            ->orderBy('created_at', 'desc')
-            ->get();
-
-        $showPopups = true;
-        // Clear the flag so popups don't show on subsequent dashboard visits
-        $request->session()->forget('show_popups_after_login');
-    }
-
-    return Inertia::render('Dashboard', [
-        'activePopups' => $activePopups,
-        'showPopups' => $showPopups,
-    ]);
-})->middleware(['auth', 'verified'])->name('dashboard');
+Route::get('dashboard', DashboardController::class)->middleware(['auth', 'verified'])->name('dashboard');
 
 Route::get('cot-rpms-summary', function () {
     return Inertia::render('CotRpmsSummary');
@@ -176,6 +176,10 @@ Route::patch('self-service/wfh-time-in-out/tasks/{task}', [WfhTimeInOutControlle
     ->middleware(['auth', 'verified'])->name('self-service.wfh-time-in-out.tasks.edit');
 Route::delete('self-service/wfh-time-in-out/tasks/{task}', [WfhTimeInOutController::class, 'destroyTask'])
     ->middleware(['auth', 'verified'])->name('self-service.wfh-time-in-out.tasks.destroy');
+Route::match(['get', 'post'], 'self-service/wfh-time-in-out/export/pdf', [WfhTimeInOutController::class, 'exportPdf'])
+    ->middleware(['auth', 'verified'])->name('self-service.wfh-time-in-out.export.pdf');
+Route::get('self-service/user-manuals', fn () => Inertia::render('SelfService/UserManuals'))
+    ->middleware(['auth', 'verified'])->name('self-service.user-manuals');
 Route::get('self-service/calendar', [CalendarController::class, 'index'])
     ->middleware(['auth', 'verified'])->name('self-service.calendar');
 Route::get('api/self-service/calendar/events', [CalendarController::class, 'events'])
@@ -254,6 +258,7 @@ Route::get('api/utilities/users', [UserListController::class, 'api'])
     ->name('utilities.user-list.api');
 Route::post('api/utilities/users', [UserListController::class, 'store'])
     ->middleware(['auth'])
+    ->withoutMiddleware([ValidateCsrfToken::class])
     ->name('utilities.user-list.store');
 Route::get('api/utilities/users/datatables', [UserListController::class, 'datatables'])
     ->middleware(['auth'])
@@ -282,9 +287,11 @@ Route::patch('api/utilities/users/{user}/reset-password', [UserListController::c
     ->name('utilities.user-list.reset-password');
 Route::patch('api/utilities/users/{user}', [UserListController::class, 'update'])
     ->middleware(['auth'])
+    ->withoutMiddleware([ValidateCsrfToken::class])
     ->name('utilities.user-list.update');
 Route::delete('api/utilities/users/{user}', [UserListController::class, 'destroy'])
     ->middleware(['auth'])
+    ->withoutMiddleware([ValidateCsrfToken::class])
     ->name('utilities.user-list.destroy');
 Route::get('utilities/business-department-list', function () {
     return Inertia::render('Utilities/BusinessDepartmentList');
@@ -334,6 +341,7 @@ Route::get('api/utilities/users', [UserListController::class, 'api'])
     ->name('utilities.user-list.api');
 Route::post('api/utilities/users', [UserListController::class, 'store'])
     ->middleware(['auth'])
+    ->withoutMiddleware([ValidateCsrfToken::class])
     ->name('utilities.user-list.store');
 Route::get('api/utilities/departments', [UserListController::class, 'departments'])
     ->middleware(['auth'])
@@ -348,9 +356,11 @@ Route::patch('api/utilities/users/{user}/reset-password', [UserListController::c
     ->name('utilities.user-list.reset-password');
 Route::patch('api/utilities/users/{user}', [UserListController::class, 'update'])
     ->middleware(['auth'])
+    ->withoutMiddleware([ValidateCsrfToken::class])
     ->name('utilities.user-list.update');
 Route::delete('api/utilities/users/{user}', [UserListController::class, 'destroy'])
     ->middleware(['auth'])
+    ->withoutMiddleware([ValidateCsrfToken::class])
     ->name('utilities.user-list.destroy');
 Route::get('utilities/business-department-list', function () {
     return Inertia::render('Utilities/BusinessDepartmentList');
@@ -512,6 +522,18 @@ Route::put('utilities/pop-up-management/{popupMessage}', [PopupMessageController
 Route::delete('utilities/pop-up-management/{popupMessage}', [PopupMessageController::class, 'destroy'])
     ->middleware(['auth', 'verified'])
     ->name('utilities.pop-up-management.destroy');
+Route::get('utilities/announcement-management', [AnnouncementManagementController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('utilities.announcement-management');
+Route::post('utilities/announcement-management', [AnnouncementManagementController::class, 'store'])
+    ->middleware(['auth', 'verified'])
+    ->name('utilities.announcement-management.store');
+Route::put('utilities/announcement-management/{announcement}', [AnnouncementManagementController::class, 'update'])
+    ->middleware(['auth', 'verified'])
+    ->name('utilities.announcement-management.update');
+Route::delete('utilities/announcement-management/{announcement}', [AnnouncementManagementController::class, 'destroy'])
+    ->middleware(['auth', 'verified'])
+    ->name('utilities.announcement-management.destroy');
 Route::get('utilities/leave-types', [LeaveTypeController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('utilities.leave-types.index');

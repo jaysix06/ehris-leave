@@ -413,6 +413,9 @@ class MyDetailsController extends Controller
     public function exportPdsExcel(Request $request): StreamedResponse
     {
         $authUser = $request->user();
+        $hasIncludeParams = $request->has('includePhoto') || $request->has('includeSignature');
+        $includePhoto = $hasIncludeParams ? $request->query('includePhoto') === '1' : true;
+        $includeSignature = $hasIncludeParams ? $request->query('includeSignature') === '1' : true;
 
         $dbProfile = DB::table('tbl_user')
             ->where('email', $authUser?->email)
@@ -491,6 +494,8 @@ class MyDetailsController extends Controller
             'father' => $father,
             'mother' => $mother,
             'children' => $children,
+            'includePhoto' => $includePhoto,
+            'includeSignature' => $includeSignature,
         ];
 
         $outputPath = $handler->export($templatePath, $data);
@@ -724,6 +729,7 @@ class MyDetailsController extends Controller
                 foreach ($columns as $column) {
                     if (Schema::hasColumn('tbl_emp_personal_info', $column)) {
                         $personalPayload[$column] = $data[$dataKey] === '' ? null : $data[$dataKey];
+
                         return;
                     }
                 }
@@ -859,6 +865,7 @@ class MyDetailsController extends Controller
                         $payload[$key] = $val === '' ? null : $val;
                     }
                 }
+
                 return $payload;
             })
             ->filter(function (array $row) {
@@ -871,6 +878,7 @@ class MyDetailsController extends Controller
                         return true;
                     }
                 }
+
                 return false;
             })
             ->values()
@@ -897,6 +905,7 @@ class MyDetailsController extends Controller
         }
 
         $normalized = strtolower(trim($role));
+
         return str_contains($normalized, 'hr manager')
             || str_contains($normalized, 'human resources manager');
     }

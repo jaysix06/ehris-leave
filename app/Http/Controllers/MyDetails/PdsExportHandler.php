@@ -168,8 +168,11 @@ class PdsExportHandler
             fn ($value) => $this->pdsValue($value)
         );
         $c4CheckStates = $c4Handler->buildControlCheckStates($personalInfo);
-        $passportPhotoPath = $c4Handler->resolvePdsPhotoPath($hrid, $dbProfile, $officialInfo);
-        $signaturePath = $c4Handler->resolvePdsSignaturePath($hrid, $dbProfile?->email ?? $officialInfo?->email ?? null);
+        $includePhoto = isset($data['includePhoto']) ? (bool) $data['includePhoto'] : true;
+        $includeSignature = isset($data['includeSignature']) ? (bool) $data['includeSignature'] : true;
+
+        $passportPhotoPath = $includePhoto ? $c4Handler->resolvePdsPhotoPath($hrid, $dbProfile, $officialInfo) : null;
+        $signaturePath = $includeSignature ? $c4Handler->resolvePdsSignaturePath($hrid, $dbProfile?->email ?? $officialInfo?->email ?? null) : null;
 
         return $this->populateTemplateWorkbook(
             $templatePath,
@@ -692,16 +695,14 @@ class PdsExportHandler
                 }
             }
         }
-        if ($passportPhotoPath !== null || $signaturePath !== null) {
-            (new PdsC4Handler)->insertC4Images(
-                $extractRoot,
-                $workbookXml,
-                $relsXml,
-                $passportPhotoPath,
-                $signaturePath,
-                $tempRoot
-            );
-        }
+        (new PdsC4Handler)->insertC4Images(
+            $extractRoot,
+            $workbookXml,
+            $relsXml,
+            $passportPhotoPath,
+            $signaturePath,
+            $tempRoot
+        );
 
         $worksheetRelsPath = dirname($sheetXmlPath).'/_rels/'.basename($sheetXmlPath).'.rels';
         if (is_file($worksheetRelsPath)) {

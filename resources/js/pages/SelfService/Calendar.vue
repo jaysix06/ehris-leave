@@ -75,8 +75,8 @@ const props = withDefaults(defineProps<Props>(), {
 const pageTitle = 'Upcoming Events & schedule';
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Self-Service', href: selfServiceRoutes.timezone().url },
-    { title: 'Timezone', href: selfServiceRoutes.timezone().url },
+    { title: 'Self-Service', href: selfServiceRoutes.wfhTimeInOut().url },
+    { title: 'Attendance', href: selfServiceRoutes.wfhTimeInOut().url },
     { title: pageTitle },
 ];
 
@@ -286,8 +286,8 @@ async function submitEvent() {
             <div class="flex flex-wrap items-center justify-between gap-4">
                 <h1 class="text-2xl font-bold text-foreground">Calendar &amp; upcoming events</h1>
                 <div class="flex items-center gap-2">
-                    <Link :href="selfServiceRoutes.timezone().url" class="text-sm font-medium text-primary hover:underline">
-                        ← Back to Timezone
+                    <Link :href="selfServiceRoutes.wfhTimeInOut().url" class="text-sm font-medium text-primary hover:underline">
+                        ← Back to WFH Attendance
                     </Link>
                     <Button size="sm" @click="openAddModal">
                         <CalendarPlus class="mr-2 size-4" />

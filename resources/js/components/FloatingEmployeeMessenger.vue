@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { usePage } from '@inertiajs/vue3';
+import { onClickOutside } from '@vueuse/core';
 import { echo } from '@laravel/echo-vue';
 import { ChevronDown, ChevronLeft, ChevronRight, MessageCircle, Search, Send, Users, X } from 'lucide-vue-next';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
@@ -59,6 +60,12 @@ const authUserId = computed(() => {
 });
 
 const isOpen = ref(false);
+const messengerRootRef = ref<HTMLElement | null>(null);
+
+onClickOutside(messengerRootRef, () => {
+    if (isOpen.value) isOpen.value = false;
+});
+
 const onlineExpanded = ref(true);
 const offlineExpanded = ref(false);
 const loadingContacts = ref(false);
@@ -593,7 +600,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <div class="fixed right-6 bottom-6 z-[70] flex flex-col-reverse items-end gap-3">
+    <div ref="messengerRootRef" class="fixed right-6 bottom-6 z-[70] flex flex-col-reverse items-end gap-3">
         <div class="pointer-events-auto">
             <button
                 type="button"
@@ -623,14 +630,11 @@ onBeforeUnmount(() => {
                 v-if="isOpen"
                 class="pointer-events-auto flex h-[620px] w-[min(92vw,820px)] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white text-slate-900 shadow-2xl"
             >
-                <header class="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3">
+                <header class="flex items-center border-b border-slate-200 bg-slate-50 px-4 py-3">
                     <div class="flex items-center gap-2 text-sm font-semibold text-slate-700">
                         <Users class="h-4 w-4 text-slate-500" />
                         <span>Employees</span>
                     </div>
-                    <button type="button" class="text-xs text-slate-500 hover:text-slate-700" @click="void refreshContacts()">
-                        Refresh
-                    </button>
                 </header>
 
                 <div class="min-h-0 flex flex-1 flex-col sm:flex-row">
