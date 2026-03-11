@@ -250,21 +250,34 @@ Route::get('utilities/user-list', [UserListController::class, 'index'])
 Route::get('api/utilities/users', [UserListController::class, 'api'])
     ->middleware(['auth'])
     ->name('utilities.user-list.api');
+Route::post('api/utilities/users', [UserListController::class, 'store'])
+    ->middleware(['auth'])
+    ->name('utilities.user-list.store');
 Route::get('api/utilities/users/datatables', [UserListController::class, 'datatables'])
     ->middleware(['auth'])
     ->name('utilities.user-list.datatables');
+Route::get('api/utilities/users/export/excel', [UserListController::class, 'exportExcel'])
+    ->middleware(['auth'])
+    ->name('utilities.user-list.export-excel');
 Route::get('api/utilities/users/{user}', [UserListController::class, 'show'])
     ->middleware(['auth'])
     ->name('utilities.user-list.show');
 Route::get('api/utilities/departments', [UserListController::class, 'departments'])
     ->middleware(['auth'])
     ->name('utilities.departments');
+Route::get('api/utilities/users/export/excel', [UserListController::class, 'exportExcel'])
+    ->middleware(['auth'])
+    ->name('utilities.user-list.export-excel');
 Route::patch('api/utilities/users/{user}/status', [UserListController::class, 'updateStatus'])
     ->middleware(['auth'])
     // Use token-based auth (session "auth" only) for this JSON endpoint to
     // avoid CSRF 419 errors when called via fetch/DataTables.
     ->withoutMiddleware([ValidateCsrfToken::class])
     ->name('utilities.user-list.update-status');
+Route::patch('api/utilities/users/{user}/reset-password', [UserListController::class, 'resetPassword'])
+    ->middleware(['auth'])
+    ->withoutMiddleware([ValidateCsrfToken::class])
+    ->name('utilities.user-list.reset-password');
 Route::patch('api/utilities/users/{user}', [UserListController::class, 'update'])
     ->middleware(['auth'])
     ->name('utilities.user-list.update');
@@ -317,12 +330,19 @@ Route::get('utilities/user-list', [UserListController::class, 'index'])
 Route::get('api/utilities/users', [UserListController::class, 'api'])
     ->middleware(['auth'])
     ->name('utilities.user-list.api');
+Route::post('api/utilities/users', [UserListController::class, 'store'])
+    ->middleware(['auth'])
+    ->name('utilities.user-list.store');
 Route::get('api/utilities/departments', [UserListController::class, 'departments'])
     ->middleware(['auth'])
     ->name('utilities.departments');
 Route::patch('api/utilities/users/{user}/status', [UserListController::class, 'updateStatus'])
     ->middleware(['auth'])
     ->name('utilities.user-list.update-status');
+Route::patch('api/utilities/users/{user}/reset-password', [UserListController::class, 'resetPassword'])
+    ->middleware(['auth'])
+    ->withoutMiddleware([ValidateCsrfToken::class])
+    ->name('utilities.user-list.reset-password');
 Route::patch('api/utilities/users/{user}', [UserListController::class, 'update'])
     ->middleware(['auth'])
     ->name('utilities.user-list.update');
