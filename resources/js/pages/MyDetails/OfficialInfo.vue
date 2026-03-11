@@ -315,113 +315,128 @@ function submit(): void {
 
                 <div class="ehris-modal-scroll">
                     <p v-if="!props.canEditOfficialInfo" class="ehris-form-error">Only HR Manager can edit official information.</p>
-                    <div class="ehris-modal-grid">
-                        <label class="ehris-modal-field">
-                            <span>Employee No.</span>
-                            <Input v-model="form.employee_id" />
-                        </label>
-                        <label class="ehris-modal-field">
-                            <span>Prefix Name</span>
-                            <Input v-model="form.prefix_name" />
-                        </label>
-                        <label class="ehris-modal-field">
-                            <span>First Name</span>
-                            <Input v-model="form.firstname" />
-                        </label>
-                        <label class="ehris-modal-field">
-                            <span>Middle Name</span>
-                            <Input v-model="form.middlename" />
-                        </label>
-                        <label class="ehris-modal-field">
-                            <span>Last Name</span>
-                            <Input v-model="form.lastname" />
-                        </label>
-                        <label class="ehris-modal-field">
-                            <span>Name Extension</span>
-                            <Input v-model="form.extension" />
-                        </label>
-                        <label class="ehris-modal-field">
-                            <span>DepEd Email</span>
-                            <Input v-model="form.email" type="email" />
-                        </label>
-                        <label class="ehris-modal-field">
-                            <span>Item No.</span>
-                            <Input v-model="form.item_no" />
-                        </label>
-                        <label class="ehris-modal-field">
-                            <span>Plantilla Assignment</span>
-                            <Input v-model="form.plantilla" />
-                        </label>
-                        <label class="ehris-modal-field">
-                            <span>Position</span>
-                            <select v-model="form.job_title" :class="selectClass">
-                                <option value="" disabled>Select position</option>
-                                <option v-for="item in optionsWithCurrent('positions', form.job_title)" :key="item" :value="item">{{ item }}</option>
-                            </select>
-                        </label>
-                        <label class="ehris-modal-field">
-                            <span>Employment Status</span>
-                            <select v-model="form.employ_status" :class="selectClass">
-                                <option value="" disabled>Select status</option>
-                                <option v-for="item in optionsWithCurrent('employmentStatuses', form.employ_status)" :key="item" :value="item">{{ item }}</option>
-                            </select>
-                        </label>
-                        <label class="ehris-modal-field">
-                            <span>Salary Grade</span>
-                            <select v-model="form.salary_grade" :class="selectClass">
-                                <option value="" disabled>Select grade</option>
-                                <option v-for="item in optionsWithCurrent('salaryGrades', form.salary_grade)" :key="item" :value="item">{{ item }}</option>
-                            </select>
-                        </label>
-                        <label class="ehris-modal-field">
-                            <span>Step</span>
-                            <select v-model="form.step" :class="selectClass">
-                                <option value="" disabled>Select step</option>
-                                <option v-for="item in optionsWithCurrent('steps', form.step)" :key="item" :value="item">{{ item }}</option>
-                            </select>
-                        </label>
-                        <label class="ehris-modal-field">
-                            <span>Date of Joining</span>
-                            <Input v-model="form.date_of_joining" type="date" />
-                        </label>
-                        <label class="ehris-modal-field">
-                            <span>Date of Promotion</span>
-                            <Input v-model="form.date_of_promotion" type="date" />
-                        </label>
-                        <label class="ehris-modal-field">
-                            <span>Years of Experience</span>
-                            <Input v-model="form.year_experience" />
-                        </label>
-                        <label class="ehris-modal-field">
-                            <span>Role</span>
-                            <select v-model="form.role" :class="selectClass" :disabled="!props.canEditOfficialRole">
-                                <option value="" disabled>Select role</option>
-                                <option v-for="item in optionsWithCurrent('roles', form.role)" :key="item" :value="item">{{ item }}</option>
-                            </select>
-                            <small v-if="!props.canEditOfficialRole" class="ehris-modal-hint">Only HR can edit this field.</small>
-                        </label>
-                        <label class="ehris-modal-field">
-                            <span>Division Office</span>
-                            <select v-model="form.division_code" :class="selectClass">
-                                <option value="" disabled>Select division office</option>
-                                <option v-for="item in optionsWithCurrent('divisionOffices', form.division_code)" :key="item" :value="item">{{ item }}</option>
-                            </select>
-                        </label>
-                        <label class="ehris-modal-field">
-                            <span>Business Unit</span>
-                            <Input v-model="form.business_id" />
-                        </label>
-                        <label class="ehris-modal-field">
-                            <span>Department</span>
-                            <select v-model="form.office" :class="selectClass">
-                                <option value="" disabled>Select department</option>
-                                <option v-for="item in optionsWithCurrent('departments', form.office)" :key="item" :value="item">{{ item }}</option>
-                            </select>
-                        </label>
-                        <label class="ehris-modal-field">
-                            <span>Reporting Manager</span>
-                            <Input v-model="form.reporting_manager" />
-                        </label>
+                    <div class="ehris-modal-section">
+                        <h4>Employee Identification</h4>
+                        <div class="ehris-modal-grid">
+                            <label class="ehris-modal-field">
+                                <span>Employee No.</span>
+                                <Input v-model="form.employee_id" />
+                            </label>
+                            <label class="ehris-modal-field">
+                                <span>DepEd Email</span>
+                                <Input v-model="form.email" type="email" />
+                            </label>
+                            <label class="ehris-modal-field">
+                                <span>Prefix Name</span>
+                                <Input v-model="form.prefix_name" />
+                            </label>
+                            <label class="ehris-modal-field">
+                                <span>First Name</span>
+                                <Input v-model="form.firstname" />
+                            </label>
+                            <label class="ehris-modal-field">
+                                <span>Middle Name</span>
+                                <Input v-model="form.middlename" />
+                            </label>
+                            <label class="ehris-modal-field">
+                                <span>Last Name</span>
+                                <Input v-model="form.lastname" />
+                            </label>
+                            <label class="ehris-modal-field">
+                                <span>Name Extension</span>
+                                <Input v-model="form.extension" />
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="ehris-modal-section">
+                        <h4>Position and Employment</h4>
+                        <div class="ehris-modal-grid">
+                            <label class="ehris-modal-field">
+                                <span>Item No.</span>
+                                <Input v-model="form.item_no" />
+                            </label>
+                            <label class="ehris-modal-field">
+                                <span>Plantilla Assignment</span>
+                                <Input v-model="form.plantilla" />
+                            </label>
+                            <label class="ehris-modal-field">
+                                <span>Position</span>
+                                <select v-model="form.job_title" :class="selectClass">
+                                    <option value="" disabled>Select position</option>
+                                    <option v-for="item in optionsWithCurrent('positions', form.job_title)" :key="item" :value="item">{{ item }}</option>
+                                </select>
+                            </label>
+                            <label class="ehris-modal-field">
+                                <span>Employment Status</span>
+                                <select v-model="form.employ_status" :class="selectClass">
+                                    <option value="" disabled>Select status</option>
+                                    <option v-for="item in optionsWithCurrent('employmentStatuses', form.employ_status)" :key="item" :value="item">{{ item }}</option>
+                                </select>
+                            </label>
+                            <label class="ehris-modal-field">
+                                <span>Salary Grade</span>
+                                <select v-model="form.salary_grade" :class="selectClass">
+                                    <option value="" disabled>Select grade</option>
+                                    <option v-for="item in optionsWithCurrent('salaryGrades', form.salary_grade)" :key="item" :value="item">{{ item }}</option>
+                                </select>
+                            </label>
+                            <label class="ehris-modal-field">
+                                <span>Step</span>
+                                <select v-model="form.step" :class="selectClass">
+                                    <option value="" disabled>Select step</option>
+                                    <option v-for="item in optionsWithCurrent('steps', form.step)" :key="item" :value="item">{{ item }}</option>
+                                </select>
+                            </label>
+                            <label class="ehris-modal-field">
+                                <span>Date of Joining</span>
+                                <Input v-model="form.date_of_joining" type="date" />
+                            </label>
+                            <label class="ehris-modal-field">
+                                <span>Date of Promotion</span>
+                                <Input v-model="form.date_of_promotion" type="date" />
+                            </label>
+                            <label class="ehris-modal-field">
+                                <span>Years of Experience</span>
+                                <Input v-model="form.year_experience" />
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="ehris-modal-section">
+                        <h4>Organization Assignment</h4>
+                        <div class="ehris-modal-grid">
+                            <label class="ehris-modal-field">
+                                <span>Role</span>
+                                <select v-model="form.role" :class="selectClass" :disabled="!props.canEditOfficialRole">
+                                    <option value="" disabled>Select role</option>
+                                    <option v-for="item in optionsWithCurrent('roles', form.role)" :key="item" :value="item">{{ item }}</option>
+                                </select>
+                                <small v-if="!props.canEditOfficialRole" class="ehris-modal-hint">Only HR can edit this field.</small>
+                            </label>
+                            <label class="ehris-modal-field">
+                                <span>Division Office</span>
+                                <select v-model="form.division_code" :class="selectClass">
+                                    <option value="" disabled>Select division office</option>
+                                    <option v-for="item in optionsWithCurrent('divisionOffices', form.division_code)" :key="item" :value="item">{{ item }}</option>
+                                </select>
+                            </label>
+                            <label class="ehris-modal-field">
+                                <span>Business Unit</span>
+                                <Input v-model="form.business_id" />
+                            </label>
+                            <label class="ehris-modal-field">
+                                <span>Department</span>
+                                <select v-model="form.office" :class="selectClass">
+                                    <option value="" disabled>Select department</option>
+                                    <option v-for="item in optionsWithCurrent('departments', form.office)" :key="item" :value="item">{{ item }}</option>
+                                </select>
+                            </label>
+                            <label class="ehris-modal-field">
+                                <span>Reporting Manager</span>
+                                <Input v-model="form.reporting_manager" />
+                            </label>
+                        </div>
                     </div>
 
                     <p v-if="errors.message" class="ehris-form-error">{{ errors.message }}</p>
@@ -479,7 +494,7 @@ function submit(): void {
 
 .ehris-pds-official-row {
     display: grid;
-    grid-template-columns: 240px 1fr;
+    grid-template-columns: minmax(170px, 210px) 1fr;
     border-left: 1px solid hsl(var(--border));
     border-right: 1px solid hsl(var(--border));
     border-bottom: 1px solid hsl(var(--border));
@@ -503,11 +518,36 @@ function submit(): void {
     display: flex;
     align-items: center;
     min-height: 2.25rem;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    white-space: normal;
+}
+
+.ehris-pds-official-row dd a {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .ehris-modal-scroll {
     overflow-y: auto;
     padding-right: 0.25rem;
+}
+
+.ehris-modal-section {
+    border: 1px solid hsl(var(--border));
+    border-radius: 0.5rem;
+    padding: 0.75rem;
+    margin-bottom: 0.75rem;
+    background: hsl(var(--background));
+}
+
+.ehris-modal-section h4 {
+    font-weight: 700;
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
 }
 
 .ehris-modal-grid {

@@ -6,6 +6,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { toast } from 'vue3-toastify';
 import { useSidebar } from '@/components/ui/sidebar/utils';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { formatPhilippineMobile } from '@/utils/phPhone';
 import EducationBackground from '@/pages/MyDetails/EducationBackground.vue';
 import Eligibility from '@/pages/MyDetails/Eligibility.vue';
 import FamilyBackground from '@/pages/MyDetails/FamilyBackground.vue';
@@ -215,9 +216,9 @@ const employeeNo = computed(() => {
 
 const contactNo = computed(() => {
     const c = props.contactInfo;
-    if (c?.mobile_num != null && String(c.mobile_num).trim() !== '') return String(c.mobile_num);
+    if (c?.mobile_num != null && String(c.mobile_num).trim() !== '') return formatPhilippineMobile(c.mobile_num);
     const o = props.officialInfo;
-    if (o?.mobile_number != null && String(o.mobile_number).trim() !== '') return String(o.mobile_number);
+    if (o?.mobile_number != null && String(o.mobile_number).trim() !== '') return formatPhilippineMobile(o.mobile_number);
     return 'N/A';
 });
 

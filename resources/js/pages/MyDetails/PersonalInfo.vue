@@ -339,6 +339,30 @@ function copyResidentialToPermanent(): void {
     };
 }
 
+function onTelephoneKeydown(e: KeyboardEvent): void {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key.length === 1 && !/\d/.test(e.key)) {
+        e.preventDefault();
+    }
+}
+
+function onTelephonePaste(e: ClipboardEvent): void {
+    e.preventDefault();
+    form.value.phone_num = digitsOnly(e.clipboardData?.getData('text') ?? '').slice(0, 10);
+}
+
+function onMobileKeydown(e: KeyboardEvent): void {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key.length === 1 && !/\d/.test(e.key)) {
+        e.preventDefault();
+    }
+}
+
+function onMobilePaste(e: ClipboardEvent): void {
+    e.preventDefault();
+    form.value.mobile_num = digitsOnly(e.clipboardData?.getData('text') ?? '').slice(0, 11);
+}
+
 function openEdit(): void {
     const p = props.personalInfo ?? {};
     const c = props.contactInfo ?? {};
@@ -622,20 +646,26 @@ function submit(): void {
                                 <span>Telephone No.</span>
                                 <Input
                                     :model-value="formatPhilippineLandline(form.phone_num)"
+                                    type="tel"
                                     inputmode="numeric"
                                     pattern="[0-9-]*"
                                     maxlength="12"
                                     @update:modelValue="(v) => { form.phone_num = digitsOnly(v).slice(0, 10); }"
+                                    @keydown="onTelephoneKeydown"
+                                    @paste="onTelephonePaste"
                                 />
                             </label>
                             <label class="ehris-modal-field">
                                 <span>Mobile No.</span>
                                 <Input
                                     :model-value="formatPhilippineMobile(form.mobile_num)"
+                                    type="tel"
                                     inputmode="numeric"
                                     pattern="[0-9-]*"
                                     maxlength="13"
                                     @update:modelValue="(v) => { form.mobile_num = digitsOnly(v).slice(0, 11); }"
+                                    @keydown="onMobileKeydown"
+                                    @paste="onMobilePaste"
                                 />
                             </label>
                             <label class="ehris-modal-field"><span>Email Address</span><Input v-model="form.email" type="email" /></label>

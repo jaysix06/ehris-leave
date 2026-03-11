@@ -265,6 +265,18 @@ const nameExtensionOptions = [
     'X',
 ];
 
+function onSpouseTelephoneKeydown(e: KeyboardEvent): void {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key.length === 1 && !/\d/.test(e.key)) {
+        e.preventDefault();
+    }
+}
+
+function onSpouseTelephonePaste(e: ClipboardEvent): void {
+    e.preventDefault();
+    spouseForm.value.tel_num = digitsOnly(e.clipboardData?.getData('text') ?? '').slice(0, 10);
+}
+
 function openEdit(): void {
     spouseForm.value = {
         lastname: val(spouseEntry.value?.lastname),
@@ -574,11 +586,14 @@ function submit(): void {
                                     <Input
                                         id="spouse-tel-num"
                                         :model-value="formatPhilippineLandline(spouseForm.tel_num)"
+                                        type="tel"
                                         inputmode="numeric"
                                         pattern="[0-9-]*"
                                         maxlength="12"
                                         placeholder="Telephone no."
                                         @update:modelValue="(v) => { spouseForm.tel_num = digitsOnly(v).slice(0, 10); }"
+                                        @keydown="onSpouseTelephoneKeydown"
+                                        @paste="onSpouseTelephonePaste"
                                     />
                                 </div>
                             </div>
