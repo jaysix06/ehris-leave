@@ -76,7 +76,7 @@ const pageTitle = 'Upcoming Events & schedule';
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Self-Service', href: selfServiceRoutes.wfhTimeInOut().url },
-    { title: 'Timezone', href: selfServiceRoutes.wfhTimeInOut().url },
+    { title: 'Attendance', href: selfServiceRoutes.wfhTimeInOut().url },
     { title: pageTitle },
 ];
 

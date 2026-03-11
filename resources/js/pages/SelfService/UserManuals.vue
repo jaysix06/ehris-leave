@@ -100,10 +100,11 @@ const breadcrumbs: BreadcrumbItem[] = [
                 <section class="space-y-2">
                     <h4 class="font-medium text-foreground">6.) Export report</h4>
                     <p class="text-muted-foreground">
-                        The report uses the official header and footer. You can optionally export without images if needed.
+                        Export all tasks (open and completed) in a date range as a PDF. The report uses the official header and footer when available.
                     </p>
                     <ul class="list-inside list-disc space-y-1 text-muted-foreground">
-                        <li><strong class="text-foreground">Click</strong> <strong>Export</strong> to download your task list as a PDF (open or completed, depending on the active tab).</li>
+                        <li><strong class="text-foreground">Click</strong> <strong>Export</strong> to open the export dialog.</li>
+                        <li><strong class="text-foreground">Click</strong> a start and end date on the calendar to choose the range, then <strong class="text-foreground">click</strong> <strong>Export</strong> to download the PDF.</li>
                     </ul>
                 </section>
             </div>
