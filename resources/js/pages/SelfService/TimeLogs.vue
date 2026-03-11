@@ -89,7 +89,7 @@ watch(
                     :href="selfServiceRoutes.wfhTimeInOut().url"
                     class="text-sm font-medium text-primary hover:underline"
                 >
-                    ← Back to Timezone
+                    ← Back to WFH Attendance
                 </Link>
             </div>
 

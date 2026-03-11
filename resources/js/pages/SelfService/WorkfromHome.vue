@@ -324,68 +324,80 @@ function confirmComplete(): void {
     });
 }
 
-// Export: POST JSON to server; server builds HTML in PHP (no Blade) and returns PDF.
-// Falls back to GET (open in new tab) when POST fails (e.g. 419 CSRF on other devices/sessions).
+// Export: single button opens modal to pick date range; exports all tasks (open + completed) in that range.
 const exportPdfLoading = ref(false);
-function exportTasks(): void {
-    const type = tasksTab.value === 'open' ? 'open' : 'completed';
-    const url = '/self-service/wfh-time-in-out/export/pdf';
-    const getFallbackUrl = `${url}?type=${encodeURIComponent(type)}`;
+const showExportModal = ref(false);
+const exportDateRange = ref<{ start: Date; end: Date } | null>(null);
+const exportDateRangeKey = ref(0);
 
-    function fallbackToGet(): void {
-        window.open(getFallbackUrl, '_blank', 'noopener,noreferrer');
+const exportDateRangeForPicker = computed({
+    get: () => exportDateRange.value ?? undefined,
+    set: (v: { start: Date; end: Date } | undefined) => { exportDateRange.value = v ?? null; },
+});
+
+function openExportModal(): void {
+    if (!exportDateRange.value) {
+        const now = new Date();
+        const start = new Date(now.getFullYear(), now.getMonth(), 1);
+        exportDateRange.value = { start, end: new Date(now) };
     }
+    exportDateRangeKey.value += 1;
+    showExportModal.value = true;
+}
 
+function closeExportModal(): void {
+    showExportModal.value = false;
+}
+
+function formatExportDate(d: Date): string {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+}
+
+function doExportWithRange(): void {
+    const range = exportDateRange.value;
+    if (!range?.start || !range?.end) {
+        toast.error('Please select a date range.');
+        return;
+    }
+    const dateFrom = formatExportDate(range.start);
+    const dateTo = formatExportDate(range.end);
+    if (dateFrom > dateTo) {
+        toast.error('Start date must be before or equal to end date.');
+        return;
+    }
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const url = `${origin}/self-service/wfh-time-in-out/export/pdf?date_from=${encodeURIComponent(dateFrom)}&date_to=${encodeURIComponent(dateTo)}`;
     exportPdfLoading.value = true;
-    const csrfToken = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
-    fetch(url, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            Accept: 'application/pdf',
-            'X-Requested-With': 'XMLHttpRequest',
-            'X-CSRF-TOKEN': csrfToken,
-        },
-        body: JSON.stringify({ type }),
-        credentials: 'same-origin',
-    })
+    fetch(url, { method: 'GET', credentials: 'same-origin', headers: { Accept: 'application/pdf' } })
         .then(async (res) => {
             if (!res.ok) {
-                const msg = `Export failed (${res.status}). Trying open in new tab.`;
-                if (res.status === 419) {
-                    toast.warn('Session expired or CSRF issue. Opening export in new tab.');
-                } else {
-                    toast.warn(msg);
-                }
-                fallbackToGet();
-                return null;
+                const text = await res.text();
+                throw new Error(text.length < 200 ? text : `Export failed (${res.status}).`);
             }
             const disposition = res.headers.get('Content-Disposition');
             const blob = await res.blob();
             return { blob, disposition };
         })
         .then((result) => {
-            if (!result) return;
-            const { blob, disposition } = result;
-            let filename = `tasklist_report_${type}_${new Date().toISOString().slice(0, 10)}.pdf`;
-            if (disposition) {
-                const m = disposition.match(/filename="?([^";\n]+)"?/);
+            let filename = `tasklist_report_${dateFrom}_${dateTo}.pdf`;
+            if (result.disposition) {
+                const m = result.disposition.match(/filename="?([^";\n]+)"?/);
                 if (m) filename = m[1].trim();
             }
-            const u = URL.createObjectURL(blob);
+            const u = URL.createObjectURL(result.blob);
             const a = document.createElement('a');
             a.href = u;
             a.download = filename;
             a.click();
             URL.revokeObjectURL(u);
+            closeExportModal();
+            toast.success('Export downloaded.');
         })
-        .catch(() => {
-            toast.warn('Export request failed. Opening in new tab.');
-            fallbackToGet();
-        })
-        .finally(() => {
-            exportPdfLoading.value = false;
-        });
+        .catch((err: Error) => toast.error(err?.message ?? 'Export failed.'))
+        .finally(() => { exportPdfLoading.value = false; });
 }
 
 // User's Manuals modal (wide)
@@ -782,7 +794,7 @@ function toggleClock(): void {
                                 type="button"
                                 class="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs font-medium text-foreground shadow-sm transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-60 disabled:pointer-events-none"
                                 :disabled="exportPdfLoading"
-                                @click="exportTasks"
+                                @click="openExportModal"
                             >
                                 <Download class="size-4" />
                                 {{ exportPdfLoading ? 'Exporting…' : 'Export' }}
@@ -816,9 +828,9 @@ function toggleClock(): void {
                                     v-model="taskStatusSort"
                                     class="rounded-md border border-input bg-background px-2 py-1.5 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                                 >
-                                    <option value="Not Started">Not Started first</option>
-                                    <option value="In Progress">In Progress first</option>
-                                    <option value="On Hold">On Hold first</option>
+                                    <option value="Not Started">Not Started</option>
+                                    <option value="In Progress">In Progress</option>
+                                    <option value="On Hold">On Hold</option>
                                 </select>
                             </div>
                             <div class="flex items-center gap-2">
@@ -828,9 +840,9 @@ function toggleClock(): void {
                                     v-model="taskPrioritySort"
                                     class="rounded-md border border-input bg-background px-2 py-1.5 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                                 >
-                                    <option value="High">High first</option>
-                                    <option value="Medium">Medium first</option>
-                                    <option value="Low">Low first</option>
+                                    <option value="High">High</option>
+                                    <option value="Medium">Medium</option>
+                                    <option value="Low">Low</option>
                                 </select>
                             </div>
                         </div>
@@ -1202,6 +1214,69 @@ function toggleClock(): void {
             </div>
         </Teleport>
 
+        <!-- Export PDF modal: pick date range, export all tasks (open + completed) in range -->
+        <Teleport to="body">
+            <div
+                v-if="showExportModal"
+                class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+                @click.self="closeExportModal"
+            >
+                <div
+                    class="w-full max-w-lg rounded-xl border border-border bg-card p-6 shadow-lg"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="export-modal-title"
+                >
+                    <div class="mb-4 flex items-center justify-between">
+                        <h2 id="export-modal-title" class="text-lg font-semibold text-foreground">Export tasks to PDF</h2>
+                        <button
+                            type="button"
+                            class="rounded p-1 text-muted-foreground hover:bg-muted"
+                            aria-label="Close"
+                            @click="closeExportModal"
+                        >
+                            <X class="size-5" />
+                        </button>
+                    </div>
+                    <p class="mb-4 text-sm text-muted-foreground">
+                        Choose a date range. All tasks (open and completed) whose due date falls in this range will be included.
+                    </p>
+                    <div class="mb-4">
+                        <label class="mb-2 block text-sm font-medium text-foreground">Date range</label>
+                        <div class="task-calendar-box rounded-md border border-input bg-background p-2">
+                            <DatePicker
+                                :key="exportDateRangeKey"
+                                v-model="exportDateRangeForPicker"
+                                is-range
+                                is-inline
+                                expanded
+                                :masks="{ weekdays: 'WWW' }"
+                                class="task-calendar-inline"
+                            />
+                        </div>
+                    </div>
+                    <div class="flex justify-end gap-2">
+                        <button
+                            type="button"
+                            class="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
+                            @click="closeExportModal"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="button"
+                            class="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:opacity-60"
+                            :disabled="exportPdfLoading || !exportDateRange?.start || !exportDateRange?.end"
+                            @click="doExportWithRange"
+                        >
+                            <Download class="size-4" />
+                            {{ exportPdfLoading ? 'Exporting…' : 'Export' }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </Teleport>
+
         <!-- User's Manuals (wide modal) – in-app guide, not PDF -->
         <Teleport to="body">
             <div
@@ -1218,7 +1293,7 @@ function toggleClock(): void {
                     <div class="mb-6 flex items-center justify-between border-b border-border pb-4">
                         <h2 id="user-manual-title" class="flex items-center gap-2 text-xl font-semibold text-foreground">
                             <BookOpen class="size-6 text-primary" />
-                            User's Manual – WFH Time In/Out
+                            User's Manual – WFH Attendance
                         </h2>
                         <button
                             type="button"
@@ -1232,7 +1307,7 @@ function toggleClock(): void {
 
                     <div class="space-y-6 text-sm text-foreground">
                         <section>
-                            <h3 class="mb-2 font-semibold text-foreground">How to use the WFH Time In/Out page</h3>
+                            <h3 class="mb-2 font-semibold text-foreground">How to use the WFH Attendance page</h3>
                             <p class="text-muted-foreground">
                                 This page lets you record your work-from-home time and manage your tasks. Follow the steps below.
                             </p>
@@ -1246,29 +1321,29 @@ function toggleClock(): void {
                             <ul class="list-inside list-disc space-y-1 text-muted-foreground">
                                 <li><strong class="text-foreground">Click</strong> the green <strong>Clock In</strong> button to start recording time.</li>
                                 <li><strong class="text-foreground">Click</strong> <strong>Clock Out</strong> when you finish.</li>
-                                <li><strong class="text-foreground">Click</strong> the <strong>View time</strong> link to open your time logs.</li>
+                                <li><strong class="text-foreground">Click</strong> the <strong>View time</strong> link to open your time logs. When you are done, <strong class="text-foreground">click</strong> <strong>Back to WFH Attendance</strong> to return.</li>
                             </ul>
                         </section>
 
                         <section class="space-y-2">
-                            <h4 class="font-medium text-foreground">2.) Task calendar</h4>
-                            <p class="text-muted-foreground">
-                                The Task calendar on the left shows your tasks by due date. Dates with tasks are marked.
-                            </p>
-                            <ul class="list-inside list-disc space-y-1 text-muted-foreground">
-                                <li><strong class="text-foreground">Click</strong> (or hover) over a date to see which tasks are due.</li>
-                                <li><strong class="text-foreground">Click</strong> the arrows to move between months.</li>
-                            </ul>
-                        </section>
-
-                        <section class="space-y-2">
-                            <h4 class="font-medium text-foreground">3.) Create a task</h4>
+                            <h4 class="font-medium text-foreground">2.) Create a task</h4>
                             <p class="text-muted-foreground">
                                 Enter the task title, target (description), priority, and due date. You can select a date range on the calendar (weekdays only). The task appears in the list and on the calendar.
                             </p>
                             <ul class="list-inside list-disc space-y-1 text-muted-foreground">
                                 <li><strong class="text-foreground">Click</strong> <strong>Create Task</strong> in the Tasks section.</li>
                                 <li><strong class="text-foreground">Click</strong> a start date and end date on the calendar to set the due date range.</li>
+                            </ul>
+                        </section>
+
+                        <section class="space-y-2">
+                            <h4 class="font-medium text-foreground">3.) Task calendar</h4>
+                            <p class="text-muted-foreground">
+                                The Task calendar on the left shows your tasks by due date. Dates with tasks are marked.
+                            </p>
+                            <ul class="list-inside list-disc space-y-1 text-muted-foreground">
+                                <li><strong class="text-foreground">Click</strong> (or hover) over a date to see which tasks are due.</li>
+                                <li><strong class="text-foreground">Click</strong> the arrows to move between months.</li>
                             </ul>
                         </section>
 
@@ -1299,10 +1374,11 @@ function toggleClock(): void {
                         <section class="space-y-2">
                             <h4 class="font-medium text-foreground">6.) Export report</h4>
                             <p class="text-muted-foreground">
-                                The report uses the official header and footer. You can optionally export without images if needed.
+                                Export all tasks (open and completed) in a date range as a PDF. The report uses the official header and footer when available.
                             </p>
                             <ul class="list-inside list-disc space-y-1 text-muted-foreground">
-                                <li><strong class="text-foreground">Click</strong> <strong>Export</strong> to download your task list as a PDF (open or completed, depending on the active tab).</li>
+                                <li><strong class="text-foreground">Click</strong> <strong>Export</strong> to open the export dialog.</li>
+                                <li><strong class="text-foreground">Click</strong> a start and end date on the calendar to choose the range, then <strong class="text-foreground">click</strong> <strong>Export</strong> to download the PDF.</li>
                             </ul>
                         </section>
                     </div>

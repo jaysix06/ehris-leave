@@ -11,11 +11,10 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Http\Response as HttpResponse;
+use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
 use Inertia\Response;
-use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class WfhTimeInOutController extends Controller
 {
@@ -155,44 +154,59 @@ class WfhTimeInOutController extends Controller
     }
 
     /**
-     * Export tasks as PDF (DomPDF, HTML built in PHP — no Blade). Accepts GET ?type= or POST JSON { type }.
+     * Export tasks as PDF (DomPDF, HTML built in PHP — no Blade).
+     * Accepts date_from and date_to (Y-m-d). Exports all tasks (open + completed) whose due date range overlaps the selected range.
      */
     public function exportPdf(Request $request): HttpResponse
     {
-        $request->validate(['type' => ['required', 'string', 'in:open,completed']]);
+        $request->validate([
+            'date_from' => ['required', 'date'],
+            'date_to' => ['required', 'date', 'after_or_equal:date_from'],
+        ]);
         $user = $request->user();
         if (! $user) {
             abort(403);
         }
 
-        $type = $request->input('type');
-        $openStatuses = ['Not Started', 'In Progress', 'On Hold', 'open'];
-        $completedStatuses = ['Complete', 'completed'];
+        $dateFrom = Carbon::parse($request->input('date_from'))->startOfDay();
+        $dateTo = Carbon::parse($request->input('date_to'))->endOfDay();
 
-        $query = SelfServiceTask::where('user_id', $user->getKey())
-            ->whereIn('status', $type === 'completed' ? $completedStatuses : $openStatuses);
+        $tasks = SelfServiceTask::where('user_id', $user->getKey())
+            ->where('due_date', '<=', $dateTo)
+            ->where(function ($q) use ($dateFrom) {
+                $q->whereNotNull('due_date_end')->where('due_date_end', '>=', $dateFrom)
+                    ->orWhere(function ($q2) use ($dateFrom) {
+                        $q2->whereNull('due_date_end')->where('due_date', '>=', $dateFrom);
+                    });
+            })
+            ->orderBy('due_date')
+            ->get();
 
-        if ($type === 'completed') {
-            $query->orderByDesc('updated_at');
-        } else {
-            $query->orderBy('due_date');
-        }
-
-        $tasks = $query->get();
-
-        $subtitle = $this->getReportDateRangeSubtitle($tasks);
+        $subtitle = '('.$dateFrom->format('F d, Y').'-'.$dateTo->format('F d, Y').')';
         [$employeeName, $station] = $this->getEmployeeNameAndStationForPdf($user);
 
-        $tasksForView = $tasks->map(function ($t) use ($station) {
+        $tasksForView = $tasks->map(function ($t) {
             $start = $t->due_date?->format('m/d/Y') ?? '';
             $end = ($t->due_date_end && $t->due_date_end != $t->due_date)
                 ? $t->due_date_end->format('m/d/Y')
                 : $start;
+            $status = (string) ($t->status ?? '');
+            $isComplete = in_array($status, ['Complete', 'completed'], true);
+            $isOnHold = in_array($status, ['On Hold', 'on hold'], true);
+            $accomplishment = '';
+            if ($isComplete) {
+                $accomplishment = (string) ($t->accomplishment_report ?? '');
+            } elseif ($isOnHold) {
+                $accomplishment = 'On Hold';
+            } else {
+                $accomplishment = 'In Progress';
+            }
+
             return [
-                'title' => $t->title,
-                'accomplishment' => $t->accomplishment_report ?? $t->description ?? '',
-                'date_range' => $start . '-' . $end,
-                'priority' => $t->priority,
+                'targeted_task' => $t->description ?? '',
+                'accomplishment' => $accomplishment,
+                'date_range' => $start.'-'.$end,
+                'priority' => $t->priority ?? '',
             ];
         })->all();
 
@@ -207,7 +221,7 @@ class WfhTimeInOutController extends Controller
             $tasksForView
         );
 
-        $filename = 'tasklist_report_' . $type . '_' . now()->format('Y-m-d') . '.pdf';
+        $filename = 'tasklist_report_'.$dateFrom->format('Y-m-d').'_'.$dateTo->format('Y-m-d').'.pdf';
 
         $pdf = Pdf::loadHTML($html)->setPaper('a4', 'landscape');
 
@@ -217,7 +231,7 @@ class WfhTimeInOutController extends Controller
     /**
      * Build full HTML for WFH Accomplishment Report (no Blade).
      *
-     * @param  array<int, array{title: string, accomplishment: string, date_range: string, priority: string}>  $tasks
+     * @param  array<int, array{targeted_task: string, accomplishment: string, date_range: string, priority: string}>  $tasks
      */
     private function buildWfhPdfHtml(
         ?string $headerImageDataUri,
@@ -229,20 +243,20 @@ class WfhTimeInOutController extends Controller
     ): string {
         $h = fn (string $s) => htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
         $headerImg = ($headerImageDataUri !== null && $headerImageDataUri !== '')
-            ? '<img src="' . $h($headerImageDataUri) . '" alt="Header" class="header-image">'
+            ? '<img src="'.$h($headerImageDataUri).'" alt="Header" class="header-image">'
             : '';
         $footerImg = ($footerImageDataUri !== null && $footerImageDataUri !== '')
-            ? '<img src="' . $h($footerImageDataUri) . '" alt="Footer" class="footer-image">'
+            ? '<img src="'.$h($footerImageDataUri).'" alt="Footer" class="footer-image">'
             : '';
 
         $rows = '';
         foreach ($tasks as $task) {
             $rows .= '<tr>';
-            $rows .= '<td class="col-task">' . $h($task['title']) . '</td>';
-            $rows .= '<td class="col-accomplishment">' . $h($task['accomplishment']) . '</td>';
-            $rows .= '<td class="col-date">' . $h($task['date_range']) . '</td>';
-            $rows .= '<td class="col-priority">' . $h($task['priority']) . '</td>';
-            $rows .= '<td class="col-station">' . $h($station) . '</td>';
+            $rows .= '<td class="col-task">'.$h($task['targeted_task']).'</td>';
+            $rows .= '<td class="col-accomplishment">'.$h($task['accomplishment']).'</td>';
+            $rows .= '<td class="col-date">'.$h($task['date_range']).'</td>';
+            $rows .= '<td class="col-priority">'.$h($task['priority']).'</td>';
+            $rows .= '<td class="col-station">'.$h($station).'</td>';
             $rows .= '</tr>';
         }
         if ($rows === '') {
@@ -250,6 +264,7 @@ class WfhTimeInOutController extends Controller
         }
 
         $year = date('Y');
+
         return '<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -257,14 +272,29 @@ class WfhTimeInOutController extends Controller
 <title>Work From Home Individual Accomplishment Report</title>
 <style>
 @page { margin: 0.6in; }
-body { font-family: DejaVu Sans, Helvetica, sans-serif; font-size: 9pt; margin: 0; padding: 0; color: #000; }
+body { font-family: "Bookman Old Style", "DejaVu Serif", serif; font-size: 11pt; margin: 0; padding: 0; color: #000; }
+.page-border {
+    position: fixed;
+    top: 0.05in;
+    left: 0.05in;
+    right: 0.05in;
+    bottom: 0.05in;
+    border: 5px solid #000;
+    box-sizing: border-box;
+    z-index: 0;
+}
+.page-content {
+    position: relative;
+    z-index: 1;
+    padding: 0.25in 0.3in 0.3in 0.25in;
+}
 .header-image { width: 100%; max-width: 11in; height: auto; max-height: 2in; margin: 0 auto 0.25in; display: block; }
-.report-title { font-size: 11pt; font-weight: bold; text-align: center; margin: 0 0 0.1in; }
-.report-date { font-size: 10pt; text-align: center; margin: 0 0 0.15in; }
+.report-title { font-size: 14pt; font-weight: bold; text-align: center; margin: 0 0 0.1in; }
+.report-date { font-size: 11pt; text-align: center; margin: 0 0 0.15in; }
 .report-title-line { border: none; border-top: 1px solid #000; margin: 0 0 0.2in; }
-.employee-name { font-weight: bold; margin-bottom: 0.15in; }
-table { width: 100%; border-collapse: collapse; font-size: 9pt; }
-th, td { border: 1px solid #000; padding: 3px; }
+.employee-name { font-weight: 700; margin-bottom: 0.15in; font-size: 12pt; text-transform: uppercase; }
+table { width: 100%; border-collapse: collapse; font-size: 11pt; font-family: "Bookman Old Style", "DejaVu Serif", serif; }
+th, td { border: 1px solid #000; padding: 3px; font-size: 11pt; font-family: "Bookman Old Style", "DejaVu Serif", serif; }
 th { font-weight: bold; background-color: #f2f2f2; }
 th.col-task, td.col-task { text-align: left; }
 th.col-accomplishment, td.col-accomplishment { text-align: left; }
@@ -277,12 +307,14 @@ th.col-station, td.col-station { text-align: left; }
 </style>
 </head>
 <body>
-' . $headerImg . '
+'.'<div class="page-border"></div>'.'
+<div class="page-content">
+'.$headerImg.'
 <h1 class="report-title">WORK FROM HOME INDIVIDUAL ACCOMPLISHMENT REPORT</h1>
-<p class="report-date">' . $h($subtitle) . '</p>
+<p class="report-date">'.$h($subtitle).'</p>
 <hr class="report-title-line">
 <div class="content-wrap">
-<p class="employee-name">Name: ' . $h($employeeName) . '</p>
+<p class="employee-name">Name: '.$h(mb_strtoupper($employeeName, 'UTF-8')).'</p>
 <table>
 <thead><tr>
 <th class="col-task">Targeted Task/ Assignments/ Output</th>
@@ -291,11 +323,12 @@ th.col-station, td.col-station { text-align: left; }
 <th class="col-priority">Priority</th>
 <th class="col-station">Station</th>
 </tr></thead>
-<tbody>' . $rows . '</tbody>
+<tbody>'.$rows.'</tbody>
 </table>
 </div>
-' . $footerImg . '
-<p class="footer-text">© ' . $h($year) . ' DepEd</p>
+'.$footerImg.'
+<p class="footer-text">© '.$h($year).' DepEd</p>
+</div>
 </body>
 </html>';
     }
@@ -463,19 +496,19 @@ th.col-station, td.col-station { text-align: left; }
     private function getWfhPdfTemplateImageDataUris(): array
     {
         $base = rtrim(public_path(), '/\\');
-        $headerPath = $base . '/Accomplishment Report Templates/header.jpg';
+        $headerPath = $base.'/Accomplishment Report Templates/header.jpg';
         if (! is_file($headerPath)) {
-            $headerPath = $base . \DIRECTORY_SEPARATOR . 'Accomplishment Report Templates' . \DIRECTORY_SEPARATOR . 'header.jpg';
+            $headerPath = $base.\DIRECTORY_SEPARATOR.'Accomplishment Report Templates'.\DIRECTORY_SEPARATOR.'header.jpg';
         }
         if (! is_file($headerPath)) {
-            $headerPath = $base . '/assets/img/header.png';
+            $headerPath = $base.'/assets/img/header.png';
         }
-        $footerPath = $base . '/Accomplishment Report Templates/footer.jpg';
+        $footerPath = $base.'/Accomplishment Report Templates/footer.jpg';
         if (! is_file($footerPath)) {
-            $footerPath = $base . \DIRECTORY_SEPARATOR . 'Accomplishment Report Templates' . \DIRECTORY_SEPARATOR . 'footer.jpg';
+            $footerPath = $base.\DIRECTORY_SEPARATOR.'Accomplishment Report Templates'.\DIRECTORY_SEPARATOR.'footer.jpg';
         }
         if (! is_file($footerPath)) {
-            $footerPath = $base . '/assets/img/footer.png';
+            $footerPath = $base.'/assets/img/footer.png';
         }
 
         $headerDataUri = null;
@@ -483,7 +516,7 @@ th.col-station, td.col-station { text-align: left; }
             $content = @file_get_contents($headerPath);
             if ($content !== false) {
                 $mime = (strtolower(pathinfo($headerPath, PATHINFO_EXTENSION)) === 'png') ? 'image/png' : 'image/jpeg';
-                $headerDataUri = 'data:' . $mime . ';base64,' . base64_encode($content);
+                $headerDataUri = 'data:'.$mime.';base64,'.base64_encode($content);
             }
         }
 
@@ -492,7 +525,7 @@ th.col-station, td.col-station { text-align: left; }
             $content = @file_get_contents($footerPath);
             if ($content !== false) {
                 $mime = (strtolower(pathinfo($footerPath, PATHINFO_EXTENSION)) === 'png') ? 'image/png' : 'image/jpeg';
-                $footerDataUri = 'data:' . $mime . ';base64,' . base64_encode($content);
+                $footerDataUri = 'data:'.$mime.';base64,'.base64_encode($content);
             }
         }
 
@@ -547,6 +580,7 @@ th.col-station, td.col-station { text-align: left; }
                 }
             }
         }
+
         return [$user->name ?? $user->email ?? 'N/A', ''];
     }
 }
