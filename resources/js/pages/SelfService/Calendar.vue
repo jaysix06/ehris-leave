@@ -287,7 +287,7 @@ async function submitEvent() {
                 <h1 class="text-2xl font-bold text-foreground">Calendar &amp; upcoming events</h1>
                 <div class="flex items-center gap-2">
                     <Link :href="selfServiceRoutes.wfhTimeInOut().url" class="text-sm font-medium text-primary hover:underline">
-                        ← Back to Timezone
+                        ← Back to WFH Attendance
                     </Link>
                     <Button size="sm" @click="openAddModal">
                         <CalendarPlus class="mr-2 size-4" />

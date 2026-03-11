@@ -1197,7 +1197,7 @@ function toggleClock(): void {
                     <div class="mb-6 flex items-center justify-between border-b border-border pb-4">
                         <h2 id="user-manual-title" class="flex items-center gap-2 text-xl font-semibold text-foreground">
                             <BookOpen class="size-6 text-primary" />
-                            User's Manual – WFH Time In/Out
+                            User's Manual – WFH Attendance
                         </h2>
                         <button
                             type="button"
@@ -1211,7 +1211,7 @@ function toggleClock(): void {
 
                     <div class="space-y-6 text-sm text-foreground">
                         <section>
-                            <h3 class="mb-2 font-semibold text-foreground">How to use the WFH Time In/Out page</h3>
+                            <h3 class="mb-2 font-semibold text-foreground">How to use the WFH Attendance page</h3>
                             <p class="text-muted-foreground">
                                 This page lets you record your work-from-home time and manage your tasks. Follow the steps below.
                             </p>
@@ -1225,29 +1225,29 @@ function toggleClock(): void {
                             <ul class="list-inside list-disc space-y-1 text-muted-foreground">
                                 <li><strong class="text-foreground">Click</strong> the green <strong>Clock In</strong> button to start recording time.</li>
                                 <li><strong class="text-foreground">Click</strong> <strong>Clock Out</strong> when you finish.</li>
-                                <li><strong class="text-foreground">Click</strong> the <strong>View time</strong> link to open your time logs.</li>
+                                <li><strong class="text-foreground">Click</strong> the <strong>View time</strong> link to open your time logs. When you are done, <strong class="text-foreground">click</strong> <strong>Back to WFH Attendance</strong> to return.</li>
                             </ul>
                         </section>
 
                         <section class="space-y-2">
-                            <h4 class="font-medium text-foreground">2.) Task calendar</h4>
-                            <p class="text-muted-foreground">
-                                The Task calendar on the left shows your tasks by due date. Dates with tasks are marked.
-                            </p>
-                            <ul class="list-inside list-disc space-y-1 text-muted-foreground">
-                                <li><strong class="text-foreground">Click</strong> (or hover) over a date to see which tasks are due.</li>
-                                <li><strong class="text-foreground">Click</strong> the arrows to move between months.</li>
-                            </ul>
-                        </section>
-
-                        <section class="space-y-2">
-                            <h4 class="font-medium text-foreground">3.) Create a task</h4>
+                            <h4 class="font-medium text-foreground">2.) Create a task</h4>
                             <p class="text-muted-foreground">
                                 Enter the task title, target (description), priority, and due date. You can select a date range on the calendar (weekdays only). The task appears in the list and on the calendar.
                             </p>
                             <ul class="list-inside list-disc space-y-1 text-muted-foreground">
                                 <li><strong class="text-foreground">Click</strong> <strong>Create Task</strong> in the Tasks section.</li>
                                 <li><strong class="text-foreground">Click</strong> a start date and end date on the calendar to set the due date range.</li>
+                            </ul>
+                        </section>
+
+                        <section class="space-y-2">
+                            <h4 class="font-medium text-foreground">3.) Task calendar</h4>
+                            <p class="text-muted-foreground">
+                                The Task calendar on the left shows your tasks by due date. Dates with tasks are marked.
+                            </p>
+                            <ul class="list-inside list-disc space-y-1 text-muted-foreground">
+                                <li><strong class="text-foreground">Click</strong> (or hover) over a date to see which tasks are due.</li>
+                                <li><strong class="text-foreground">Click</strong> the arrows to move between months.</li>
                             </ul>
                         </section>
 
