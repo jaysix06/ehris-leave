@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, router } from '@inertiajs/vue3';
-import { ArrowRight, CheckCircle2, Clock, Eye, FolderOpen, ListPlus, Pause, Pencil, Play, Search, Trash2, X } from 'lucide-vue-next';
+import { ArrowRight, BookOpen, CheckCircle2, Download, Eye, FolderOpen, ListPlus, Pause, Pencil, Play, Search, Trash2, X } from 'lucide-vue-next';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Calendar as VCalendar, DatePicker } from 'v-calendar';
 import { toast } from 'vue3-toastify';
@@ -42,7 +42,7 @@ const props = withDefaults(defineProps<Props>(), {
     errorMessage: '',
 });
 
-const pageTitle = 'Self-Service - WFH TimeIn/Out';
+const pageTitle = 'Self-Service - WFH Attendance';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -106,6 +106,7 @@ const tasksTab = ref<'open' | 'completed'>('open');
 // Search and sort (apply to both Tasks and Completed Tasks)
 const taskSearchQuery = ref('');
 const taskPrioritySort = ref<'High' | 'Medium' | 'Low'>('High');
+const taskStatusSort = ref<'Not Started' | 'In Progress' | 'On Hold'>('Not Started');
 
 const PRIORITY_ORDER: Record<'High' | 'Medium' | 'Low', number[]> = {
     High: [0, 1, 2],   // High first, then Medium, then Low
@@ -114,10 +115,24 @@ const PRIORITY_ORDER: Record<'High' | 'Medium' | 'Low', number[]> = {
 };
 const PRIORITY_RANK: Record<string, number> = { High: 0, Medium: 1, Low: 2 };
 
+const STATUS_ORDER: Record<'Not Started' | 'In Progress' | 'On Hold', number[]> = {
+    'Not Started': [0, 1, 2],   // Not Started, In Progress, On Hold
+    'In Progress': [1, 0, 2],   // In Progress first, then Not Started, then On Hold
+    'On Hold': [2, 0, 1],       // On Hold first, then Not Started, then In Progress
+};
+const STATUS_RANK: Record<string, number> = {
+    'Not Started': 0,
+    'In Progress': 1,
+    'On Hold': 2,
+    'Complete': 3,
+};
+
 function filterAndSortTasks(tasks: TaskItem[]): TaskItem[] {
     const q = taskSearchQuery.value.trim().toLowerCase();
-    const sortKey = taskPrioritySort.value;
-    const order = PRIORITY_ORDER[sortKey];
+    const priorityKey = taskPrioritySort.value;
+    const statusKey = taskStatusSort.value;
+    const priorityOrder = PRIORITY_ORDER[priorityKey];
+    const statusOrder = STATUS_ORDER[statusKey];
     let list = tasks;
     if (q) {
         list = list.filter(
@@ -127,8 +142,13 @@ function filterAndSortTasks(tasks: TaskItem[]): TaskItem[] {
         );
     }
     return [...list].sort((a, b) => {
-        const rankA = order[PRIORITY_RANK[a.priority] ?? 1];
-        const rankB = order[PRIORITY_RANK[b.priority] ?? 1];
+        const statusA = normalizedStatus(a);
+        const statusB = normalizedStatus(b);
+        const statusRankA = statusOrder[STATUS_RANK[statusA] ?? 0] ?? 99;
+        const statusRankB = statusOrder[STATUS_RANK[statusB] ?? 0] ?? 99;
+        if (statusRankA !== statusRankB) return statusRankA - statusRankB;
+        const rankA = priorityOrder[PRIORITY_RANK[a.priority] ?? 1];
+        const rankB = priorityOrder[PRIORITY_RANK[b.priority] ?? 1];
         return rankA - rankB;
     });
 }
@@ -186,7 +206,7 @@ function submitEditTask(): void {
     if (!title) { toast.error('Task title is required.'); return; }
     if (title.length > 50) { toast.error('Task title must be at most 50 characters.'); return; }
     const description = editDescription.value.trim();
-    if (!description) { toast.error('Task description is required.'); return; }
+    if (!description) { toast.error('Task target is required.'); return; }
     const range = editDueDateRange.value;
     if (!range?.start) { toast.error('Task due date is required.'); return; }
     const end = range.end && range.end >= range.start ? range.end : range.start;
@@ -303,6 +323,73 @@ function confirmComplete(): void {
         },
     });
 }
+
+// Export: POST JSON to server; server builds HTML in PHP (no Blade) and returns PDF.
+// Falls back to GET (open in new tab) when POST fails (e.g. 419 CSRF on other devices/sessions).
+const exportPdfLoading = ref(false);
+function exportTasks(): void {
+    const type = tasksTab.value === 'open' ? 'open' : 'completed';
+    const url = '/self-service/wfh-time-in-out/export/pdf';
+    const getFallbackUrl = `${url}?type=${encodeURIComponent(type)}`;
+
+    function fallbackToGet(): void {
+        window.open(getFallbackUrl, '_blank', 'noopener,noreferrer');
+    }
+
+    exportPdfLoading.value = true;
+    const csrfToken = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
+    fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/pdf',
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRF-TOKEN': csrfToken,
+        },
+        body: JSON.stringify({ type }),
+        credentials: 'same-origin',
+    })
+        .then(async (res) => {
+            if (!res.ok) {
+                const msg = `Export failed (${res.status}). Trying open in new tab.`;
+                if (res.status === 419) {
+                    toast.warn('Session expired or CSRF issue. Opening export in new tab.');
+                } else {
+                    toast.warn(msg);
+                }
+                fallbackToGet();
+                return null;
+            }
+            const disposition = res.headers.get('Content-Disposition');
+            const blob = await res.blob();
+            return { blob, disposition };
+        })
+        .then((result) => {
+            if (!result) return;
+            const { blob, disposition } = result;
+            let filename = `tasklist_report_${type}_${new Date().toISOString().slice(0, 10)}.pdf`;
+            if (disposition) {
+                const m = disposition.match(/filename="?([^";\n]+)"?/);
+                if (m) filename = m[1].trim();
+            }
+            const u = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = u;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(u);
+        })
+        .catch(() => {
+            toast.warn('Export request failed. Opening in new tab.');
+            fallbackToGet();
+        })
+        .finally(() => {
+            exportPdfLoading.value = false;
+        });
+}
+
+// User's Manuals modal (wide)
+const showUserManualModal = ref(false);
 
 // Create Task modal
 const showCreateTaskModal = ref(false);
@@ -466,7 +553,7 @@ function submitCreateTask(): void {
     }
     const description = taskDescription.value.trim();
     if (!description) {
-        toast.error('Task description is required.');
+        toast.error('Task target is required.');
         return;
     }
     const range = taskDueDateRange.value;
@@ -537,7 +624,7 @@ function clockOut(): void {
 function toggleClock(): void {
     if (clockLoading.value) return;
     clockIconSpinning.value = true;
-    setTimeout(() => { clockIconSpinning.value = false; }, 600);
+    setTimeout(() => { clockIconSpinning.value = false; }, 1200);
     if (isClockedIn.value) clockOut();
     else clockIn();
 }
@@ -548,6 +635,16 @@ function toggleClock(): void {
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="ehris-page timezone-attendance-page">
+            <div class="mb-3 flex justify-end">
+                <button
+                    type="button"
+                    class="inline-flex items-center gap-2 rounded-lg border border-white/30 bg-white px-5 py-3 text-base font-semibold text-neutral-800 shadow-md transition hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    @click="showUserManualModal = true"
+                >
+                    <BookOpen class="size-5" />
+                    User's Manuals
+                </button>
+            </div>
             <!-- Row 1: Calendar card (left) + Activity Logs / Clock-in card (right) -->
             <section class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-[1fr_auto]">
                 <!-- Calendar card (left) -->
@@ -594,7 +691,7 @@ function toggleClock(): void {
 
                 <!-- Activity Logs card (right) – hours worked + Clock In button in empty space -->
                 <article
-                    class="flex min-h-0 flex-col justify-between gap-3 rounded-2xl p-4 text-white"
+                    class="flex min-h-0 flex-col justify-between gap-3 rounded-2xl p-4 text-white transition-colors duration-500 ease-in-out"
                     :class="isClockedIn ? 'bg-green-700' : 'bg-red-700'"
                 >
                     <Link
@@ -602,10 +699,25 @@ function toggleClock(): void {
                         class="flex flex-col gap-3 transition hover:opacity-95"
                     >
                         <span
-                            class="inline-block shrink-0"
-                            :class="{ 'clock-icon-spin': clockIconSpinning }"
+                            class="inline-flex size-10 shrink-0 items-center justify-center opacity-90"
+                            :class="{ 'clock-hands-spin': clockIconSpinning }"
                         >
-                            <Clock class="size-10 opacity-90" />
+                            <svg
+                                class="size-10"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                            >
+                                <circle cx="12" cy="12" r="10" />
+                                <g class="clock-hand clock-hand-minute">
+                                    <line x1="12" y1="12" x2="12" y2="4" />
+                                </g>
+                                <g class="clock-hand clock-hand-hour">
+                                    <line x1="12" y1="12" x2="18" y2="12" />
+                                </g>
+                            </svg>
                         </span>
                         <div>
                             <p class="text-sm font-medium opacity-90">You have worked</p>
@@ -665,18 +777,29 @@ function toggleClock(): void {
                                 Completed Tasks
                             </button>
                         </div>
-                        <button
-                            v-if="tasksTab === 'open'"
-                            type="button"
-                            class="inline-flex shrink-0 items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
-                            @click="openCreateTaskModal"
-                        >
-                            <ListPlus class="size-4" />
-                            Create Task
-                        </button>
+                        <div class="flex shrink-0 items-center gap-2">
+                            <button
+                                type="button"
+                                class="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs font-medium text-foreground shadow-sm transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-60 disabled:pointer-events-none"
+                                :disabled="exportPdfLoading"
+                                @click="exportTasks"
+                            >
+                                <Download class="size-4" />
+                                {{ exportPdfLoading ? 'Exporting…' : 'Export' }}
+                            </button>
+                            <button
+                                v-if="tasksTab === 'open'"
+                                type="button"
+                                class="inline-flex shrink-0 items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
+                                @click="openCreateTaskModal"
+                            >
+                                <ListPlus class="size-4" />
+                                Create Task
+                            </button>
+                        </div>
                     </div>
                     <div class="mb-3 flex flex-wrap items-center gap-2">
-                        <div class="relative flex-1 min-w-[180px]">
+                        <div class="relative w-full max-w-[220px]">
                             <Search class="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                             <input
                                 v-model="taskSearchQuery"
@@ -685,17 +808,31 @@ function toggleClock(): void {
                                 class="w-full rounded-md border border-input bg-background py-1.5 pl-8 pr-3 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                             />
                         </div>
-                        <div class="flex items-center gap-2">
-                            <label for="task-priority-sort" class="text-xs font-medium text-muted-foreground">Sort by priority</label>
-                            <select
-                                id="task-priority-sort"
-                                v-model="taskPrioritySort"
-                                class="rounded-md border border-input bg-background px-2 py-1.5 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                            >
-                                <option value="High">High first</option>
-                                <option value="Medium">Medium first</option>
-                                <option value="Low">Low first</option>
-                            </select>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <div class="flex items-center gap-2">
+                                <label for="task-status-sort" class="text-xs font-medium text-muted-foreground">Sort by status</label>
+                                <select
+                                    id="task-status-sort"
+                                    v-model="taskStatusSort"
+                                    class="rounded-md border border-input bg-background px-2 py-1.5 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                >
+                                    <option value="Not Started">Not Started first</option>
+                                    <option value="In Progress">In Progress first</option>
+                                    <option value="On Hold">On Hold first</option>
+                                </select>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <label for="task-priority-sort" class="text-xs font-medium text-muted-foreground">Sort by priority</label>
+                                <select
+                                    id="task-priority-sort"
+                                    v-model="taskPrioritySort"
+                                    class="rounded-md border border-input bg-background px-2 py-1.5 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                >
+                                    <option value="High">High first</option>
+                                    <option value="Medium">Medium first</option>
+                                    <option value="Low">Low first</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
                     <div v-if="tasksTab === 'open'" class="min-h-[120px]">
@@ -863,7 +1000,7 @@ function toggleClock(): void {
                             <dd class="mt-0.5 font-medium text-foreground">{{ viewTask.title }}</dd>
                         </div>
                         <div>
-                            <dt class="font-medium text-muted-foreground">Description</dt>
+                            <dt class="font-medium text-muted-foreground">Target</dt>
                             <dd class="mt-0.5 text-foreground">{{ viewTask.description || '—' }}</dd>
                         </div>
                         <div>
@@ -900,13 +1037,13 @@ function toggleClock(): void {
                             />
                         </div>
                         <div>
-                            <label for="edit-task-desc" class="mb-1 block text-sm font-medium text-foreground">Description</label>
+                            <label for="edit-task-desc" class="mb-1 block text-sm font-medium text-foreground">Target</label>
                             <textarea
                                 id="edit-task-desc"
                                 v-model="editDescription"
                                 rows="3"
                                 class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-none"
-                                placeholder="Task description"
+                                placeholder="Task target"
                             />
                         </div>
                         <div>
@@ -1009,13 +1146,13 @@ function toggleClock(): void {
                             </select>
                         </div>
                         <div>
-                            <label for="task-description" class="block text-sm font-medium text-foreground">Task Description *</label>
+                            <label for="task-description" class="block text-sm font-medium text-foreground">Task Target *</label>
                             <textarea
                                 id="task-description"
                                 v-model="taskDescription"
                                 rows="4"
                                 class="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-none"
-                                placeholder="Enter task description"
+                                placeholder="Enter task target"
                                 required
                             />
                         </div>
@@ -1064,6 +1201,115 @@ function toggleClock(): void {
                 </div>
             </div>
         </Teleport>
+
+        <!-- User's Manuals (wide modal) – in-app guide, not PDF -->
+        <Teleport to="body">
+            <div
+                v-if="showUserManualModal"
+                class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+                @click.self="showUserManualModal = false"
+            >
+                <div
+                    class="w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-xl border border-border bg-card p-6 shadow-lg"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="user-manual-title"
+                >
+                    <div class="mb-6 flex items-center justify-between border-b border-border pb-4">
+                        <h2 id="user-manual-title" class="flex items-center gap-2 text-xl font-semibold text-foreground">
+                            <BookOpen class="size-6 text-primary" />
+                            User's Manual – WFH Time In/Out
+                        </h2>
+                        <button
+                            type="button"
+                            class="rounded p-1 text-muted-foreground hover:bg-muted"
+                            aria-label="Close"
+                            @click="showUserManualModal = false"
+                        >
+                            <X class="size-5" />
+                        </button>
+                    </div>
+
+                    <div class="space-y-6 text-sm text-foreground">
+                        <section>
+                            <h3 class="mb-2 font-semibold text-foreground">How to use the WFH Time In/Out page</h3>
+                            <p class="text-muted-foreground">
+                                This page lets you record your work-from-home time and manage your tasks. Follow the steps below.
+                            </p>
+                        </section>
+
+                        <section class="space-y-2">
+                            <h4 class="font-medium text-foreground">1.) Clock In and Clock Out</h4>
+                            <p class="text-muted-foreground">
+                                The clock card on the right shows how long you have worked this week and whether you are currently clocked in or out.
+                            </p>
+                            <ul class="list-inside list-disc space-y-1 text-muted-foreground">
+                                <li><strong class="text-foreground">Click</strong> the green <strong>Clock In</strong> button to start recording time.</li>
+                                <li><strong class="text-foreground">Click</strong> <strong>Clock Out</strong> when you finish.</li>
+                                <li><strong class="text-foreground">Click</strong> the <strong>View time</strong> link to open your time logs.</li>
+                            </ul>
+                        </section>
+
+                        <section class="space-y-2">
+                            <h4 class="font-medium text-foreground">2.) Task calendar</h4>
+                            <p class="text-muted-foreground">
+                                The Task calendar on the left shows your tasks by due date. Dates with tasks are marked.
+                            </p>
+                            <ul class="list-inside list-disc space-y-1 text-muted-foreground">
+                                <li><strong class="text-foreground">Click</strong> (or hover) over a date to see which tasks are due.</li>
+                                <li><strong class="text-foreground">Click</strong> the arrows to move between months.</li>
+                            </ul>
+                        </section>
+
+                        <section class="space-y-2">
+                            <h4 class="font-medium text-foreground">3.) Create a task</h4>
+                            <p class="text-muted-foreground">
+                                Enter the task title, target (description), priority, and due date. You can select a date range on the calendar (weekdays only). The task appears in the list and on the calendar.
+                            </p>
+                            <ul class="list-inside list-disc space-y-1 text-muted-foreground">
+                                <li><strong class="text-foreground">Click</strong> <strong>Create Task</strong> in the Tasks section.</li>
+                                <li><strong class="text-foreground">Click</strong> a start date and end date on the calendar to set the due date range.</li>
+                            </ul>
+                        </section>
+
+                        <section class="space-y-2">
+                            <h4 class="font-medium text-foreground">4.) Manage task status</h4>
+                            <p class="text-muted-foreground">
+                                Each task has a <strong>View</strong> button and action buttons. Completed tasks move to the <strong>Completed Tasks</strong> tab. You can edit or delete from the view modal (delete is not available for completed tasks).
+                            </p>
+                            <ul class="list-inside list-disc space-y-1 text-muted-foreground">
+                                <li><strong class="text-foreground">Click</strong> <strong>View</strong> to see task details.</li>
+                                <li><strong class="text-foreground">Click</strong> <strong>Start Task</strong> when the task is Not Started.</li>
+                                <li><strong class="text-foreground">Click</strong> <strong>Hold Task</strong> or <strong>Complete Task</strong> when In Progress.</li>
+                                <li><strong class="text-foreground">Click</strong> <strong>Resume Task</strong> when the task is On Hold.</li>
+                            </ul>
+                        </section>
+
+                        <section class="space-y-2">
+                            <h4 class="font-medium text-foreground">5.) Search and sort</h4>
+                            <p class="text-muted-foreground">
+                                Filter by title or target; order the list by status or priority.
+                            </p>
+                            <ul class="list-inside list-disc space-y-1 text-muted-foreground">
+                                <li><strong class="text-foreground">Click</strong> in the <strong>Search Task</strong> field and type to filter.</li>
+                                <li><strong class="text-foreground">Click</strong> <strong>Sort by status</strong> or <strong>Sort by priority</strong> to reorder the list.</li>
+                            </ul>
+                        </section>
+
+                        <section class="space-y-2">
+                            <h4 class="font-medium text-foreground">6.) Export report</h4>
+                            <p class="text-muted-foreground">
+                                The report uses the official header and footer. You can optionally export without images if needed.
+                            </p>
+                            <ul class="list-inside list-disc space-y-1 text-muted-foreground">
+                                <li><strong class="text-foreground">Click</strong> <strong>Export</strong> to download your task list as a PDF (open or completed, depending on the active tab).</li>
+                            </ul>
+                        </section>
+                    </div>
+                </div>
+            </div>
+        </Teleport>
+
         <!-- Delete Task Confirmation Modal -->
         <AppModal v-model="showDeleteModal" title="Delete Task" tone="disapprove">
             <p class="text-sm text-muted-foreground">Are you sure you want to delete this task? This action cannot be undone.</p>
@@ -1247,12 +1493,22 @@ function toggleClock(): void {
     opacity: 0;
 }
 
-/* Clock icon spin animation on clock in/out */
-@keyframes clock-turn {
+/* Clock hands animation on clock in/out – only the arms rotate, smooth ease-in-out */
+.clock-hand {
+    transform-origin: 12px 12px;
+}
+@keyframes clock-minute-turn {
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
 }
-.clock-icon-spin {
-    animation: clock-turn 0.6s ease-in-out;
+@keyframes clock-hour-turn {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+.clock-hands-spin .clock-hand-minute {
+    animation: clock-minute-turn 0.6s ease-in-out;
+}
+.clock-hands-spin .clock-hand-hour {
+    animation: clock-hour-turn 1.2s ease-in-out;
 }
 </style>

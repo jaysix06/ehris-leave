@@ -136,7 +136,7 @@ const mainNavItems = computed<NavItem[]>(() => {
         icon: UserRoundCog,
         children: [
             {
-                title: 'WFH TimeIn/Out',
+                title: 'WFH Attendance',
                 href: selfServiceRoutes.wfhTimeInOut(),
             },
             {
