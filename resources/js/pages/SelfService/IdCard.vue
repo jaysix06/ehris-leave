@@ -368,7 +368,7 @@ function applyChanges() {
                                 class="w-full h-full object-cover"
                             />
                         </div>
-                        <span class="text-xs text-muted-foreground">Auto-cropped to passport size (2in x 2in)</span>
+                        <span class="text-xs text-muted-foreground">Passport Size (2in x 2in)</span>
                         <input
                             ref="idPhotoInput"
                             type="file"
@@ -408,7 +408,6 @@ function applyChanges() {
                             <Upload class="size-4" />
                             Choose File
                         </button>
-                        <span class="text-xs text-muted-foreground">Auto-cropped to signature placeholder size</span>
                         <div class="text-center">
                             <p class="font-semibold text-lg">{{ fullName || '—' }}</p>
                             <p class="text-sm text-muted-foreground">Email: {{ displayEmail || '—' }}</p>
