@@ -274,7 +274,7 @@ body { font-family: "Bookman Old Style", "DejaVu Serif", serif; font-size: 11pt;
     padding: 0.25in 0.3in 0.3in 0.25in;
 }
 .header-image { width: 100%; max-width: 11in; height: auto; max-height: 2in; margin: 0 auto 0.25in; display: block; }
-.report-title { font-size: 11pt; font-weight: bold; text-align: center; margin: 0 0 0.1in; }
+.report-title { font-size: 14pt; font-weight: bold; text-align: center; margin: 0 0 0.1in; }
 .report-date { font-size: 11pt; text-align: center; margin: 0 0 0.15in; }
 .report-title-line { border: none; border-top: 1px solid #000; margin: 0 0 0.2in; }
 .employee-name { font-weight: 700; margin-bottom: 0.15in; font-size: 12pt; text-transform: uppercase; }
