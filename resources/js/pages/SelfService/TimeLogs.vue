@@ -31,7 +31,7 @@ const pageTitle = 'My Time Logs';
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Self-Service', href: selfServiceRoutes.wfhTimeInOut().url },
-    { title: 'WFH Time In/Out', href: selfServiceRoutes.wfhTimeInOut().url },
+    { title: 'WFH Attendance', href: selfServiceRoutes.wfhTimeInOut().url },
     { title: pageTitle },
 ];
 

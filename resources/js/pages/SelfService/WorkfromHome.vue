@@ -42,7 +42,7 @@ const props = withDefaults(defineProps<Props>(), {
     errorMessage: '',
 });
 
-const pageTitle = 'Self-Service - WFH TimeIn/Out';
+const pageTitle = 'Self-Service - WFH Attendance';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
