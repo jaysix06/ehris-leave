@@ -95,35 +95,43 @@ class EmployeeListingController extends Controller
         // Chart data: distributions from the same filtered query (before pagination)
         // Use explicit select() and groupBy(column) to satisfy MySQL ONLY_FULL_GROUP_BY
 
-        // Employment Status: Get all records, split for legend (top 4) and others
+        // Employment Status: Get all records, exclude blank; split for legend (top 5) and others
         $allEmploymentStatus = (clone $query)
-            ->select(DB::raw('COALESCE(employ_status, \'(Blank)\') as label'), DB::raw('count(*) as count'))
+            ->select('employ_status as label', DB::raw('count(*) as count'))
+            ->whereNotNull('employ_status')
+            ->where('employ_status', '!=', '')
             ->groupBy('employ_status')
             ->orderByDesc('count')
             ->get()
-            ->map(fn ($row) => ['label' => $row->label ?? '(Blank)', 'count' => (int) $row->count])
+            ->map(fn ($row) => ['label' => trim((string) ($row->label ?? '')), 'count' => (int) $row->count])
+            ->filter(fn ($item) => $item['label'] !== '')
             ->values();
 
         $employmentStatusTop = $allEmploymentStatus->take(5)->all();
         $employmentStatusOthers = $allEmploymentStatus->skip(5)->all();
 
+        // Job Title (top 10): exclude blank labels
         $jobTitleDistribution = (clone $query)
-            ->select(DB::raw('COALESCE(job_title, \'(Blank)\') as label'), DB::raw('count(*) as count'))
+            ->select('job_title as label', DB::raw('count(*) as count'))
+            ->whereNotNull('job_title')
+            ->where('job_title', '!=', '')
             ->groupBy('job_title')
             ->orderByDesc('count')
             ->limit(10)
             ->get()
-            ->map(fn ($row) => ['label' => $row->label ?? '(Blank)', 'count' => (int) $row->count])
+            ->map(fn ($row) => ['label' => trim((string) ($row->label ?? '')), 'count' => (int) $row->count])
+            ->filter(fn ($item) => $item['label'] !== '')
             ->values()
             ->all();
 
-        // School/Office: group by department name (from tbl_department join)
+        // School/Office: group by department name (from tbl_department join); exclude blank
         $allSchoolDistribution = (clone $query)
-            ->select(DB::raw('COALESCE(d.department_name, \'(Blank)\') as label'), DB::raw('count(*) as count'))
+            ->select(DB::raw('d.department_name as label'), DB::raw('count(*) as count'))
             ->groupBy(DB::raw('d.department_name'))
             ->orderByDesc('count')
             ->get()
-            ->map(fn ($row) => ['label' => (string) ($row->label ?? '(Blank)'), 'count' => (int) $row->count])
+            ->map(fn ($row) => ['label' => trim((string) ($row->label ?? '')), 'count' => (int) $row->count])
+            ->filter(fn ($item) => $item['label'] !== '')
             ->values();
 
         $schoolTop = $allSchoolDistribution->take(5)->all();
