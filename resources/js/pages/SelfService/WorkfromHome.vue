@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, router } from '@inertiajs/vue3';
-import { ArrowRight, BookOpen, CheckCircle2, Download, Eye, FolderOpen, ListPlus, Pause, Pencil, Play, Search, Trash2, X } from 'lucide-vue-next';
+import { ArrowRight, BookOpen, CheckCircle2, Download, Eye, FolderOpen, ListPlus, Pause, Pencil, Play, RotateCcw, Search, Trash2, X } from 'lucide-vue-next';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Calendar as VCalendar, DatePicker } from 'v-calendar';
 import { toast } from 'vue3-toastify';
@@ -246,6 +246,18 @@ function updateTaskStatus(taskId: number, status: string, fromStatus?: string): 
             } else if (status === 'On Hold') {
                 toast.info('Task put on hold.');
             }
+        },
+    });
+}
+
+function reEnterTask(taskId: number): void {
+    taskActionLoading.value = true;
+    router.put(`/self-service/wfh-time-in-out/tasks/${taskId}`, { status: 'Not Started' }, {
+        preserveScroll: true,
+        onFinish: () => { taskActionLoading.value = false; },
+        onSuccess: () => {
+            closeViewModal();
+            toast.success('Task re-entered. It is back in Tasks.');
         },
     });
 }
@@ -820,7 +832,7 @@ function toggleClock(): void {
                             />
                         </div>
                         <div class="flex flex-wrap items-center gap-2">
-                            <div class="flex items-center gap-2">
+                            <div v-if="tasksTab === 'open'" class="flex items-center gap-2">
                                 <label for="task-status-sort" class="text-xs font-medium text-muted-foreground">Sort by status</label>
                                 <select
                                     id="task-status-sort"
@@ -953,6 +965,15 @@ function toggleClock(): void {
                                     >
                                         <Eye class="size-3.5" />
                                         View
+                                    </button>
+                                    <button
+                                        type="button"
+                                        :disabled="taskActionLoading"
+                                        class="inline-flex items-center gap-1 rounded border border-primary bg-primary/10 px-2 py-1.5 text-xs font-medium text-primary hover:bg-primary/20 disabled:opacity-60"
+                                        @click="reEnterTask(t.id)"
+                                    >
+                                        <RotateCcw class="size-3.5" />
+                                        Re-enter
                                     </button>
                                 </div>
                             </li>
