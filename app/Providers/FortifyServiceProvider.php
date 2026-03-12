@@ -6,6 +6,7 @@ use App\Actions\Fortify\CreateNewUser;
 use App\Actions\Fortify\ResetUserPassword;
 use App\Models\BusinessUnit;
 use App\Models\Department;
+use App\Models\Role;
 use App\Models\User;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -132,7 +133,7 @@ class FortifyServiceProvider extends ServiceProvider
         ]));
 
         Fortify::registerView(fn () => Inertia::render('auth/Register', [
-            'roles' => array_values(config('ehris.register_roles', ['Employee', 'HR Manager', 'AO Manager', 'SDS Manager', 'System Admin'])),
+            'roles' => Role::roleNames(),
             'districts' => BusinessUnit::orderBy('id')->get()->map(fn ($row) => [
                 'id' => $row->BusinessUnitId,
                 'name' => $row->BusinessUnit,
