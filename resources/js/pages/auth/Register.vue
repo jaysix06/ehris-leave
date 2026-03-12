@@ -112,7 +112,7 @@ const handleDistrictChange = (event: Event) => {
                         :class="currentStep === 2 ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'"
                         @click="currentStep = 2"
                     >
-                        Employment & account
+                        Employment details
                     </button>
                 </div>
 
