@@ -538,6 +538,9 @@ Route::put('utilities/announcement-management/{announcement}', [AnnouncementMana
 Route::delete('utilities/announcement-management/{announcement}', [AnnouncementManagementController::class, 'destroy'])
     ->middleware(['auth', 'verified'])
     ->name('utilities.announcement-management.destroy');
+Route::post('utilities/announcement-management/{announcement}/send-email', [AnnouncementManagementController::class, 'sendEmail'])
+    ->middleware(['auth', 'verified'])
+    ->name('utilities.announcement-management.send-email');
 Route::get('utilities/leave-types', [LeaveTypeController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('utilities.leave-types.index');

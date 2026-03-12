@@ -3,11 +3,16 @@
 namespace App\Http\Controllers\Utilities;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Utilities\SendAnnouncementEmailRequest;
 use App\Http\Requests\Utilities\StoreAnnouncementRequest;
 use App\Http\Requests\Utilities\UpdateAnnouncementRequest;
+use App\Jobs\SendAnnouncementBroadcastJob;
 use App\Models\Announcement;
+use App\Models\Role;
+use App\Models\User;
 use App\Services\ActivityLogService;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Collection;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -22,6 +27,7 @@ class AnnouncementManagementController extends Controller
 
         return Inertia::render('Utilities/AnnouncementManagement', [
             'announcements' => $announcements,
+            'roles' => Role::roleNames(),
         ]);
     }
 
@@ -68,6 +74,61 @@ class AnnouncementManagementController extends Controller
         ActivityLogService::logDelete('Announcement', "Title: {$title}");
 
         return back();
+    }
+
+    public function sendEmail(SendAnnouncementEmailRequest $request, Announcement $announcement): RedirectResponse
+    {
+        $validated = $request->validated();
+        $recipientScope = (string) $validated['recipient_scope'];
+        $onlyActive = (bool) ($validated['only_active'] ?? true);
+        $roles = is_array($validated['roles'] ?? null) ? $validated['roles'] : [];
+
+        $query = User::query()
+            ->selectRaw('userId, fullname, role, active, TRIM(personal_email) as send_email')
+            ->whereNotNull('personal_email')
+            ->whereRaw("TRIM(personal_email) <> ''");
+
+        if ($onlyActive) {
+            $query->where('active', true);
+        }
+
+        if ($recipientScope === 'role') {
+            $query->whereIn('role', $roles);
+        }
+
+        /** @var Collection<int, string> $emails */
+        $emails = $query
+            ->pluck('send_email')
+            ->map(fn ($email) => trim((string) $email))
+            ->filter(function (string $email): bool {
+                if ($email === '') {
+                    return false;
+                }
+
+                // Filter out malformed addresses (e.g. double dots) so Symfony's mailer does not throw.
+                return filter_var($email, FILTER_VALIDATE_EMAIL) !== false;
+            })
+            ->values();
+
+        // Send synchronously (same as activation email) so emails go out immediately
+        // using the same SMTP config, with no queue worker required.
+        $queuedCount = 0;
+        foreach ($emails->chunk(50) as $chunk) {
+            SendAnnouncementBroadcastJob::dispatchSync(
+                $announcement->id,
+                $chunk->values()->all(),
+                [
+                    'scope' => $recipientScope,
+                    'only_active' => $onlyActive,
+                    'roles' => $roles,
+                ],
+            );
+            $queuedCount += $chunk->count();
+        }
+
+        ActivityLogService::logCreate('Announcement Email', "Announcement: {$announcement->title} | Recipients sent: {$queuedCount}");
+
+        return back()->with('success', "Announcement email sent to {$queuedCount} recipient(s).");
     }
 
     /**

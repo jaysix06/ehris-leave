@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head } from '@inertiajs/vue3';
+import { Head, usePage } from '@inertiajs/vue3';
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import utilitiesRoutes from '@/routes/utilities';
@@ -31,6 +31,9 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
+const page = usePage();
+const roles = computed(() => (page.props.roles ?? []) as string[]);
+
 type UserRow = {
     id: number;
     hrid: number | null;
@@ -55,8 +58,6 @@ type DepartmentOption = {
 
 const dataTableWrapperRef = ref<HTMLElement | null>(null);
 const refreshTrigger = ref(0);
-
-const ROLE_OPTIONS = ['Employee', 'HR Manager', 'AO Manager', 'SDS Manager', 'System Admin'] as const;
 
 const JOB_TITLE_OPTIONS = [
     'Teacher I',
@@ -868,14 +869,14 @@ onBeforeUnmount(() => {
                         <option
                             v-if="
                                 editState.form.role &&
-                                !ROLE_OPTIONS.includes(editState.form.role as (typeof ROLE_OPTIONS)[number])
+                                !roles.includes(editState.form.role)
                             "
                             :value="editState.form.role"
                         >
                             {{ editState.form.role }}
                         </option>
                         <option
-                            v-for="role in ROLE_OPTIONS"
+                            v-for="role in roles"
                             :key="role"
                             :value="role"
                         >
