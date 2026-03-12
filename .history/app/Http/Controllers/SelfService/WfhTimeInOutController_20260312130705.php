@@ -317,7 +317,7 @@ class WfhTimeInOutController extends Controller
 <meta charset="utf-8">
 <title>Work From Home Individual Accomplishment Report</title>
 <style>
-@page { margin: 2.05in 0.35in 1.10in 0.35in; }
+@page { margin: 2.05in 0.35in 0.95in 0.35in; }
 {$fontFaceCss}
 body {
     font-family: "WFH Bookman", "Bookman Old Style", "DejaVu Serif", serif;
@@ -381,7 +381,7 @@ body {
     position: fixed;
     left: 0;
     right: 0;
-    bottom: -0.70in;
+    bottom: -0.60in;
     height: auto;
     z-index: 1;
     text-align: center;
@@ -455,12 +455,15 @@ th.col-station, td.col-station { text-align: left; width: 12%; }
     padding-top: 1.08in;
 }
 .prepared-by {
+    position: fixed;
+    right: 0.25in;
+    bottom: 0.25in;
+    z-index: 2;
     width: 2.55in;
-    margin: 1.9in 0.20in 0 auto;
+    margin: 0;
     text-align: left;
     page-break-inside: avoid;
     break-inside: avoid;
-    page-break-before: avoid;
     font-family: "BookmanOldStyle";
     font-size: 12pt;
     line-height: 1.2;
@@ -492,12 +495,13 @@ th.col-station, td.col-station { text-align: left; width: 12%; }
 <p class="footer-text">© {$yearEscaped} DepEd</p>
 </div>
 
-<div class="page-content">
-{$tablesHtml}
 <div class="prepared-by">
 <p class="prepared-by-label">Prepared by:</p>
 <p class="prepared-by-name">{$employeeNameEscaped}</p>
 </div>
+
+<div class="page-content">
+{$tablesHtml}
 </div>
 </body>
 </html>

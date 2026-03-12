@@ -456,7 +456,7 @@ th.col-station, td.col-station { text-align: left; width: 12%; }
 }
 .prepared-by {
     width: 2.55in;
-    margin: 1.9in 0.20in 0 auto;
+    margin: 0.60in 0.20in 0 auto;
     text-align: left;
     page-break-inside: avoid;
     break-inside: avoid;

@@ -586,7 +586,8 @@ class PdsExportHandler
         if ($extraRows > 0) {
             $sheetXml = $this->insertRowsBefore($sheetXml, 59, $extraRows);
         }
-        $educationStyleMap = $this->getEducationStyleMapFromTemplate($sheetXml);
+        $educationTemplateLastStyleRow = 59 + $extraRows;
+        $educationStyleMap = $this->getEducationStyleMapFromTemplate($sheetXml, $educationTemplateLastStyleRow);
         $educationStyleIndex = $this->getEducationRowStyleIndex($sheetXml);
         $educationEndRow = 54 + $educationRowCount - 1;
 
@@ -867,7 +868,7 @@ class PdsExportHandler
     /**
      * @return array<string, array{0: int, 1: int}>|null
      */
-    private function getEducationStyleMapFromTemplate(string $worksheetXml): ?array
+    private function getEducationStyleMapFromTemplate(string $worksheetXml, ?int $lastStyleRow = null): ?array
     {
         $dom = new \DOMDocument('1.0', 'UTF-8');
         $dom->preserveWhiteSpace = false;
@@ -903,8 +904,26 @@ class PdsExportHandler
         };
 
         $row54 = $getRowStyles(54);
-        // Template may have 5 rows (54–58) or 6 rows (54–59). Use row 59 for last-row style (thick bottom border) when present.
-        $lastRowStyles = $getRowStyles(59) ?? $getRowStyles(58);
+        // Template may be shifted downward after dynamic row insertion.
+        // Prefer shifted last style row, then fallback to canonical template rows.
+        $candidateRows = [];
+        if ($lastStyleRow !== null && $lastStyleRow >= 54) {
+            $candidateRows[] = $lastStyleRow;
+        }
+        foreach ([59, 58, 57, 56, 55, 54] as $candidateRow) {
+            $candidateRows[] = $candidateRow;
+        }
+        $candidateRows = array_values(array_unique($candidateRows));
+
+        $lastRowStyles = null;
+        foreach ($candidateRows as $candidateRow) {
+            $styles = $getRowStyles((int) $candidateRow);
+            if ($styles !== null) {
+                $lastRowStyles = $styles;
+                break;
+            }
+        }
+
         if ($row54 === null || $lastRowStyles === null) {
             return null;
         }
