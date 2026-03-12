@@ -234,7 +234,7 @@ const sendAnnouncementEmail = (): void => {
     router.post(`/utilities/announcement-management/${pendingEmailAnnouncement.value.id}/send-email`, payload, {
         preserveScroll: true,
         onSuccess: () => {
-            toast.success('Announcement email queued.');
+            toast.success('Announcement email sent.');
             closeEmailModal();
         },
         onError: (errors) => {
@@ -596,7 +596,7 @@ const formatDate = (dateString: string): string => {
                     :disabled="isEmailLoading"
                     @click="sendAnnouncementEmail"
                 >
-                    {{ isEmailLoading ? 'Queuing...' : 'Send email' }}
+                    {{ isEmailLoading ? 'Sending...' : 'Send email' }}
                 </button>
             </template>
         </AppModal>

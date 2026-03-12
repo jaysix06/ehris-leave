@@ -83,15 +83,10 @@ class AnnouncementManagementController extends Controller
         $onlyActive = (bool) ($validated['only_active'] ?? true);
         $roles = is_array($validated['roles'] ?? null) ? $validated['roles'] : [];
 
-        // Prefer personal_email (registration email) and fallback to official email.
         $query = User::query()
-            ->selectRaw("
-                userId,
-                fullname,
-                role,
-                active,
-                COALESCE(NULLIF(TRIM(personal_email), ''), NULLIF(TRIM(email), '')) as send_email
-            ");
+            ->selectRaw('userId, fullname, role, active, TRIM(personal_email) as send_email')
+            ->whereNotNull('personal_email')
+            ->whereRaw("TRIM(personal_email) <> ''");
 
         if ($onlyActive) {
             $query->where('active', true);
@@ -105,13 +100,21 @@ class AnnouncementManagementController extends Controller
         $emails = $query
             ->pluck('send_email')
             ->map(fn ($email) => trim((string) $email))
-            ->filter(fn ($email) => $email !== '')
+            ->filter(function (string $email): bool {
+                if ($email === '') {
+                    return false;
+                }
+
+                // Filter out malformed addresses (e.g. double dots) so Symfony's mailer does not throw.
+                return filter_var($email, FILTER_VALIDATE_EMAIL) !== false;
+            })
             ->values();
 
-        // Chunk to keep BCC lists reasonable.
+        // Send synchronously (same as activation email) so emails go out immediately
+        // using the same SMTP config, with no queue worker required.
         $queuedCount = 0;
         foreach ($emails->chunk(50) as $chunk) {
-            SendAnnouncementBroadcastJob::dispatch(
+            SendAnnouncementBroadcastJob::dispatchSync(
                 $announcement->id,
                 $chunk->values()->all(),
                 [
@@ -123,9 +126,9 @@ class AnnouncementManagementController extends Controller
             $queuedCount += $chunk->count();
         }
 
-        ActivityLogService::logCreate('Announcement Email', "Announcement: {$announcement->title} | Recipients queued: {$queuedCount}");
+        ActivityLogService::logCreate('Announcement Email', "Announcement: {$announcement->title} | Recipients sent: {$queuedCount}");
 
-        return back()->with('success', "Queued announcement email to {$queuedCount} recipient(s).");
+        return back()->with('success', "Announcement email sent to {$queuedCount} recipient(s).");
     }
 
     /**

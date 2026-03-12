@@ -29,19 +29,17 @@ class SendAnnouncementBroadcastJob implements ShouldQueue
 
     public function handle(): void
     {
+        if (function_exists('set_time_limit')) {
+            @set_time_limit(0);
+        }
+
         $announcement = Announcement::query()->find($this->announcementId);
         if (! $announcement) {
             return;
         }
 
-        $toAddress = config('mail.from.address');
-        $toName = (string) config('mail.from.name', 'eHRIS');
-        if (! is_string($toAddress) || trim($toAddress) === '') {
-            $toAddress = 'noreply@ehris.local';
-        }
-
-        Mail::to(trim($toAddress), $toName)
-            ->bcc($this->bccEmails)
+        // Send directly to the recipient list only (no copy to the admin inbox).
+        Mail::bcc($this->bccEmails)
             ->send(new AnnouncementBroadcastMail($announcement));
     }
 }
