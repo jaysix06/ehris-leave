@@ -241,7 +241,7 @@ Route::get('my-details', [MyDetailsController::class, 'show'])
     ->middleware(['auth', 'verified'])
     ->name('my-details');
 Route::get('my-profile', function () {
-    return Inertia::render('MyProfile');
+    return redirect()->route('profile.edit');
 })->middleware(['auth', 'verified'])->name('my-profile');
 
 Route::get('utilities', function () {

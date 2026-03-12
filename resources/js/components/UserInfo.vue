@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { useAvatarSrc } from '@/composables/useAvatarSrc';
 import { useInitials } from '@/composables/useInitials';
 import type { User } from '@/types';
 
@@ -14,25 +15,7 @@ const props = withDefaults(defineProps<Props>(), {
 });
 
 const { getInitials } = useInitials();
-
-const avatarSrc = computed(() => {
-    const avatar = props.user.avatar;
-    if (typeof avatar !== 'string') return null;
-
-    const s = avatar.trim();
-    if (s === '') return null;
-
-    const cleaned = s.split('?')[0]?.split('#')[0] ?? '';
-    const normalizedName = cleaned.split('/').pop()?.toLowerCase() ?? '';
-    if (normalizedName === 'avatar-default.jpg') return null;
-
-    if (/^(https?:)?\/\//i.test(s) || s.startsWith('/') || s.startsWith('data:') || s.startsWith('blob:')) {
-        return s;
-    }
-
-    return `/${s}`;
-});
-
+const avatarSrc = useAvatarSrc(() => props.user.avatar);
 const showAvatar = computed(() => avatarSrc.value !== null);
 </script>
 

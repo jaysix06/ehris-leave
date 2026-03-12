@@ -12,13 +12,13 @@ import { home, login } from '@/routes';
 import { store } from '@/routes/register';
 
 const props = defineProps<{
-    employmentStatuses?: string[];
+    roles?: string[];
     districts?: { id: number | string; name: string }[];
     stations?: { id: number | string; name: string; district_id?: number | string | null }[];
 }>();
 
 const page = usePage();
-const step2ErrorKeys = ['employment_status', 'district', 'station'];
+const step2ErrorKeys = ['role', 'district', 'station'];
 
 const currentStep = ref(1);
 const selectedDistrictId = ref<string>('');
@@ -207,24 +207,24 @@ const handleDistrictChange = (event: Event) => {
 
                     <div v-show="currentStep === 2" class="contents">
                         <div class="grid gap-2 md:col-span-2">
-                            <Label for="employment_status">Employment status</Label>
+                            <Label for="role">Role</Label>
                             <select
-                                id="employment_status"
-                                name="employment_status"
+                                id="role"
+                                name="role"
                                 required
                                 :tabindex="6"
                                 class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                             >
-                                <option value="" disabled selected>Select status</option>
+                                <option value="" disabled selected>Select role</option>
                                 <option
-                                    v-for="status in (props.employmentStatuses ?? [])"
-                                    :key="status"
-                                    :value="status"
+                                    v-for="r in (props.roles ?? [])"
+                                    :key="r"
+                                    :value="r"
                                 >
-                                    {{ status }}
+                                    {{ r }}
                                 </option>
                             </select>
-                            <InputError :message="errors.employment_status" />
+                            <InputError :message="errors.role" />
                         </div>
                         <div class="grid gap-2 md:col-span-1">
                             <Label for="district">District</Label>

@@ -34,6 +34,7 @@ import {
     TooltipTrigger,
 } from '@/components/ui/tooltip';
 import UserMenuContent from '@/components/UserMenuContent.vue';
+import { useAvatarSrc } from '@/composables/useAvatarSrc';
 import { useCurrentUrl } from '@/composables/useCurrentUrl';
 import { type HeaderNotification, type NotificationKind, useHeaderNotifications } from '@/composables/useHeaderNotifications';
 import { getInitials } from '@/composables/useInitials';
@@ -52,23 +53,7 @@ const props = withDefaults(defineProps<Props>(), {
 const page = usePage();
 const auth = computed(() => page.props.auth);
 const { isCurrentUrl, whenCurrentUrl } = useCurrentUrl();
-const headerAvatarSrc = computed(() => {
-    const avatar = auth.value?.user?.avatar;
-    if (typeof avatar !== 'string') return null;
-
-    const s = avatar.trim();
-    if (s === '') return null;
-
-    const cleaned = s.split('?')[0]?.split('#')[0] ?? '';
-    const normalizedName = cleaned.split('/').pop()?.toLowerCase() ?? '';
-    if (normalizedName === 'avatar-default.jpg') return null;
-
-    if (/^(https?:)?\/\//i.test(s) || s.startsWith('/') || s.startsWith('data:') || s.startsWith('blob:')) {
-        return s;
-    }
-
-    return `/${s}`;
-});
+const headerAvatarSrc = useAvatarSrc(() => auth.value?.user?.avatar);
 
 const activeItemStyles =
     'text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100';

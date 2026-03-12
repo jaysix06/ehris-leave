@@ -33,5 +33,9 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->redirectUsersTo(fn () => route('dashboard'));
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        $exceptions->render(function (\Illuminate\Session\TokenMismatchException $e, \Illuminate\Http\Request $request) {
+            if ($request->expectsJson() || $request->header('X-Inertia')) {
+                return redirect()->back()->with('error', __('Your session expired. Please refresh the page and try again.'));
+            }
+        });
     })->create();

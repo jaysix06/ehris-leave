@@ -529,6 +529,14 @@ const updateStatus = async (userId: number, active: boolean, displayNameLabel: s
         confirmButtonColor: active ? '#059669' : '#f59e0b',
     });
     if (!result.isConfirmed) return;
+    Swal.fire({
+        title: active ? 'Activating user...' : 'Deactivating user...',
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        didOpen: () => {
+            Swal.showLoading();
+        },
+    });
     state.isActionLoading = true;
     state.error = null;
     state.statusMessage = null;

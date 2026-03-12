@@ -19,6 +19,13 @@ trait ProfileValidationRules
             'email' => $this->emailRules($userId),
             'personal_email' => $this->personalEmailRules($userId),
             'avatar' => $this->avatarRules(),
+            'firstname' => ['nullable', 'string', 'max:255'],
+            'lastname' => ['nullable', 'string', 'max:255'],
+            'middlename' => ['nullable', 'string', 'max:255'],
+            'extname' => ['nullable', 'string', 'max:50'],
+            'role' => ['nullable', 'string', 'max:255'],
+            'job_title' => ['nullable', 'string', 'max:255'],
+            'department_id' => ['nullable', 'integer', Rule::exists('tbl_department', 'department_id')],
         ];
     }
 

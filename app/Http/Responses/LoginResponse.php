@@ -39,6 +39,12 @@ class LoginResponse implements LoginResponseContract
         // Set flag to show popups on next dashboard visit (only after login)
         $request->session()->put('show_popups_after_login', true);
 
-        return redirect()->intended(config('fortify.home'));
+        $role = $user->role ?? 'Employee';
+        $roleHome = config('ehris.role_home', []);
+        $path = is_array($roleHome) && isset($roleHome[$role])
+            ? $roleHome[$role]
+            : config('fortify.home');
+
+        return redirect()->intended($path);
     }
 }

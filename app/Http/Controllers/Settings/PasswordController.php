@@ -27,6 +27,10 @@ class PasswordController extends Controller
             'password' => $request->password,
         ]);
 
+        // Regenerate session so the old CSRF token is invalidated. The frontend must
+        // reload the page after success so the new token is in the document (meta tag).
+        $request->session()->regenerateToken();
+
         return back();
     }
 }
