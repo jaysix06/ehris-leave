@@ -13,6 +13,7 @@ use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response as HttpResponse;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -224,7 +225,12 @@ class WfhTimeInOutController extends Controller
 
         $filename = 'tasklist_report_'.$dateFrom->format('Y-m-d').'_'.$dateTo->format('Y-m-d').'.pdf';
 
-        $pdf = Pdf::loadHTML($html)->setPaper('a4', 'landscape');
+        $dompdfFontPaths = $this->ensureDompdfFontDirectoriesExist();
+
+        $pdf = Pdf::setOption([
+            'font_dir' => $dompdfFontPaths['font_dir'],
+            'font_cache' => $dompdfFontPaths['font_cache'],
+        ])->loadHTML($html)->setPaper('a4', 'landscape');
 
         return $pdf->download($filename);
     }
@@ -994,5 +1000,27 @@ HTML;
         }
 
         return strtoupper($value);
+    }
+
+    /**
+     * @return array{font_dir: string, font_cache: string}
+     */
+    private function ensureDompdfFontDirectoriesExist(): array
+    {
+        $fontDir = (string) config('dompdf.options.font_dir', storage_path('fonts'));
+        $fontCache = (string) config('dompdf.options.font_cache', storage_path('fonts'));
+
+        if (! File::isDirectory($fontDir)) {
+            File::ensureDirectoryExists($fontDir, 0755, true);
+        }
+
+        if (! File::isDirectory($fontCache)) {
+            File::ensureDirectoryExists($fontCache, 0755, true);
+        }
+
+        return [
+            'font_dir' => $fontDir,
+            'font_cache' => $fontCache,
+        ];
     }
 }
