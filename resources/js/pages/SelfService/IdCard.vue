@@ -2,6 +2,7 @@
 import { Head, router } from '@inertiajs/vue3';
 import { computed, ref, watch, onUnmounted } from 'vue';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { useAvatarSrc } from '@/composables/useAvatarSrc';
 import type { BreadcrumbItem } from '@/types';
 import { Upload } from 'lucide-vue-next';
 
@@ -184,29 +185,6 @@ async function onSignatureChange(event: Event): Promise<void> {
     input.value = '';
 }
 
-const idPhotoSrc = computed((): string => {
-    if (idPhotoPreview.value) return idPhotoPreview.value;
-
-    const avatar = props.profile?.avatar;
-    if (typeof avatar === 'string') {
-        const s = avatar.trim();
-        if (s !== '') {
-            // Compare using basename without query/hash to detect default avatar values.
-            const cleaned = s.split('?')[0]?.split('#')[0] ?? '';
-            const normalizedName = cleaned.split('/').pop()?.toLowerCase() ?? '';
-            if (normalizedName !== 'avatar-default.jpg') {
-                // Make relative paths root-relative so nested routes don't cause 404s.
-                if (/^(https?:)?\/\//i.test(s) || s.startsWith('/') || s.startsWith('data:') || s.startsWith('blob:')) {
-                    return s;
-                }
-                return `/${s}`;
-            }
-        }
-    }
-
-    return defaultIdPhoto;
-});
-
 function splitFullName(fullname: unknown): { firstname: string; middlename: string; lastname: string } {
     const s = typeof fullname === 'string' ? fullname.trim() : '';
     if (!s) return { firstname: '', middlename: '', lastname: '' };
@@ -230,6 +208,14 @@ const props = defineProps<{
     templateBaseUrl?: string;
     signaturePath?: string | null;
 }>();
+
+const resolvedProfileAvatarUrl = useAvatarSrc(() => props.profile?.avatar as string | null | undefined);
+
+const idPhotoSrc = computed((): string => {
+    if (idPhotoPreview.value) return idPhotoPreview.value;
+    const url = resolvedProfileAvatarUrl.value;
+    return url ?? defaultIdPhoto;
+});
 
 const signatureSrc = computed((): string | null => {
     if (signaturePreview.value) return signaturePreview.value;

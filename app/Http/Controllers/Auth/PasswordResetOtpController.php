@@ -47,6 +47,13 @@ class PasswordResetOtpController extends Controller
             ->orWhereRaw('LOWER(TRIM(personal_email)) = ?', [$email])
             ->first();
 
+        // Inactive (not yet activated) accounts cannot use forgot password.
+        if ($user && ! $user->active) {
+            return back()->withErrors([
+                'email' => 'Your account has not been activated by the system administrator. Please contact your administrator or wait for activation before using Forgot password.',
+            ]);
+        }
+
         if ($user) {
             $existingOtp = DB::table('password_reset_otps')
                 ->where('email', $email)
@@ -93,14 +100,19 @@ class PasswordResetOtpController extends Controller
                     new \App\Mail\PasswordResetOtpMail($otp)
                 );
             }
+
+            $request->session()->put('otp_email', $email);
+            $request->session()->forget('password_reset_verified_email');
+
+            return redirect()
+                ->route('password.otp.verify.form')
+                ->with('status', 'otp-sent');
         }
 
-        $request->session()->put('otp_email', $email);
-        $request->session()->forget('password_reset_verified_email');
-
-        return redirect()
-            ->route('password.otp.verify.form')
-            ->with('status', 'otp-sent');
+        // Email not found in database (no user with this email or personal_email).
+        return back()->withErrors([
+            'email' => 'No account found with this email address. Please use the email registered in the system (DepEd email or personal email on file).',
+        ]);
     }
 
     /**
@@ -150,6 +162,11 @@ class PasswordResetOtpController extends Controller
         if (! $otpRecord || ! $user || $otpRecord->used_at !== null || now()->greaterThan($otpRecord->expires_at)) {
             return back()
                 ->withErrors(['otp' => 'The OTP is invalid or expired.']);
+        }
+
+        if (! $user->active) {
+            return back()
+                ->withErrors(['otp' => 'Your account has not been activated by the system administrator. Please contact your administrator before resetting your password.']);
         }
 
         if ($otpRecord->attempts >= 5) {
@@ -228,6 +245,13 @@ class PasswordResetOtpController extends Controller
 
         if (! $user) {
             return redirect()->route('password.request');
+        }
+
+        if (! $user->active) {
+            $request->session()->forget(['otp_email', 'password_reset_verified_email']);
+            return redirect()
+                ->route('password.request')
+                ->withErrors(['email' => 'Your account has not been activated by the system administrator. Please contact your administrator before resetting your password.']);
         }
 
         $user->forceFill([

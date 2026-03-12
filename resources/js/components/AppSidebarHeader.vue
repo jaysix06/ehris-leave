@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { type HeaderNotification, type NotificationKind, useHeaderNotifications } from '@/composables/useHeaderNotifications';
+import { useAvatarSrc } from '@/composables/useAvatarSrc';
 import { useInitials } from '@/composables/useInitials';
 import { logout } from '@/routes';
 import type { BreadcrumbItem } from '@/types';
@@ -29,25 +30,7 @@ const props = withDefaults(
 const page = usePage();
 const user = computed(() => page.props.auth.user);
 const { getInitials } = useInitials();
-const avatarSrc = computed(() => {
-    const avatar = user.value?.avatar;
-    if (typeof avatar !== 'string') return null;
-
-    const s = avatar.trim();
-    if (s === '') return null;
-
-    const cleaned = s.split('?')[0]?.split('#')[0] ?? '';
-    const normalizedName = cleaned.split('/').pop()?.toLowerCase() ?? '';
-    if (normalizedName === 'avatar-default.jpg') {
-        return '/avatar-default.jpg';
-    }
-
-    if (/^(https?:)?\/\//i.test(s) || s.startsWith('/') || s.startsWith('data:') || s.startsWith('blob:')) {
-        return s;
-    }
-
-    return `/${s}`;
-});
+const avatarSrc = useAvatarSrc(() => user.value?.avatar);
 
 const currentTitle = computed(() => {
     if (!props.breadcrumbs.length) {
@@ -204,7 +187,7 @@ const notificationIconByKind = (kind: NotificationKind) => {
                                 </button>
                             </Link>
                             <div class="flex gap-3">
-                                <Link href="/my-profile" class="flex-1">
+                                <Link href="/settings/profile" class="flex-1">
                                     <button
                                         type="button"
                                         class="flex w-full items-center justify-center rounded-md border border-input bg-background px-3 py-2 text-sm font-medium hover:bg-muted"
