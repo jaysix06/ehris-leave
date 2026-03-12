@@ -4,6 +4,7 @@ namespace App\Http\Controllers\SelfService;
 
 use App\Http\Controllers\Controller;
 use App\Models\Attendance;
+use App\Models\Department;
 use App\Models\Employee;
 use App\Models\SelfServiceTask;
 use App\Models\User;
@@ -307,7 +308,7 @@ class WfhTimeInOutController extends Controller
 
         $year = date('Y');
         $subtitleEscaped = $h($subtitle);
-        $employeeNameEscaped = $h(mb_strtoupper($employeeName, 'UTF-8'));
+        $employeeNameEscaped = $h($this->toUpper($employeeName));
         $yearEscaped = $h($year);
 
         return <<<HTML
@@ -441,11 +442,11 @@ th {
 td.col-task, td.col-accomplishment {
     white-space: pre-wrap;
 }
-th.col-task, td.col-task { text-align: left; width: 32%; }
+th.col-task, td.col-task { text-align: left; width: 25%; }
 th.col-accomplishment, td.col-accomplishment { text-align: left; width: 28%; }
-th.col-date, td.col-date { text-align: center; width: 18%; }
-th.col-priority, td.col-priority { text-align: center; width: 10%; }
-th.col-station, td.col-station { text-align: left; width: 12%; }
+th.col-date, td.col-date { text-align: center; width: 14%; }
+th.col-priority, td.col-priority { text-align: center; width: 6%; }
+th.col-station, td.col-station { text-align: left; width: 15%; }
 .table-block {
     width: 100%;
 }
@@ -523,7 +524,7 @@ HTML;
         $lineCount = 0;
 
         foreach ($segments as $segment) {
-            $segmentLength = mb_strlen($segment, 'UTF-8');
+            $segmentLength = $this->stringLength($segment);
             $lineCount += max(1, (int) ceil($segmentLength / max(1, $maxCharsPerLine)));
         }
 
@@ -565,6 +566,11 @@ HTML;
             public_path('fonts/bookmanoldstyle.ttf'),
             public_path('fonts/BookmanOldStyle.ttf'),
             public_path('fonts/BOOKMANOLDSTYLE.TTF'),
+            public_path('fonts/bookman old style.ttf'),
+            public_path('fonts/Bookman Old Style.ttf'),
+            public_path('fonts/BOOKMAN OLD STYLE.TTF'),
+            public_path('fonts/arial.ttf'),
+            public_path('fonts/ARIAL.TTF'),
         ];
 
         foreach ($fallbackCandidates as $fallbackPath) {
@@ -589,10 +595,25 @@ HTML;
     {
         $normalized = str_replace('\\', '/', $path);
         if (str_starts_with($normalized, '/')) {
-            return 'file://'.$normalized;
+            $segments = explode('/', ltrim($normalized, '/'));
+            $encoded = implode('/', array_map(static fn (string $segment): string => rawurlencode($segment), $segments));
+
+            return 'file:///'.$encoded;
         }
 
-        return 'file:///'.$normalized;
+        if (preg_match('/^[A-Za-z]:\//', $normalized) === 1) {
+            $drive = substr($normalized, 0, 2);
+            $rest = ltrim(substr($normalized, 2), '/');
+            $segments = $rest === '' ? [] : explode('/', $rest);
+            $encoded = implode('/', array_map(static fn (string $segment): string => rawurlencode($segment), $segments));
+
+            return 'file:///'.$drive.($encoded === '' ? '' : '/'.$encoded);
+        }
+
+        $segments = explode('/', $normalized);
+        $encoded = implode('/', array_map(static fn (string $segment): string => rawurlencode($segment), $segments));
+
+        return 'file:///'.$encoded;
     }
 
     public function destroyTask(Request $request, SelfServiceTask $task): RedirectResponse
@@ -825,6 +846,7 @@ HTML;
         if (! $user) {
             return ['', ''];
         }
+        $station = $this->resolveStationFromAuthenticatedUser($user);
         $hrid = $this->resolveHrid($user);
         if ($hrid > 0) {
             $emp = Employee::query()
@@ -837,14 +859,16 @@ HTML;
                     (string) ($emp->lastname ?? '')
                 );
                 if ($name !== '') {
-                    $station = $emp->office ?? '';
+                    if ($station === '') {
+                        $station = $this->resolveEmployeeStationForPdf($emp);
+                    }
 
                     return [$name, $station];
                 }
             }
         }
 
-        return [$user->name ?? $user->email ?? 'N/A', ''];
+        return [$user->name ?? $user->email ?? 'N/A', $station];
     }
 
     private function formatEmployeeDisplayName(string $first, string $middle, string $last): string
@@ -855,7 +879,7 @@ HTML;
         $middleInitial = '';
 
         if ($middleName !== '') {
-            $middleInitial = mb_strtoupper(mb_substr($middleName, 0, 1, 'UTF-8'), 'UTF-8').'.';
+            $middleInitial = $this->toUpper($this->substring($middleName, 0, 1)).'.';
         }
 
         $nameParts = array_filter(
@@ -864,5 +888,111 @@ HTML;
         );
 
         return trim(implode(' ', $nameParts));
+    }
+
+    private function resolveEmployeeStationForPdf(Employee $employee): string
+    {
+        $stationFromOffice = trim((string) ($employee->office ?? ''));
+        $stationFromDepartmentId = trim((string) ($employee->department_id ?? ''));
+
+        $departmentName = $this->findDepartmentNameByStationValue($stationFromOffice);
+        if ($departmentName !== '') {
+            return $departmentName;
+        }
+
+        $departmentName = $this->findDepartmentNameByStationValue($stationFromDepartmentId);
+        if ($departmentName !== '') {
+            return $departmentName;
+        }
+
+        if ($stationFromOffice !== '') {
+            return $stationFromOffice;
+        }
+
+        return $stationFromDepartmentId;
+    }
+
+    private function findDepartmentNameByStationValue(string $stationValue): string
+    {
+        if ($stationValue === '') {
+            return '';
+        }
+
+        if (! Schema::hasTable('tbl_department') || ! Schema::hasColumn('tbl_department', 'department_name')) {
+            return '';
+        }
+
+        $department = Department::query()
+            ->select('department_name')
+            ->where('department_id', $stationValue)
+            ->first();
+
+        return trim((string) ($department?->department_name ?? ''));
+    }
+
+    private function resolveStationFromAuthenticatedUser(mixed $user): string
+    {
+        if (! $user) {
+            return '';
+        }
+
+        $departmentId = trim((string) ($user->department_id ?? ''));
+
+        if ($departmentId === '' && Schema::hasTable('tbl_user')) {
+            $profile = null;
+            $userKey = $user->getKey();
+            if ($userKey !== null) {
+                $profile = User::query()
+                    ->select('department_id')
+                    ->whereKey($userKey)
+                    ->first();
+            }
+
+            if (! $profile && ! empty($user->email)) {
+                $profile = User::query()
+                    ->select('department_id')
+                    ->where('email', (string) $user->email)
+                    ->first();
+            }
+
+            if ($profile) {
+                $departmentId = trim((string) ($profile->department_id ?? ''));
+            }
+        }
+
+        if ($departmentId === '') {
+            return '';
+        }
+
+        $departmentName = $this->findDepartmentNameByStationValue($departmentId);
+
+        return $departmentName !== '' ? $departmentName : $departmentId;
+    }
+
+    private function stringLength(string $value): int
+    {
+        if (function_exists('mb_strlen')) {
+            return mb_strlen($value, 'UTF-8');
+        }
+
+        return strlen($value);
+    }
+
+    private function substring(string $value, int $start, int $length): string
+    {
+        if (function_exists('mb_substr')) {
+            return (string) mb_substr($value, $start, $length, 'UTF-8');
+        }
+
+        return substr($value, $start, $length);
+    }
+
+    private function toUpper(string $value): string
+    {
+        if (function_exists('mb_strtoupper')) {
+            return mb_strtoupper($value, 'UTF-8');
+        }
+
+        return strtoupper($value);
     }
 }
