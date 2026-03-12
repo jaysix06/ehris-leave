@@ -336,17 +336,15 @@ const exportDateRangeForPicker = computed({
 });
 
 function openExportModal(): void {
-    if (!exportDateRange.value) {
-        const now = new Date();
-        const start = new Date(now.getFullYear(), now.getMonth(), 1);
-        exportDateRange.value = { start, end: new Date(now) };
-    }
+    exportDateRange.value = null;
     exportDateRangeKey.value += 1;
     showExportModal.value = true;
 }
 
 function closeExportModal(): void {
     showExportModal.value = false;
+    exportDateRange.value = null;
+    exportDateRangeKey.value += 1;
 }
 
 function formatExportDate(d: Date): string {
