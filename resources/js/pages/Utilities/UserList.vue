@@ -20,7 +20,7 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { Check, Pencil, RefreshCw, Trash2, X } from 'lucide-vue-next';
+import { Check, Download, Pencil, RefreshCw, Trash2, UserPlus, X } from 'lucide-vue-next';
 import Swal from 'sweetalert2';
 
 const pageTitle = 'Utilities - User List';
@@ -35,6 +35,7 @@ type UserRow = {
     id: number;
     hrid: number | null;
     email: string | null;
+    personal_email?: string | null;
     lastname: string | null;
     firstname: string | null;
     middlename: string | null;
@@ -82,6 +83,16 @@ const getCsrfToken = (): string => {
     if (meta?.content) return meta.content;
 
     // Laravel sets XSRF-TOKEN cookie; it is URL-encoded
+    const cookie = getCookieValue('XSRF-TOKEN');
+    if (!cookie) return '';
+    try {
+        return decodeURIComponent(cookie);
+    } catch {
+        return cookie;
+    }
+};
+
+const getXsrfTokenCookie = (): string => {
     const cookie = getCookieValue('XSRF-TOKEN');
     if (!cookie) return '';
     try {
@@ -188,10 +199,11 @@ const userColumns: DataTableColumn[] = [
             const id = r.id;
             const active = r.active;
             const esc = (s: string | number) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+            const emailLabel = (r.personal_email ?? r.email ?? '').trim();
             return `
                 <div class="ehris-user-list-actions flex flex-wrap items-center justify-end gap-1">
                     <button type="button" class="ehris-btn ehris-btn-edit inline-flex size-8 items-center justify-center rounded-md border border-input bg-background hover:bg-muted" data-user-list-action="edit" data-user-id="${esc(id)}" title="Edit"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></button>
-                    <button type="button" class="ehris-btn ehris-btn-refresh inline-flex size-8 items-center justify-center rounded-md border border-input bg-background hover:bg-muted" data-user-list-action="refresh" data-user-id="${esc(id)}" title="Refresh row"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg></button>
+                    <button type="button" class="ehris-btn ehris-btn-reset-password inline-flex size-8 items-center justify-center rounded-md border border-input bg-background hover:bg-muted" data-user-list-action="resetPassword" data-user-id="${esc(id)}" data-user-email="${esc(emailLabel)}" title="Reset password"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></button>
                     ${!active ? `<button type="button" class="ehris-btn ehris-btn-activate inline-flex size-8 items-center justify-center rounded-md bg-emerald-600 text-white hover:bg-emerald-700" data-user-list-action="activate" data-user-id="${esc(id)}" title="Activate"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg></button>` : `<button type="button" class="ehris-btn ehris-btn-deactivate inline-flex size-8 items-center justify-center rounded-md bg-amber-500 text-white hover:bg-amber-600" data-user-list-action="deactivate" data-user-id="${esc(id)}" title="Deactivate"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>`}
                     <button type="button" class="ehris-btn ehris-btn-delete inline-flex size-8 items-center justify-center rounded-md border border-destructive/50 text-destructive hover:bg-destructive hover:text-destructive-foreground" data-user-list-action="delete" data-user-id="${esc(id)}" title="Delete"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg></button>
                 </div>`;
@@ -232,6 +244,117 @@ const editState = reactive<{
         department_id: null,
     },
 });
+
+const createState = reactive<{
+    isOpen: boolean;
+    isSaving: boolean;
+    form: {
+        personal_email: string;
+        firstname: string;
+        middlename: string;
+        lastname: string;
+        extname: string;
+        role: string;
+        job_title: string;
+        department_id: number | null;
+    };
+}>({
+    isOpen: false,
+    isSaving: false,
+    form: {
+        personal_email: '',
+        firstname: '',
+        middlename: '',
+        lastname: '',
+        extname: '',
+        role: 'Employee',
+        job_title: '',
+        department_id: null,
+    },
+});
+
+const openCreateModal = () => {
+    createState.isOpen = true;
+};
+
+const closeCreateModal = () => {
+    if (createState.isSaving) return;
+    createState.isOpen = false;
+};
+
+const getCreateUserUrl = (): string => {
+    const base = (utilitiesRoutes?.userList?.store as ((...args: any[]) => { url: string }) | undefined)?.().url;
+    if (base) {
+        try {
+            return new URL(base, window.location.origin).toString();
+        } catch {
+            // fall through
+        }
+    }
+    return `${window.location.origin}/api/utilities/users`;
+};
+
+const saveNewUser = async () => {
+    createState.isSaving = true;
+    state.error = null;
+    state.statusMessage = null;
+    try {
+        const url = getCreateUserUrl();
+        const payload = {
+            personal_email: createState.form.personal_email.trim(),
+            firstname: createState.form.firstname.trim(),
+            middlename: createState.form.middlename.trim() || null,
+            lastname: createState.form.lastname.trim(),
+            extname: createState.form.extname.trim() || null,
+            role: createState.form.role.trim() || 'Employee',
+            job_title: createState.form.job_title.trim() || null,
+            department_id: createState.form.department_id,
+        };
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                Accept: 'application/json',
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': getCsrfToken(),
+                'X-XSRF-TOKEN': getXsrfTokenCookie(),
+            },
+            credentials: 'same-origin',
+            body: JSON.stringify(payload),
+        });
+        if (!response.ok) {
+            const maybeJson = (await response.json().catch(() => null)) as { message?: string } | null;
+            throw new Error(maybeJson?.message ?? `Failed to create user (HTTP ${response.status})`);
+        }
+        createState.isOpen = false;
+        state.statusMessage = 'New user created successfully.';
+        refreshTrigger.value += 1;
+        void Swal.fire({ icon: 'success', title: 'User created', text: 'New user has been created.' });
+    } catch (error: unknown) {
+        console.error(error);
+        state.error = error instanceof Error ? error.message : 'Unable to create user.';
+        void Swal.fire({ icon: 'error', title: 'Create failed', text: state.error ?? undefined });
+    } finally {
+        createState.isSaving = false;
+    }
+};
+
+const getExportUsersExcelUrl = (): string => {
+    const base = (utilitiesRoutes?.userList?.exportExcel as ((...args: any[]) => { url: string }) | undefined)?.().url;
+    if (base) {
+        try {
+            return new URL(base, window.location.origin).toString();
+        } catch {
+            // fall through
+        }
+    }
+    return `${window.location.origin}/api/utilities/users/export/excel`;
+};
+
+const exportUsersExcel = () => {
+    // Use normal navigation so the browser downloads the file
+    window.location.href = getExportUsersExcelUrl();
+};
 
 const openEditModal = (row: UserRow) => {
     editState.userId = row.id;
@@ -311,7 +434,7 @@ const saveUserEdits = async () => {
                 'Content-Type': 'application/json',
                 'X-Requested-With': 'XMLHttpRequest',
                 'X-CSRF-TOKEN': getCsrfToken(),
-                'X-XSRF-TOKEN': getCsrfToken(),
+                'X-XSRF-TOKEN': getXsrfTokenCookie(),
             },
             credentials: 'same-origin',
             body: JSON.stringify(payload),
@@ -357,7 +480,7 @@ const deleteUser = async (userId: number, displayNameLabel: string) => {
                 Accept: 'application/json',
                 'X-Requested-With': 'XMLHttpRequest',
                 'X-CSRF-TOKEN': getCsrfToken(),
-                'X-XSRF-TOKEN': getCsrfToken(),
+                'X-XSRF-TOKEN': getXsrfTokenCookie(),
             },
             credentials: 'same-origin',
         });
@@ -397,7 +520,7 @@ const updateStatus = async (userId: number, active: boolean, displayNameLabel: s
                 'Content-Type': 'application/json',
                 'X-Requested-With': 'XMLHttpRequest',
                 'X-CSRF-TOKEN': getCsrfToken(),
-                'X-XSRF-TOKEN': getCsrfToken(),
+                'X-XSRF-TOKEN': getXsrfTokenCookie(),
             },
             credentials: 'same-origin',
             body: JSON.stringify({ active }),
@@ -412,6 +535,61 @@ const updateStatus = async (userId: number, active: boolean, displayNameLabel: s
         console.error(error);
         state.error = 'Unable to update user status. Please try again.';
         void Swal.fire({ icon: 'error', title: 'Status update failed', text: state.error ?? undefined });
+    } finally {
+        state.isActionLoading = false;
+    }
+};
+
+const DEFAULT_PASSWORD = '1q2w3e4r5t';
+
+const getResetPasswordUrl = (userId: number): string => {
+    const base = (utilitiesRoutes?.userList?.resetPassword?.(userId) as { url: string } | undefined)?.url;
+    if (base) {
+        try {
+            return new URL(base, window.location.origin).toString();
+        } catch {
+            // fall through
+        }
+    }
+    return `${window.location.origin}/api/utilities/users/${userId}/reset-password`;
+};
+
+const resetUserPassword = async (userId: number, displayEmail: string) => {
+    const label = (displayEmail || `User #${userId}`).trim();
+    const result = await Swal.fire({
+        icon: 'warning',
+        title: 'Reset password?',
+        html: `This is an <strong>admin reset</strong> (different from “Forgot password”).<br><br>You are going to reset <strong>${label}</strong>'s password.<br>Temporary password (<strong>${DEFAULT_PASSWORD}</strong>) will be sent to the user's personal email.`,
+        showCancelButton: true,
+        confirmButtonText: 'Yes, reset password',
+        cancelButtonText: 'Cancel',
+        confirmButtonColor: '#0f766e',
+    });
+    if (!result.isConfirmed) return;
+
+    state.isActionLoading = true;
+    state.error = null;
+    state.statusMessage = null;
+    try {
+        const url = getResetPasswordUrl(userId);
+        const response = await fetch(url, {
+            method: 'PATCH',
+            headers: {
+                Accept: 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': getCsrfToken(),
+                'X-XSRF-TOKEN': getXsrfTokenCookie(),
+            },
+            credentials: 'same-origin',
+        });
+        if (!response.ok) throw new Error(`Failed to reset password (HTTP ${response.status})`);
+        state.statusMessage = 'Password reset successfully.';
+        refreshTrigger.value += 1;
+        void Swal.fire({ icon: 'success', title: 'Password Reset!', text: 'User password has been successfully reset!' });
+    } catch (error: unknown) {
+        console.error(error);
+        state.error = 'Unable to reset password. Please try again.';
+        void Swal.fire({ icon: 'error', title: 'Reset failed', text: state.error ?? undefined });
     } finally {
         state.isActionLoading = false;
     }
@@ -434,8 +612,9 @@ const handleTableAction = (e: Event) => {
     e.stopPropagation();
     if (action === 'edit') {
         void fetchUserForEdit(userId);
-    } else if (action === 'refresh') {
-        refreshTable();
+    } else if (action === 'resetPassword') {
+        const email = btn.getAttribute('data-user-email') || `User #${userId}`;
+        void resetUserPassword(userId, email);
     } else if (action === 'activate') {
         void updateStatus(userId, true, `User #${userId}`);
     } else if (action === 'deactivate') {
@@ -491,7 +670,27 @@ onBeforeUnmount(() => {
                             <span class="font-semibold">Inactive</span> until an administrator activates them.
                         </p>
                     </div>
-                    <div class="flex items-center gap-2">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <Button
+                            type="button"
+                            class="bg-red-600 hover:bg-red-700 text-white"
+                            size="sm"
+                            :disabled="state.isActionLoading"
+                            @click="exportUsersExcel"
+                        >
+                            <Download class="mr-2 size-4" />
+                            Export users
+                        </Button>
+                        <Button
+                            type="button"
+                            class="bg-red-600 hover:bg-red-700 text-white"
+                            size="sm"
+                            :disabled="state.isActionLoading"
+                            @click="openCreateModal"
+                        >
+                            <UserPlus class="mr-2 size-4" />
+                            New user
+                        </Button>
                         <TooltipProvider :delay-duration="0">
                             <Tooltip>
                                 <TooltipTrigger as-child>
@@ -656,6 +855,82 @@ onBeforeUnmount(() => {
                 </Button>
                 <Button :disabled="editState.isSaving" @click="saveUserEdits">
                     {{ editState.isSaving ? 'Saving…' : 'Save changes' }}
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
+
+    <Dialog
+        :open="createState.isOpen"
+        @update:open="(v) => (v ? (createState.isOpen = true) : closeCreateModal())"
+    >
+        <DialogContent class="sm:max-w-2xl">
+            <DialogHeader>
+                <DialogTitle>New user</DialogTitle>
+                <DialogDescription>
+                    Create a new user account. New users will appear as <span class="font-semibold">Inactive</span> until activated.
+                </DialogDescription>
+            </DialogHeader>
+
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div class="space-y-1 sm:col-span-2">
+                    <label class="text-sm text-muted-foreground">Personal email</label>
+                    <input
+                        v-model="createState.form.personal_email"
+                        type="email"
+                        class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        placeholder="name@example.com"
+                    />
+                </div>
+
+                <div class="space-y-1">
+                    <label class="text-sm text-muted-foreground">Last name</label>
+                    <input v-model="createState.form.lastname" type="text" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
+                </div>
+                <div class="space-y-1">
+                    <label class="text-sm text-muted-foreground">First name</label>
+                    <input v-model="createState.form.firstname" type="text" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
+                </div>
+                <div class="space-y-1">
+                    <label class="text-sm text-muted-foreground">Middle name</label>
+                    <input v-model="createState.form.middlename" type="text" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
+                </div>
+                <div class="space-y-1">
+                    <label class="text-sm text-muted-foreground">Extension</label>
+                    <input
+                        v-model="createState.form.extname"
+                        type="text"
+                        class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        placeholder="Jr., Sr., III"
+                    />
+                </div>
+
+                <div class="space-y-1">
+                    <label class="text-sm text-muted-foreground">Role</label>
+                    <input v-model="createState.form.role" type="text" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
+                </div>
+                <div class="space-y-1">
+                    <label class="text-sm text-muted-foreground">Job title</label>
+                    <input v-model="createState.form.job_title" type="text" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
+                </div>
+
+                <div class="space-y-1 sm:col-span-2">
+                    <label class="text-sm text-muted-foreground">Office / School</label>
+                    <select v-model="createState.form.department_id" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                        <option :value="null">—</option>
+                        <option v-for="dept in state.departments" :key="dept.id" :value="dept.id">
+                            {{ dept.name }}
+                        </option>
+                    </select>
+                </div>
+            </div>
+
+            <DialogFooter class="mt-2 flex flex-col gap-2 sm:flex-row sm:justify-end">
+                <Button variant="outline" :disabled="createState.isSaving" @click="closeCreateModal">
+                    Cancel
+                </Button>
+                <Button :disabled="createState.isSaving" @click="saveNewUser">
+                    {{ createState.isSaving ? 'Saving…' : 'Create user' }}
                 </Button>
             </DialogFooter>
         </DialogContent>

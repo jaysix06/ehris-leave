@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Utilities;
 
 use App\Http\Controllers\Controller;
 use App\Mail\AccountActivatedMail;
+use App\Mail\PasswordResetMail;
 use App\Models\User;
 use App\Services\ActivityLogService;
 use Illuminate\Http\Request;
@@ -14,6 +15,9 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
+use Maatwebsite\Excel\Facades\Excel;
+use Maatwebsite\Excel\Concerns\FromArray;
+use Maatwebsite\Excel\Concerns\WithHeadings;
 
 class UserListController extends Controller
 {
@@ -191,6 +195,143 @@ class UserListController extends Controller
             'recordsFiltered' => $filteredRecords,
             'data' => $data,
         ]);
+    }
+
+    /**
+     * API endpoint: create a new user (admin/manual).
+     *
+     * This is different from self-service registration.
+     */
+    public function store(Request $request)
+    {
+        $this->authorizeAdmin();
+
+        $data = $request->validate([
+            'personal_email' => ['required', 'email', 'max:255', Rule::unique('tbl_user', 'personal_email')],
+            'firstname' => ['required', 'string', 'max:255'],
+            'lastname' => ['required', 'string', 'max:255'],
+            'middlename' => ['nullable', 'string', 'max:255'],
+            'extname' => ['nullable', 'string', 'max:50'],
+            'role' => ['nullable', 'string', 'max:255'],
+            'job_title' => ['nullable', 'string', 'max:255'],
+            'department_id' => ['nullable', 'integer', Rule::exists('tbl_department', 'department_id')],
+        ]);
+
+        $fullname = trim(implode(' ', array_filter([
+            trim((string) ($data['firstname'] ?? '')),
+            trim((string) ($data['middlename'] ?? '')),
+            trim((string) ($data['lastname'] ?? '')),
+            trim((string) ($data['extname'] ?? '')),
+        ]))) ?: (string) $data['personal_email'];
+
+        $user = User::create([
+            'fullname' => $fullname,
+            'firstname' => $data['firstname'],
+            'middlename' => $data['middlename'] ?? null,
+            'lastname' => $data['lastname'],
+            'extname' => $data['extname'] ?? null,
+            'personal_email' => $data['personal_email'],
+            // Official DepEd email + password are generated on activation
+            'email' => null,
+            'password' => null,
+            'date_created' => now()->toDateString(),
+            'active' => false,
+            'role' => $data['role'] ?? 'Employee',
+            'job_title' => $data['job_title'] ?? null,
+            'department_id' => $data['department_id'] ?? null,
+        ]);
+
+        $user->hrId = $user->getKey();
+        $user->save();
+
+        ActivityLogService::logCreate('User', "Created user: {$user->personal_email}", $user->getKey());
+
+        return response()->json([
+            'id' => $user->getKey(),
+            'hrid' => $user->hrId,
+            'personal_email' => $user->personal_email,
+            'active' => (bool) $user->active,
+        ], 201);
+    }
+
+    /**
+     * Export user list as Excel (admin).
+     */
+    public function exportExcel()
+    {
+        $this->authorizeAdmin();
+
+        $rows = DB::table('tbl_user as u')
+            ->leftJoin('tbl_department as d', 'u.department_id', '=', 'd.department_id')
+            ->select([
+                'u.userId as id',
+                'u.hrid as hrid',
+                'u.email',
+                'u.personal_email',
+                'u.fullname',
+                'u.firstname',
+                'u.middlename',
+                'u.lastname',
+                'u.extname',
+                'u.role',
+                'u.job_title',
+                'u.active',
+                'd.department_name as office',
+                'u.date_created',
+            ])
+            ->orderByDesc('u.date_created')
+            ->orderByDesc('u.userId')
+            ->get();
+
+        $filename = 'users-'.now()->format('Y-m-d-His').'.xlsx';
+
+        $data = $rows->map(function ($r) {
+            $name = trim(implode(' ', array_filter([
+                $r->firstname,
+                $r->middlename,
+                $r->lastname,
+                $r->extname,
+            ]))) ?: ($r->fullname ?? $r->personal_email ?? $r->email ?? '');
+
+            return [
+                'HRID' => $r->hrid ?? '',
+                'Personal Email' => $r->personal_email ?? '',
+                'Official Email' => $r->email ?? '',
+                'Name' => $name,
+                'Role' => $r->role ?? '',
+                'Job Title' => $r->job_title ?? '',
+                'Office/School' => $r->office ?? '',
+                'Status' => ((bool) $r->active) ? 'Active' : 'Inactive',
+                'Created' => $r->date_created ?? '',
+            ];
+        })->toArray();
+
+        return Excel::download(
+            new class($data) implements FromArray, WithHeadings {
+                public function __construct(private array $data) {}
+
+                public function array(): array
+                {
+                    return $this->data;
+                }
+
+                public function headings(): array
+                {
+                    return [
+                        'HRID',
+                        'Personal Email',
+                        'Official Email',
+                        'Name',
+                        'Role',
+                        'Job Title',
+                        'Office/School',
+                        'Status',
+                        'Created',
+                    ];
+                }
+            },
+            $filename,
+        );
     }
 
     /**
@@ -392,6 +533,46 @@ class UserListController extends Controller
         return response()->json([
             'id' => $id,
             'deleted' => true,
+        ]);
+    }
+
+    /**
+     * API endpoint: reset user password to default and send email to personal email.
+     *
+     * This is an admin/manual reset (different from the "Forgot password" self-service flow).
+     */
+    public function resetPassword(User $user)
+    {
+        $this->authorizeAdmin();
+
+        $defaultPassword = '1q2w3e4r5t';
+        $user->password = Hash::make($defaultPassword);
+        $user->save();
+
+        $recipient = $user->personal_email ?? $user->email;
+        if ($recipient) {
+            try {
+                Mail::to($recipient)->send(
+                    new PasswordResetMail([
+                        'name' => (string) ($user->fullname ?? $user->name ?? 'User'),
+                        'login_email' => (string) ($user->email ?? $recipient),
+                        'temporary_password' => $defaultPassword,
+                        'sign_in_url' => url('/login'),
+                    ]),
+                );
+            } catch (\Throwable $e) {
+                // Swallow mail errors so that reset still succeeds
+            }
+        }
+
+        ActivityLogService::logUpdate(
+            'User',
+            "Password reset for user: {$user->email}"
+        );
+
+        return response()->json([
+            'id' => $user->getKey(),
+            'reset' => true,
         ]);
     }
 

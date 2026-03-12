@@ -242,6 +242,7 @@ class WfhTimeInOutController extends Controller
         array $tasks
     ): string {
         $h = fn (string $s) => htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
+        $fontFaceCss = $this->buildWfhPdfFontFaceCss();
         $headerImg = ($headerImageDataUri !== null && $headerImageDataUri !== '')
             ? '<img src="'.$h($headerImageDataUri).'" alt="Header" class="header-image">'
             : '';
@@ -272,7 +273,8 @@ class WfhTimeInOutController extends Controller
 <title>Work From Home Individual Accomplishment Report</title>
 <style>
 @page { margin: 0.6in; }
-body { font-family: "Bookman Old Style", "DejaVu Serif", serif; font-size: 11pt; margin: 0; padding: 0; color: #000; }
+'.$fontFaceCss.'
+body { font-family: "WFH Bookman", "Bookman Old Style", "DejaVu Serif", serif; font-size: 11pt; margin: 0; padding: 0; color: #000; }
 .page-border {
     position: fixed;
     top: 0.05in;
@@ -293,8 +295,8 @@ body { font-family: "Bookman Old Style", "DejaVu Serif", serif; font-size: 11pt;
 .report-date { font-size: 11pt; text-align: center; margin: 0 0 0.15in; }
 .report-title-line { border: none; border-top: 1px solid #000; margin: 0 0 0.2in; }
 .employee-name { font-weight: 700; margin-bottom: 0.15in; font-size: 12pt; text-transform: uppercase; }
-table { width: 100%; border-collapse: collapse; font-size: 11pt; font-family: "Bookman Old Style", "DejaVu Serif", serif; }
-th, td { border: 1px solid #000; padding: 3px; font-size: 11pt; font-family: "Bookman Old Style", "DejaVu Serif", serif; }
+table { width: 100%; border-collapse: collapse; font-size: 11pt; font-family: "WFH Bookman", "Bookman Old Style", "DejaVu Serif", serif; }
+th, td { border: 1px solid #000; padding: 3px; font-size: 11pt; font-family: "WFH Bookman", "Bookman Old Style", "DejaVu Serif", serif; }
 th { font-weight: bold; background-color: #f2f2f2; }
 th.col-task, td.col-task { text-align: left; }
 th.col-accomplishment, td.col-accomplishment { text-align: left; }
@@ -331,6 +333,61 @@ th.col-station, td.col-station { text-align: left; }
 </div>
 </body>
 </html>';
+    }
+
+    private function buildWfhPdfFontFaceCss(): string
+    {
+        $fontPath = $this->resolveWfhPdfNameFontPath();
+        if ($fontPath === null) {
+            return '';
+        }
+
+        $fontUri = $this->toFileUri($fontPath);
+
+        return '@font-face {'
+            .' font-family: "WFH Bookman";'
+            .' src: url("'.$fontUri.'") format("truetype");'
+            .' font-weight: normal;'
+            .' font-style: normal;'
+            .'}';
+    }
+
+    private function resolveWfhPdfNameFontPath(): ?string
+    {
+        $configured = trim((string) config('ehris.wfh_pdf_name_ttf_font', ''));
+        if ($configured === '') {
+            return null;
+        }
+
+        $candidate = $configured;
+        if (! $this->isAbsolutePath($candidate)) {
+            $candidate = base_path(ltrim($candidate, '/\\'));
+        }
+
+        if (! is_file($candidate) || ! is_readable($candidate)) {
+            return null;
+        }
+
+        return (string) (realpath($candidate) ?: $candidate);
+    }
+
+    private function isAbsolutePath(string $path): bool
+    {
+        if (str_starts_with($path, '/') || str_starts_with($path, '\\\\')) {
+            return true;
+        }
+
+        return preg_match('/^[A-Za-z]:[\/\\\\]/', $path) === 1;
+    }
+
+    private function toFileUri(string $path): string
+    {
+        $normalized = str_replace('\\', '/', $path);
+        if (str_starts_with($normalized, '/')) {
+            return 'file://'.$normalized;
+        }
+
+        return 'file:///'.$normalized;
     }
 
     public function destroyTask(Request $request, SelfServiceTask $task): RedirectResponse

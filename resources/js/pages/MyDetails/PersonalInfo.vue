@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
+import { digitsOnly, formatPhilippineLandline, formatPhilippineMobile } from '@/utils/phPhone';
 
 function val(v: unknown): string {
     if (v == null || v === '') return 'N/A';
@@ -23,6 +24,34 @@ function val(v: unknown): string {
 function valInput(v: unknown): string {
     if (v == null) return '';
     return String(v);
+}
+
+function normalizeDateToIso(v: unknown): string {
+    const raw = valInput(v).trim();
+    if (raw === '') {
+        return '';
+    }
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+        return raw;
+    }
+
+    const ymdSlash = raw.match(/^(\d{4})\/(\d{2})\/(\d{2})$/);
+    if (ymdSlash) {
+        return `${ymdSlash[1]}-${ymdSlash[2]}-${ymdSlash[3]}`;
+    }
+
+    const dmySlash = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (dmySlash) {
+        return `${dmySlash[3]}-${dmySlash[2]}-${dmySlash[1]}`;
+    }
+
+    const dmyDash = raw.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+    if (dmyDash) {
+        return `${dmyDash[3]}-${dmyDash[2]}-${dmyDash[1]}`;
+    }
+
+    return '';
 }
 
 function pick(source: Record<string, unknown> | null | undefined, keys: string[]): unknown {
@@ -310,11 +339,35 @@ function copyResidentialToPermanent(): void {
     };
 }
 
+function onTelephoneKeydown(e: KeyboardEvent): void {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key.length === 1 && !/\d/.test(e.key)) {
+        e.preventDefault();
+    }
+}
+
+function onTelephonePaste(e: ClipboardEvent): void {
+    e.preventDefault();
+    form.value.phone_num = digitsOnly(e.clipboardData?.getData('text') ?? '').slice(0, 10);
+}
+
+function onMobileKeydown(e: KeyboardEvent): void {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key.length === 1 && !/\d/.test(e.key)) {
+        e.preventDefault();
+    }
+}
+
+function onMobilePaste(e: ClipboardEvent): void {
+    e.preventDefault();
+    form.value.mobile_num = digitsOnly(e.clipboardData?.getData('text') ?? '').slice(0, 11);
+}
+
 function openEdit(): void {
     const p = props.personalInfo ?? {};
     const c = props.contactInfo ?? {};
     form.value = {
-        dob: valInput(p.dob),
+        dob: normalizeDateToIso(p.dob),
         pob: valInput(p.pob),
         gender: valInput(p.gender),
         civil_stat: valInput(p.civil_stat),
@@ -348,8 +401,8 @@ function openEdit(): void {
         city_municipality1: valInput(c.city_municipality1),
         province1: valInput(c.province1),
         zip_code1: valInput(c.zip_code1),
-        phone_num: valInput(c.phone_num),
-        mobile_num: valInput(c.mobile_num),
+        phone_num: digitsOnly(c.phone_num).slice(0, 10),
+        mobile_num: digitsOnly(c.mobile_num).slice(0, 11),
         email: valInput(c.email),
     };
     errors.value = {};
@@ -459,8 +512,8 @@ function submit(): void {
                         <div class="ehris-pds-personal-row"><dt>PERMANENT - CITY/MUNICIPALITY</dt><dd>{{ val(contactInfo?.city_municipality1) }}</dd></div>
                         <div class="ehris-pds-personal-row"><dt>PERMANENT - PROVINCE</dt><dd>{{ val(contactInfo?.permanent_province_name ?? contactInfo?.province1) }}</dd></div>
                         <div class="ehris-pds-personal-row"><dt>PERMANENT - ZIP CODE</dt><dd>{{ val(contactInfo?.zip_code1) }}</dd></div>
-                        <div class="ehris-pds-personal-row"><dt>TELEPHONE NO.</dt><dd>{{ val(contactInfo?.phone_num) }}</dd></div>
-                        <div class="ehris-pds-personal-row"><dt>MOBILE NO.</dt><dd>{{ val(contactInfo?.mobile_num) }}</dd></div>
+                        <div class="ehris-pds-personal-row"><dt>TELEPHONE NO.</dt><dd>{{ val(formatPhilippineLandline(contactInfo?.phone_num)) }}</dd></div>
+                        <div class="ehris-pds-personal-row"><dt>MOBILE NO.</dt><dd>{{ val(formatPhilippineMobile(contactInfo?.mobile_num)) }}</dd></div>
                         <div class="ehris-pds-personal-row">
                             <dt>E-MAIL ADDRESS</dt>
                             <dd>
@@ -592,21 +645,27 @@ function submit(): void {
                             <label class="ehris-modal-field">
                                 <span>Telephone No.</span>
                                 <Input
-                                    :model-value="form.phone_num"
+                                    :model-value="formatPhilippineLandline(form.phone_num)"
+                                    type="tel"
                                     inputmode="numeric"
-                                    pattern="[0-9]*"
-                                    maxlength="11"
-                                    @update:modelValue="(v) => { form.phone_num = String(v ?? '').replace(/\\D+/g, ''); }"
+                                    pattern="[0-9-]*"
+                                    maxlength="12"
+                                    @update:modelValue="(v) => { form.phone_num = digitsOnly(v).slice(0, 10); }"
+                                    @keydown="onTelephoneKeydown"
+                                    @paste="onTelephonePaste"
                                 />
                             </label>
                             <label class="ehris-modal-field">
                                 <span>Mobile No.</span>
                                 <Input
-                                    :model-value="form.mobile_num"
+                                    :model-value="formatPhilippineMobile(form.mobile_num)"
+                                    type="tel"
                                     inputmode="numeric"
-                                    pattern="[0-9]*"
-                                    maxlength="11"
-                                    @update:modelValue="(v) => { form.mobile_num = String(v ?? '').replace(/\\D+/g, '').slice(0, 11); }"
+                                    pattern="[0-9-]*"
+                                    maxlength="13"
+                                    @update:modelValue="(v) => { form.mobile_num = digitsOnly(v).slice(0, 11); }"
+                                    @keydown="onMobileKeydown"
+                                    @paste="onMobilePaste"
                                 />
                             </label>
                             <label class="ehris-modal-field"><span>Email Address</span><Input v-model="form.email" type="email" /></label>
