@@ -1,8 +1,10 @@
 <?php
 
+use App\Events\UserListUpdated;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Inertia\Testing\AssertableInertia;
 
 uses(DatabaseTransactions::class);
@@ -88,4 +90,23 @@ it('returns summary stats for authenticated users', function () {
         ->assertJsonPath('inactiveAccounts', $baselineInactiveAccounts + 2)
         ->assertJsonPath('registeredToday', $baselineRegisteredToday + 2)
         ->assertJsonPath('date', $today);
+});
+
+it('dispatches user-list realtime event when creating a user', function () {
+    Event::fake([UserListUpdated::class]);
+
+    $admin = createAdminUser();
+
+    $this->actingAs($admin)
+        ->postJson('/utilities/users', [
+            'personal_email' => 'realtime-test@example.com',
+            'firstname' => 'Realtime',
+            'lastname' => 'Tester',
+            'role' => 'Employee',
+        ])
+        ->assertCreated();
+
+    Event::assertDispatched(UserListUpdated::class, function (UserListUpdated $event) {
+        return $event->action === 'created' && is_int($event->userId);
+    });
 });

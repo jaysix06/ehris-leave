@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head, usePage } from '@inertiajs/vue3';
+import { echo } from '@laravel/echo-vue';
 import { AlertCircle, CheckCircle2, Download, RefreshCw, UserPlus } from 'lucide-vue-next';
 import Swal from 'sweetalert2';
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
@@ -179,6 +180,7 @@ const buildNameFromParts = (row: {
 const getAjaxParams = computed(() => () => ({
     _refresh: String(refreshTrigger.value),
 }));
+const reverbEnabled = import.meta.env.VITE_REVERB_ENABLED !== 'false';
 
 const formatSummaryCount = (value: number): string => {
     return new Intl.NumberFormat().format(value);
@@ -695,6 +697,10 @@ const refreshTable = () => {
     refreshUserList();
 };
 
+const handleUserListRealtimeUpdate = () => {
+    refreshUserList();
+};
+
 const handleTableAction = (e: Event) => {
     const target = e.target as HTMLElement;
     const btn = target.closest?.('[data-user-list-action]') as HTMLElement | null;
@@ -743,6 +749,13 @@ const fetchDepartments = async () => {
 onMounted(() => {
     fetchDepartments();
     void fetchSummaryStats();
+    if (reverbEnabled) {
+        try {
+            echo().channel('user-list').listen('.UserListUpdated', handleUserListRealtimeUpdate);
+        } catch {
+            // Reverb not connected; real-time updates disabled
+        }
+    }
     nextTick(() => {
         dataTableWrapperRef.value?.addEventListener('click', handleTableAction);
     });
@@ -750,6 +763,13 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
     dataTableWrapperRef.value?.removeEventListener('click', handleTableAction);
+    if (reverbEnabled) {
+        try {
+            echo().channel('user-list').stopListening('UserListUpdated');
+        } catch {
+            // ignore
+        }
+    }
 });
 </script>
 

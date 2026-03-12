@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Utilities;
 
+use App\Events\UserListUpdated;
 use App\Http\Controllers\Controller;
 use App\Mail\AccountActivatedMail;
 use App\Mail\PasswordResetMail;
@@ -270,6 +271,7 @@ class UserListController extends Controller
         $user->save();
 
         ActivityLogService::logCreate('User', "Created user: {$user->personal_email}", $user->getKey());
+        UserListUpdated::dispatch('created', (int) $user->getKey());
 
         return response()->json([
             'id' => $user->getKey(),
@@ -472,6 +474,7 @@ class UserListController extends Controller
             'User',
             "Updated user: {$user->email}"
         );
+        UserListUpdated::dispatch($user->active ? 'activated' : 'deactivated', (int) $user->getKey());
 
         return response()->json([
             'id' => $user->getKey(),
@@ -517,6 +520,7 @@ class UserListController extends Controller
         }
 
         $user->save();
+        UserListUpdated::dispatch('updated', (int) $user->getKey());
 
         $office = null;
         if ($user->department_id) {
@@ -558,6 +562,7 @@ class UserListController extends Controller
 
         $id = $user->getKey();
         $user->delete();
+        UserListUpdated::dispatch('deleted', (int) $id);
 
         return response()->json([
             'id' => $id,
