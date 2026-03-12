@@ -31,13 +31,23 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 const page = usePage();
 const announcements = computed(() => (page.props.announcements ?? []) as AnnouncementRow[]);
+const roles = computed(() => (page.props.roles ?? []) as string[]);
 
 const showAddModal = ref(false);
 const showEditModal = ref(false);
 const showDeleteModal = ref(false);
+const showEmailModal = ref(false);
 const editingId = ref<number | null>(null);
 const pendingDeleteAnnouncement = ref<AnnouncementRow | null>(null);
+const pendingEmailAnnouncement = ref<AnnouncementRow | null>(null);
 const isDeleteLoading = ref(false);
+const isEmailLoading = ref(false);
+
+const emailForm = reactive({
+    recipient_scope: 'all' as 'all' | 'role',
+    only_active: true,
+    roles: [] as string[],
+});
 
 const newAnnouncement = reactive({
     title: '',
@@ -191,6 +201,52 @@ const cancelDeleteAnnouncement = (): void => {
     pendingDeleteAnnouncement.value = null;
 };
 
+const openEmailModal = (row: AnnouncementRow): void => {
+    pendingEmailAnnouncement.value = row;
+    emailForm.recipient_scope = 'all';
+    emailForm.only_active = true;
+    emailForm.roles = [];
+    showEmailModal.value = true;
+};
+
+const closeEmailModal = (): void => {
+    if (isEmailLoading.value) return;
+    showEmailModal.value = false;
+    pendingEmailAnnouncement.value = null;
+};
+
+const sendAnnouncementEmail = (): void => {
+    if (!pendingEmailAnnouncement.value) return;
+
+    if (emailForm.recipient_scope === 'role' && emailForm.roles.length === 0) {
+        toast.error('Please select at least one role.');
+        return;
+    }
+
+    isEmailLoading.value = true;
+
+    const payload = {
+        recipient_scope: emailForm.recipient_scope,
+        only_active: emailForm.only_active,
+        roles: emailForm.recipient_scope === 'role' ? emailForm.roles : [],
+    };
+
+    router.post(`/utilities/announcement-management/${pendingEmailAnnouncement.value.id}/send-email`, payload, {
+        preserveScroll: true,
+        onSuccess: () => {
+            toast.success('Announcement email sent.');
+            closeEmailModal();
+        },
+        onError: (errors) => {
+            const msg = errors?.roles?.[0] || errors?.recipient_scope?.[0] || 'Failed to queue announcement email.';
+            toast.error(msg);
+        },
+        onFinish: () => {
+            isEmailLoading.value = false;
+        },
+    });
+};
+
 const confirmDeleteAnnouncement = (): void => {
     if (!pendingDeleteAnnouncement.value) {
         return;
@@ -275,6 +331,13 @@ const formatDate = (dateString: string): string => {
                                 <td class="border border-border px-3 py-2">{{ formatDate(row.created_at) }}</td>
                                 <td class="border border-border px-3 py-2">
                                     <div class="flex gap-2">
+                                        <button
+                                            type="button"
+                                            class="rounded-md border border-blue-500 px-3 py-1 text-blue-600 hover:bg-blue-50"
+                                            @click="openEmailModal(row)"
+                                        >
+                                            Email
+                                        </button>
                                         <button
                                             type="button"
                                             class="rounded-md border border-orange-500 px-3 py-1 text-orange-600 hover:bg-orange-50"
@@ -452,6 +515,88 @@ const formatDate = (dateString: string): string => {
                     @click="confirmDeleteAnnouncement"
                 >
                     {{ isDeleteLoading ? 'Deleting...' : 'Delete' }}
+                </button>
+            </template>
+        </AppModal>
+
+        <AppModal v-model="showEmailModal" title="Send announcement email" :persistent="isEmailLoading">
+            <div class="space-y-3">
+                <p class="text-sm text-muted-foreground">
+                    Send
+                    <span class="font-semibold text-foreground">{{ pendingEmailAnnouncement?.title }}</span>
+                    to users by email.
+                </p>
+
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium">Recipients</label>
+                    <div class="flex flex-wrap gap-2">
+                        <button
+                            type="button"
+                            :class="[
+                                'rounded-md border px-3 py-1 text-sm font-medium',
+                                emailForm.recipient_scope === 'all'
+                                    ? 'border-primary bg-primary text-primary-foreground'
+                                    : 'border-input bg-background text-foreground hover:bg-muted',
+                            ]"
+                            @click="emailForm.recipient_scope = 'all'"
+                        >
+                            All users
+                        </button>
+                        <button
+                            type="button"
+                            :class="[
+                                'rounded-md border px-3 py-1 text-sm font-medium',
+                                emailForm.recipient_scope === 'role'
+                                    ? 'border-primary bg-primary text-primary-foreground'
+                                    : 'border-input bg-background text-foreground hover:bg-muted',
+                            ]"
+                            @click="emailForm.recipient_scope = 'role'"
+                        >
+                            By role
+                        </button>
+                    </div>
+
+                    <label class="mt-3 flex items-center gap-2 text-sm">
+                        <input type="checkbox" v-model="emailForm.only_active" />
+                        Only active users
+                    </label>
+
+                    <div v-if="emailForm.recipient_scope === 'role'" class="mt-3 space-y-2">
+                        <label class="block text-sm font-medium">Roles</label>
+                        <div class="grid gap-2 sm:grid-cols-2">
+                            <label
+                                v-for="r in roles"
+                                :key="r"
+                                class="flex items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                            >
+                                <input
+                                    type="checkbox"
+                                    :value="r"
+                                    v-model="emailForm.roles"
+                                />
+                                <span>{{ r }}</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <template #actions>
+                <button
+                    type="button"
+                    class="rounded-md border border-input px-4 py-2 text-sm hover:bg-muted"
+                    :disabled="isEmailLoading"
+                    @click="closeEmailModal"
+                >
+                    Cancel
+                </button>
+                <button
+                    type="button"
+                    class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+                    :disabled="isEmailLoading"
+                    @click="sendAnnouncementEmail"
+                >
+                    {{ isEmailLoading ? 'Sending...' : 'Send email' }}
                 </button>
             </template>
         </AppModal>

@@ -7,6 +7,7 @@ use App\Concerns\ProfileValidationRules;
 use App\Mail\NewUserRegistrationAdminMail;
 use App\Models\BusinessUnit;
 use App\Models\Department;
+use App\Models\Role;
 use App\Models\User;
 use App\Services\ActivityLogService;
 use Illuminate\Support\Facades\DB;
@@ -37,7 +38,7 @@ class CreateNewUser implements CreatesNewUsers
 
         $validDistrictIds = BusinessUnit::pluck('BusinessUnitId')->map(fn ($id) => (string) $id)->all();
         $validStationIds = Department::pluck('department_id')->map(fn ($id) => (string) $id)->all();
-        $validRoles = array_values(config('ehris.register_roles', ['Employee', 'HR Manager', 'AO Manager', 'SDS Manager', 'System Admin']));
+        $validRoles = Role::roleNames();
 
         Validator::make($input, [
             ...$profileRules,

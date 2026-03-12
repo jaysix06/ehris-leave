@@ -24,7 +24,9 @@ class UserListController extends Controller
      */
     public function index()
     {
-        return Inertia::render('Utilities/UserList');
+        return Inertia::render('Utilities/UserList', [
+            'roles' => \App\Models\Role::roleNames(),
+        ]);
     }
 
     /**

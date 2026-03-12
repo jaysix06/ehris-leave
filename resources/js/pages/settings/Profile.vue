@@ -12,7 +12,6 @@ import { type BreadcrumbItem } from '@/types';
 import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileController';
 import { edit } from '@/routes/profile';
 
-const ROLE_OPTIONS = ['Employee', 'HR Manager', 'AO Manager', 'SDS Manager', 'System Admin'] as const;
 const EXTENSION_OPTIONS = ['', 'Jr.', 'Sr.', 'II', 'III', 'IV'] as const;
 const JOB_TITLE_OPTIONS = [
     'Teacher I', 'Teacher II', 'Teacher III', 'Master Teacher I', 'Master Teacher II',
@@ -27,6 +26,7 @@ const breadcrumbItems: BreadcrumbItem[] = [
 ];
 
 const page = usePage();
+const roles = computed(() => (page.props.roles ?? []) as string[]);
 const user = page.props.auth.user as {
     name: string;
     email: string;
@@ -84,12 +84,12 @@ const avatarPreview = ref<string | null>(null);
 const avatarUrl = computed(() => {
     if (avatarPreview.value) return avatarPreview.value;
     const raw = user?.avatar;
-    if (typeof raw !== 'string' || raw.trim() === '') return '/storage/avatars/avatar-default.jpg';
+    if (typeof raw !== 'string' || raw.trim() === '') return '/avatar-default.jpg';
     const s = raw.trim();
     const base = s.split('?')[0]?.split('#')[0] ?? '';
     const lower = base.toLowerCase();
     if (lower === 'avatar-default.jpg' || lower.endsWith('/avatar-default.jpg')) {
-        return '/storage/avatars/avatar-default.jpg';
+        return '/avatar-default.jpg';
     }
     if (/^(https?:)?\/\//i.test(base) || base.startsWith('/') || base.startsWith('data:') || base.startsWith('blob:')) {
         return base.startsWith('/') ? base : `/${base}`;
@@ -138,7 +138,7 @@ const displayHrId = computed(() => user?.hrId != null ? String(user.hrId) : '—
                             :src="avatarUrl"
                             :alt="user.name"
                             class="h-full w-full object-cover"
-                            @error="($event as Event & { currentTarget: HTMLImageElement }).currentTarget.src = '/storage/avatars/avatar-default.jpg'"
+                            @error="($event as Event & { currentTarget: HTMLImageElement }).currentTarget.src = '/avatar-default.jpg'"
                         />
                     </div>
                     <p class="text-lg font-semibold text-foreground">
@@ -318,7 +318,7 @@ const displayHrId = computed(() => user?.hrId != null ? String(user.hrId) : '—
                                 >
                                     <option value="">- Select Role -</option>
                                     <option
-                                        v-for="r in ROLE_OPTIONS"
+                                        v-for="r in roles"
                                         :key="r"
                                         :value="r"
                                     >
