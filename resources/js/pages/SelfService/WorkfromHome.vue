@@ -445,6 +445,14 @@ const taskDueDateRange = ref<{ start: Date; end: Date } | null>(null);
 const taskCalendarKey = ref(0);
 const taskSubmitLoading = ref(false);
 
+/** Start of today (local) – used to disable past days in Create Task date picker */
+function getStartOfToday(): Date {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+}
+const createTaskMinDate = computed(() => getStartOfToday());
+
 // Task view calendar (dashboard): show open tasks on their due dates
 const taskViewCalendarDate = ref(new Date());
 
@@ -606,7 +614,20 @@ function submitCreateTask(): void {
         toast.error('Task due date is required.');
         return;
     }
+    const startOfToday = getStartOfToday();
+    const startDay = new Date(range.start);
+    startDay.setHours(0, 0, 0, 0);
+    if (startDay < startOfToday) {
+        toast.error('Task due date cannot be in the past. Please pick today or a future date.');
+        return;
+    }
     const end = range.end && range.end >= range.start ? range.end : range.start;
+    const endDay = new Date(end);
+    endDay.setHours(0, 0, 0, 0);
+    if (endDay < startOfToday) {
+        toast.error('Task due date range cannot include past days. Please pick today or future dates.');
+        return;
+    }
     taskSubmitLoading.value = true;
     router.post('/self-service/wfh-time-in-out/tasks', {
         title,
@@ -1217,6 +1238,7 @@ function toggleClock(): void {
                                 <DatePicker
                                     :key="taskCalendarKey"
                                     v-model="taskDueDateRangeForPicker"
+                                    :min-date="createTaskMinDate"
                                     is-range
                                     is-inline
                                     expanded
