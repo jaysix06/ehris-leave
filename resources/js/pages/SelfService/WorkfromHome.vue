@@ -1638,9 +1638,24 @@ function toggleClock(): void {
                                     Export all tasks (open and completed) in a date range as a PDF. The report uses the official header and footer when available. The header and footer appear on every page; if you have many tasks, the table continues on the next pages with the same header and footer on each page.
                                 </p>
                                 <ul class="list-inside list-disc space-y-3 text-muted-foreground">
-                                    <li><strong class="text-foreground">Click</strong> <strong>Export</strong> to open the export dialog.</li>
-                                    <li>Choose a date range: <strong class="text-foreground">click</strong> a start date and an end date on the calendar (no range is pre-selected when you open the dialog).</li>
-                                    <li><strong class="text-foreground">Click</strong> <strong>Export</strong> to download the PDF.</li>
+                                    <li class="flex flex-col gap-1">
+                                        <span><strong class="text-foreground">Click</strong> <strong>Export</strong> to open the export dialog.</span>
+                                        <button type="button" class="mt-1 block h-48 max-w-xs overflow-hidden rounded-md border border-border cursor-zoom-in hover:ring-2 hover:ring-primary/50 focus:outline-none focus:ring-2 focus:ring-primary text-left" @click="openManualImage('/Users_Manual/Export_btn.png', 'Export button')">
+                                            <img src="/Users_Manual/Export_btn.png" alt="Export button" class="h-full w-full object-cover object-[right_bottom]" />
+                                        </button>
+                                    </li>
+                                    <li class="flex flex-col gap-1">
+                                        <span>Choose a date range: <strong class="text-foreground">click</strong> a start date and an end date on the calendar (no range is pre-selected when you open the dialog).</span>
+                                        <button type="button" class="mt-1 block h-48 max-w-xs overflow-hidden rounded-md border border-border cursor-zoom-in hover:ring-2 hover:ring-primary/50 focus:outline-none focus:ring-2 focus:ring-primary text-left" @click="openManualImage('/Users_Manual/ExportDatePicker_btn.png', 'Export date picker')">
+                                            <img src="/Users_Manual/ExportDatePicker_btn.png" alt="Export date picker" class="h-full w-full object-cover object-[center_center]" />
+                                        </button>
+                                    </li>
+                                    <li class="flex flex-col gap-1">
+                                        <span><strong class="text-foreground">Click</strong> <strong>Export</strong> to download the PDF.</span>
+                                        <button type="button" class="mt-1 block h-48 max-w-xs overflow-hidden rounded-md border border-border cursor-zoom-in hover:ring-2 hover:ring-primary/50 focus:outline-none focus:ring-2 focus:ring-primary text-left" @click="openManualImage('/Users_Manual/ExportNow_btn.png', 'Export button in dialog')">
+                                            <img src="/Users_Manual/ExportNow_btn.png" alt="Export button in dialog" class="h-full w-full object-cover object-[center_bottom]" />
+                                        </button>
+                                    </li>
                                 </ul>
                             </div>
                         </div>
