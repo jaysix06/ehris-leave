@@ -200,7 +200,7 @@ const submitJobTitle = async () => {
             job_shorten: newJobShorten.value.trim(),
         };
         
-        const response = await fetch('/api/utilities/job-title-monthly-salary/job-titles', {
+        const response = await fetch('/utilities/job-title-monthly-salary/job-titles', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -311,7 +311,7 @@ const submitMonthlySalary = async () => {
     isSubmittingMonthlySalary.value = true;
     
     try {
-        const response = await fetch('/api/utilities/job-title-monthly-salary/monthly-salaries', {
+        const response = await fetch('/utilities/job-title-monthly-salary/monthly-salaries', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -456,7 +456,7 @@ if (typeof window !== 'undefined') {
 
         if (formValues) {
             try {
-                const response = await fetch(`/api/utilities/job-title-monthly-salary/job-titles/${id}`, {
+                const response = await fetch(`/utilities/job-title-monthly-salary/job-titles/${id}`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
@@ -533,7 +533,7 @@ if (typeof window !== 'undefined') {
 
         if (result.isConfirmed) {
             try {
-                const response = await fetch(`/api/utilities/job-title-monthly-salary/job-titles/${id}`, {
+                const response = await fetch(`/utilities/job-title-monthly-salary/job-titles/${id}`, {
                     method: 'DELETE',
                     headers: {
                         'Accept': 'application/json',
@@ -689,7 +689,7 @@ if (typeof window !== 'undefined') {
 
         if (formValues) {
             try {
-                const response = await fetch(`/api/utilities/job-title-monthly-salary/monthly-salaries/${id}`, {
+                const response = await fetch(`/utilities/job-title-monthly-salary/monthly-salaries/${id}`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
@@ -769,7 +769,7 @@ if (typeof window !== 'undefined') {
 
         if (result.isConfirmed) {
             try {
-                const response = await fetch(`/api/utilities/job-title-monthly-salary/monthly-salaries/${id}`, {
+                const response = await fetch(`/utilities/job-title-monthly-salary/monthly-salaries/${id}`, {
                     method: 'DELETE',
                     headers: {
                         'Accept': 'application/json',
@@ -835,7 +835,7 @@ if (typeof window !== 'undefined') {
                             :key="jobTitleTableKey"
                             ref="jobTitleTableRef"
                             :columns="jobTitleColumns"
-                            ajax-url="/api/utilities/job-title-monthly-salary/job-titles/datatables"
+                            ajax-url="/utilities/job-title-monthly-salary/job-titles/datatables"
                             :get-ajax-params="getAjaxParams"
                             row-key="id"
                             :loading="isLoadingJobTitles"
@@ -862,7 +862,7 @@ if (typeof window !== 'undefined') {
                             :key="monthlySalaryTableKey"
                             ref="monthlySalaryTableRef"
                             :columns="monthlySalaryColumns"
-                            ajax-url="/api/utilities/job-title-monthly-salary/monthly-salaries/datatables"
+                            ajax-url="/utilities/job-title-monthly-salary/monthly-salaries/datatables"
                             :get-ajax-params="getAjaxParams"
                             row-key="id"
                             :loading="isLoadingSalaries"
@@ -1060,3 +1060,4 @@ if (typeof window !== 'undefined') {
     background-color: #b91c1c !important;
 }
 </style>
+

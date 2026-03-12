@@ -199,6 +199,30 @@ class UserListController extends Controller
     }
 
     /**
+     * API endpoint: user list summary statistics.
+     */
+    public function summaryStats()
+    {
+        $this->authorizeAdmin();
+
+        $today = now()->toDateString();
+
+        $inactiveAccounts = DB::table('tbl_user')
+            ->where('active', 0)
+            ->count();
+
+        $registeredToday = DB::table('tbl_user')
+            ->whereDate('date_created', $today)
+            ->count();
+
+        return response()->json([
+            'inactiveAccounts' => $inactiveAccounts,
+            'registeredToday' => $registeredToday,
+            'date' => $today,
+        ]);
+    }
+
+    /**
      * API endpoint: create a new user (admin/manual).
      *
      * This is different from self-service registration.

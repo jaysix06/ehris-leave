@@ -3,7 +3,7 @@
   Supports custom cell rendering, accordion rows, and backend export buttons.
 -->
 <script setup lang="ts">
-import { ref, onMounted, watch, nextTick, onUnmounted } from 'vue';
+import { computed, onMounted, onUnmounted, ref, useSlots, watch, nextTick } from 'vue';
 import { DataTablesCore } from '@/config/datatables';
 import type { Config } from 'datatables.net';
 
@@ -83,9 +83,12 @@ const emit = defineEmits<{
     'row-toggle': [row: unknown, isExpanded: boolean];
 }>();
 
+const slots = useSlots();
 const tableRef = ref<HTMLTableElement | null>(null);
 let dataTableInstance: any = null;
 const expandedRows = ref<Set<string | number>>(new Set());
+const hasHeaderActionsSlot = computed(() => Boolean(slots['header-actions']));
+const headerActionsTarget = ref<HTMLElement | null>(null);
 
 // Toggle row expansion
 function toggleRow(row: any, rowElement?: HTMLElement) {
@@ -255,6 +258,18 @@ onMounted(() => {
             );
         }
         
+        const headerRightDomParts: string[] = [];
+        if (buttons.length > 0) {
+            headerRightDomParts.push('B');
+        }
+        if (hasHeaderActionsSlot.value) {
+            headerRightDomParts.push('<"dataTables-header-custom-actions">');
+        }
+
+        const headerRowOneDom = headerRightDomParts.length > 0
+            ? `<"dataTables-header-row-1"<"dataTables-header-left"f><"dataTables-header-right"${headerRightDomParts.join('')}>>`
+            : '<"dataTables-header-row-1"f>';
+
         // DataTables configuration
         const dtConfig: any = {
             processing: true,
@@ -349,9 +364,7 @@ onMounted(() => {
             } : undefined,
             // Show pagination controls both at the top (in header row 2) and bottom (footer)
             // Top pagination: length menu on left, pagination on right
-            dom: buttons.length > 0
-                ? '<"dataTables-header"<"dataTables-header-row-1"<"dataTables-header-left"f><"dataTables-header-right"B>><"dataTables-header-row-2"<"dataTables-header-row-2-left"l><"dataTables-header-row-2-right"p>>>rt<"dataTables-footer"ip>'
-                : '<"dataTables-header"<"dataTables-header-row-1"f><"dataTables-header-row-2"<"dataTables-header-row-2-left"l><"dataTables-header-row-2-right"p>>>rt<"dataTables-footer"ip>',
+            dom: `<"dataTables-header"${headerRowOneDom}<"dataTables-header-row-2"<"dataTables-header-row-2-left"l><"dataTables-header-row-2-right"p>>>rt<"dataTables-footer"ip>`,
             responsive: true,
             rowCallback: (row: Node, data: any) => {
                 const rowElement = row as HTMLElement;
@@ -411,6 +424,15 @@ onMounted(() => {
         // Initialize DataTable
         // @ts-ignore - DataTables types
         dataTableInstance = new DataTablesCore(table, dtConfig);
+
+        if (hasHeaderActionsSlot.value) {
+            const headerActionsContainer = table
+                .closest('.dataTables_wrapper')
+                ?.querySelector('.dataTables-header-custom-actions') as HTMLElement | null;
+            if (headerActionsContainer) {
+                headerActionsTarget.value = headerActionsContainer;
+            }
+        }
         
         // Limit pagination to show only 3 page numbers (current page + 2 adjacent)
         const limitPagination = () => {
@@ -490,12 +512,16 @@ onUnmounted(() => {
         dataTableInstance.destroy();
         dataTableInstance = null;
     }
+    headerActionsTarget.value = null;
 });
 </script>
 
 <template>
     <div class="data-table-wrapper">
         <table ref="tableRef" class="display" style="width: 100%"></table>
+        <Teleport v-if="headerActionsTarget" :to="headerActionsTarget">
+            <slot name="header-actions" />
+        </Teleport>
     </div>
 </template>
 
@@ -531,7 +557,15 @@ onUnmounted(() => {
 /* Header right: Buttons */
 :deep(.dataTables-header-right) {
     display: flex;
+    align-items: center;
     gap: 0.5rem;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+}
+
+:deep(.dataTables-header-custom-actions) {
+    display: flex;
+    align-items: center;
 }
 
 /* Second row: Length menu on left, Pagination on right */

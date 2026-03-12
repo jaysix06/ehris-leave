@@ -76,7 +76,7 @@ const loadingMessages = ref(false);
 const sendingMessage = ref(false);
 const error = ref<string | null>(null);
 const contacts = ref<Contact[]>([]);
-const nextContactsUrl = ref<string | null>('/api/utilities/users?per_page=60');
+const nextContactsUrl = ref<string | null>('/utilities/users?per_page=60');
 const nextConversationsCursor = ref<string | null>(null);
 const activeConversationId = ref<number | string | null>(null);
 const messageInput = ref('');
@@ -296,7 +296,7 @@ const loadInitialContacts = async () => {
     if (q !== '') {
         params.set('search', q);
     }
-    nextContactsUrl.value = `/api/utilities/users?${params.toString()}`;
+    nextContactsUrl.value = `/utilities/users?${params.toString()}`;
     await fetchContactsPage(nextContactsUrl.value, { showLoader: true, append: false });
 };
 
@@ -312,7 +312,7 @@ const refreshContacts = async () => {
     if (q !== '') {
         params.set('search', q);
     }
-    await fetchContactsPage(`/api/utilities/users?${params.toString()}`);
+    await fetchContactsPage(`/utilities/users?${params.toString()}`);
 };
 
 const conversationListUrl = (cursor?: string | null): string => {
@@ -580,7 +580,7 @@ watch(searchQuery, (value) => {
             params.set('search', q);
         }
 
-        nextContactsUrl.value = `/api/utilities/users?${params.toString()}`;
+        nextContactsUrl.value = `/utilities/users?${params.toString()}`;
         void fetchContactsPage(nextContactsUrl.value, { showLoader: true, append: false });
     }, 300);
 });
@@ -939,3 +939,4 @@ onBeforeUnmount(() => {
         </Transition>
     </div>
 </template>
+
