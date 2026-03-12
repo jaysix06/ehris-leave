@@ -15,9 +15,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
-use Maatwebsite\Excel\Facades\Excel;
-use Maatwebsite\Excel\Concerns\FromArray;
-use Maatwebsite\Excel\Concerns\WithHeadings;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class UserListController extends Controller
 {
@@ -256,9 +254,9 @@ class UserListController extends Controller
     }
 
     /**
-     * Export user list as Excel (admin).
+     * Export user list as CSV (admin). Opens in Excel and requires no extra package.
      */
-    public function exportExcel()
+    public function exportExcel(): StreamedResponse
     {
         $this->authorizeAdmin();
 
@@ -284,55 +282,52 @@ class UserListController extends Controller
             ->orderByDesc('u.userId')
             ->get();
 
-        $filename = 'users-'.now()->format('Y-m-d-His').'.xlsx';
+        $filename = 'users-'.now()->format('Y-m-d-His').'.csv';
 
-        $data = $rows->map(function ($r) {
-            $name = trim(implode(' ', array_filter([
-                $r->firstname,
-                $r->middlename,
-                $r->lastname,
-                $r->extname,
-            ]))) ?: ($r->fullname ?? $r->personal_email ?? $r->email ?? '');
+        $headers = [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+        ];
 
-            return [
-                'HRID' => $r->hrid ?? '',
-                'Personal Email' => $r->personal_email ?? '',
-                'Official Email' => $r->email ?? '',
-                'Name' => $name,
-                'Role' => $r->role ?? '',
-                'Job Title' => $r->job_title ?? '',
-                'Office/School' => $r->office ?? '',
-                'Status' => ((bool) $r->active) ? 'Active' : 'Inactive',
-                'Created' => $r->date_created ?? '',
-            ];
-        })->toArray();
+        return response()->streamDownload(function () use ($rows) {
+            $out = fopen('php://output', 'w');
+            fprintf($out, chr(0xEF).chr(0xBB).chr(0xBF)); // UTF-8 BOM for Excel
 
-        return Excel::download(
-            new class($data) implements FromArray, WithHeadings {
-                public function __construct(private array $data) {}
+            fputcsv($out, [
+                'HRID',
+                'Personal Email',
+                'Official Email',
+                'Name',
+                'Role',
+                'Job Title',
+                'Office/School',
+                'Status',
+                'Created',
+            ]);
 
-                public function array(): array
-                {
-                    return $this->data;
-                }
+            foreach ($rows as $r) {
+                $name = trim(implode(' ', array_filter([
+                    $r->firstname,
+                    $r->middlename,
+                    $r->lastname,
+                    $r->extname,
+                ]))) ?: ($r->fullname ?? $r->personal_email ?? $r->email ?? '');
 
-                public function headings(): array
-                {
-                    return [
-                        'HRID',
-                        'Personal Email',
-                        'Official Email',
-                        'Name',
-                        'Role',
-                        'Job Title',
-                        'Office/School',
-                        'Status',
-                        'Created',
-                    ];
-                }
-            },
-            $filename,
-        );
+                fputcsv($out, [
+                    $r->hrid ?? '',
+                    $r->personal_email ?? '',
+                    $r->email ?? '',
+                    $name,
+                    $r->role ?? '',
+                    $r->job_title ?? '',
+                    $r->office ?? '',
+                    ((bool) $r->active) ? 'Active' : 'Inactive',
+                    $r->date_created ?? '',
+                ]);
+            }
+
+            fclose($out);
+        }, $filename, $headers);
     }
 
     /**
