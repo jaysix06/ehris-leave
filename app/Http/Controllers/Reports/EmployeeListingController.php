@@ -32,11 +32,10 @@ class EmployeeListingController extends Controller
             }
         }
 
-        // Get filter options for dropdowns
-        $schools = Employee::whereNotNull('office')
-            ->distinct()
-            ->pluck('office')
-            ->sort()
+        // Get filter options for dropdowns (from tbl_department, same as User List)
+        $schools = DB::table('tbl_department')
+            ->orderBy('department_name')
+            ->pluck('department_name')
             ->values();
 
         // Schools/Offices grouped by District (Business Code + Business Name from tbl_business / tbl_department)
@@ -63,18 +62,24 @@ class EmployeeListingController extends Controller
         $subjects = Employee::whereNotNull('subject_taught')
             ->distinct()
             ->pluck('subject_taught')
+            ->map(fn ($v) => is_string($v) ? trim($v) : $v)
+            ->filter(fn ($v) => $v !== '' && $v !== null)
             ->sort()
             ->values();
 
         $gradeLevels = Employee::whereNotNull('grade_level')
             ->distinct()
             ->pluck('grade_level')
+            ->map(fn ($v) => is_string($v) ? trim($v) : $v)
+            ->filter(fn ($v) => $v !== '' && $v !== null)
             ->sort()
             ->values();
 
         $employmentStatuses = Employee::whereNotNull('employ_status')
             ->distinct()
             ->pluck('employ_status')
+            ->map(fn ($v) => is_string($v) ? trim($v) : $v)
+            ->filter(fn ($v) => $v !== '' && $v !== null)
             ->sort()
             ->values();
 
@@ -112,10 +117,10 @@ class EmployeeListingController extends Controller
             ->values()
             ->all();
 
-        // School/Office: Get all records, split for legend (top 4) and others
+        // School/Office: group by department name (from tbl_department join)
         $allSchoolDistribution = (clone $query)
-            ->select(DB::raw('COALESCE(office, \'(Blank)\') as label'), DB::raw('count(*) as count'))
-            ->groupBy('office')
+            ->select(DB::raw('COALESCE(d.department_name, \'(Blank)\') as label'), DB::raw('count(*) as count'))
+            ->groupBy(DB::raw('d.department_name'))
             ->orderByDesc('count')
             ->get()
             ->map(fn ($row) => ['label' => (string) ($row->label ?? '(Blank)'), 'count' => (int) $row->count])
@@ -148,8 +153,13 @@ class EmployeeListingController extends Controller
             ['label' => 'Non-Teaching', 'count' => $nonTeaching],
         ];
 
-        // Pagination (full load)
+        // Pagination (full load); show department name in Office/School column
         $employees = $query->paginate($perPage)->withQueryString();
+        $employees->getCollection()->transform(function ($employee) {
+            $employee->setAttribute('office', $employee->office_display ?? $employee->getOriginal('office'));
+
+            return $employee;
+        });
 
         return Inertia::render('Reports/EmployeeListing', [
             'employees' => $employees,
@@ -245,14 +255,23 @@ class EmployeeListingController extends Controller
     {
         $query = Employee::query();
 
+        // Join tbl_department so Office/School column shows department name (same as User List)
+        $empTable = (new Employee)->getTable();
+        if (Schema::hasColumn($empTable, 'department_id')) {
+            $query->leftJoin('tbl_department as d', "{$empTable}.department_id", '=', 'd.department_id')
+                ->addSelect("{$empTable}.*", DB::raw('d.department_name as office_display'));
+        } else {
+            $query->leftJoin('tbl_department as d', DB::raw("CAST({$empTable}.office AS UNSIGNED)"), '=', 'd.department_id')
+                ->addSelect("{$empTable}.*", DB::raw('d.department_name as office_display'));
+        }
+
         // Apply filters (same as index method)
         if ($request->filled('school')) {
-            $query->where('office', $request->school);
+            $query->where('d.department_name', $request->school);
         } elseif ($request->filled('district')) {
             // Filter by district: employees whose business_id matches the district code (e.g. 92001 = District 1)
-            // tbl_emp_official_info.business_id matches tbl_business.BusinessUnitId / tbl_department.business_id
             $districtCode = $request->district;
-            $query->where('business_id', (string) $districtCode);
+            $query->where("{$empTable}.business_id", (string) $districtCode);
         }
 
         if ($request->filled('job_title')) {
@@ -305,6 +324,11 @@ class EmployeeListingController extends Controller
         $query = $this->buildEmployeeQuery($request);
         $perPage = (int) $request->get('per_page', 10);
         $employees = $query->paginate($perPage)->withQueryString();
+        $employees->getCollection()->transform(function ($employee) {
+            $employee->setAttribute('office', $employee->office_display ?? $employee->getOriginal('office'));
+
+            return $employee;
+        });
 
         return response()->json($employees);
     }
@@ -436,7 +460,7 @@ class EmployeeListingController extends Controller
                     'leave_balance' => $employee->leave_balance ?? 0,
                     'subject_taught' => $employee->subject_taught ?? '',
                     'grade_level' => $employee->grade_level ?? '',
-                    'office' => $employee->office ?? '',
+                    'office' => $employee->office_display ?? $employee->office ?? '',
                     'station_code' => $employee->station_code ?? '',
                     'salary_grade' => $employee->salary_grade ?? '',
                     'salary_step' => $employee->salary_step ?? '',
@@ -514,7 +538,7 @@ class EmployeeListingController extends Controller
                     $employee->job_title ?? '',
                     $employee->subject_taught ?? '',
                     $employee->grade_level ?? '',
-                    $employee->office ?? '',
+                    $employee->office_display ?? $employee->office ?? '',
                     $employee->station_code ?? '',
                     $employee->salary_grade ?? '',
                     $employee->salary_step ?? '',
@@ -555,7 +579,7 @@ class EmployeeListingController extends Controller
                 'Job Title' => $employee->job_title ?? '',
                 'Subject' => $employee->subject_taught ?? '',
                 'Grade Level' => $employee->grade_level ?? '',
-                'School/Office' => $employee->office ?? '',
+                'School/Office' => $employee->office_display ?? $employee->office ?? '',
                 'Station Code' => $employee->station_code ?? '',
                 'Salary Grade' => $employee->salary_grade ?? '',
                 'Salary Step' => $employee->salary_step ?? '',
@@ -627,7 +651,11 @@ class EmployeeListingController extends Controller
     public function exportPrint(Request $request)
     {
         $query = $this->buildEmployeeQuery($request);
-        $employees = $query->get();
+        $employees = $query->get()->map(function ($employee) {
+            $employee->setAttribute('office', $employee->office_display ?? $employee->getOriginal('office'));
+
+            return $employee;
+        });
 
         return Inertia::render('Reports/EmployeeListingPrint', [
             'employees' => $employees,
