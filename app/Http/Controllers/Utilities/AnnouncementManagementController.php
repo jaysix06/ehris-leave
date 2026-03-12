@@ -83,10 +83,15 @@ class AnnouncementManagementController extends Controller
         $onlyActive = (bool) ($validated['only_active'] ?? true);
         $roles = is_array($validated['roles'] ?? null) ? $validated['roles'] : [];
 
+        // Prefer personal_email (registration email) and fallback to official email.
         $query = User::query()
-            ->select(['userId', 'email', 'fullname', 'role', 'active'])
-            ->whereNotNull('email')
-            ->whereRaw("TRIM(email) <> ''");
+            ->selectRaw("
+                userId,
+                fullname,
+                role,
+                active,
+                COALESCE(NULLIF(TRIM(personal_email), ''), NULLIF(TRIM(email), '')) as send_email
+            ");
 
         if ($onlyActive) {
             $query->where('active', true);
@@ -98,7 +103,7 @@ class AnnouncementManagementController extends Controller
 
         /** @var Collection<int, string> $emails */
         $emails = $query
-            ->pluck('email')
+            ->pluck('send_email')
             ->map(fn ($email) => trim((string) $email))
             ->filter(fn ($email) => $email !== '')
             ->values();
