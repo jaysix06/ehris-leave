@@ -242,7 +242,6 @@ class WfhTimeInOutController extends Controller
         array $tasks
     ): string {
         $h = fn (string $s) => htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
-        $hWithBreaks = fn (string $s) => nl2br($h($s));
         $fontFaceCss = $this->buildWfhPdfFontFaceCss();
         $headerImg = ($headerImageDataUri !== null && $headerImageDataUri !== '')
             ? '<img src="'.$h($headerImageDataUri).'" alt="Header" class="header-image">'
@@ -251,58 +250,18 @@ class WfhTimeInOutController extends Controller
             ? '<img src="'.$h($footerImageDataUri).'" alt="Footer" class="footer-image">'
             : '';
 
-        $tableHeaderHtml = '<thead><tr>'
-            .'<th class="col-task">Target Accomplishment</th>'
-            .'<th class="col-accomplishment">Actual Accomplishment</th>'
-            .'<th class="col-date">Date</th>'
-            .'<th class="col-priority">Priority</th>'
-            .'<th class="col-station">Station</th>'
-            .'</tr></thead>';
-
-        $rowPages = [];
-        $currentPageRows = '';
-        $currentPageUnits = 0.0;
-        $maxRowUnitsPerPage = 12.0;
-
+        $rows = '';
         foreach ($tasks as $task) {
-            $targetedTask = (string) ($task['targeted_task'] ?? '');
-            $accomplishment = (string) ($task['accomplishment'] ?? '');
-            $dateRange = (string) ($task['date_range'] ?? '');
-            $priority = (string) ($task['priority'] ?? '');
-
-            $rowUnits = $this->estimateWfhPdfRowUnits($targetedTask, $accomplishment);
-
-            if ($currentPageRows !== '' && ($currentPageUnits + $rowUnits) > $maxRowUnitsPerPage) {
-                $rowPages[] = $currentPageRows;
-                $currentPageRows = '';
-                $currentPageUnits = 0.0;
-            }
-
-            $currentPageRows .= '<tr>';
-            $currentPageRows .= '<td class="col-task">'.$hWithBreaks($targetedTask).'</td>';
-            $currentPageRows .= '<td class="col-accomplishment">'.$hWithBreaks($accomplishment).'</td>';
-            $currentPageRows .= '<td class="col-date">'.$h($dateRange).'</td>';
-            $currentPageRows .= '<td class="col-priority">'.$h($priority).'</td>';
-            $currentPageRows .= '<td class="col-station">'.$h($station).'</td>';
-            $currentPageRows .= '</tr>';
-            $currentPageUnits += $rowUnits;
+            $rows .= '<tr>';
+            $rows .= '<td class="col-task">'.$h($task['targeted_task']).'</td>';
+            $rows .= '<td class="col-accomplishment">'.$h($task['accomplishment']).'</td>';
+            $rows .= '<td class="col-date">'.$h($task['date_range']).'</td>';
+            $rows .= '<td class="col-priority">'.$h($task['priority']).'</td>';
+            $rows .= '<td class="col-station">'.$h($station).'</td>';
+            $rows .= '</tr>';
         }
-
-        if ($currentPageRows !== '') {
-            $rowPages[] = $currentPageRows;
-        }
-
-        if ($rowPages === []) {
-            $rowPages[] = '<tr><td colspan="5" style="text-align: center;">No tasks in this report.</td></tr>';
-        }
-
-        $tablesHtml = '';
-        foreach ($rowPages as $pageIndex => $pageRows) {
-            $tableBlockClass = $pageIndex > 0
-                ? 'table-block table-block-continued'
-                : 'table-block';
-
-            $tablesHtml .= '<div class="'.$tableBlockClass.'"><table>'.$tableHeaderHtml.'<tbody>'.$pageRows.'</tbody></table></div>';
+        if ($rows === '') {
+            $rows = '<tr><td colspan="5" style="text-align: center;">No tasks in this report.</td></tr>';
         }
 
         $year = date('Y');
@@ -317,7 +276,7 @@ class WfhTimeInOutController extends Controller
 <meta charset="utf-8">
 <title>Work From Home Individual Accomplishment Report</title>
 <style>
-@page { margin: 2.05in 0.35in 1.10in 0.35in; }
+@page { margin: 2.05in 0.35in 0.95in 0.35in; }
 {$fontFaceCss}
 body {
     font-family: "WFH Bookman", "Bookman Old Style", "DejaVu Serif", serif;
@@ -331,7 +290,7 @@ body {
     top: -1.65in;
     left: 0.05in;
     right: 0.05in;
-    bottom: -0.70in;
+    bottom: -0.60in;
     border: 5px solid #000;
     box-sizing: border-box;
     z-index: 0;
@@ -372,7 +331,7 @@ body {
 .employee-name {
     font-weight: 700;
     width: 96%;
-    margin: 0.05in auto 0;
+    margin: 0 auto 0.14in;
     font-size: 12pt;
     text-transform: uppercase;
     text-align: left;
@@ -381,7 +340,7 @@ body {
     position: fixed;
     left: 0;
     right: 0;
-    bottom: -0.70in;
+    bottom: -0.62in;
     height: auto;
     z-index: 1;
     text-align: center;
@@ -407,7 +366,7 @@ body {
 .page-content {
     position: relative;
     z-index: 2;
-    margin: 1.08in 0 0;
+    margin: 0.76in 0 0;
 }
 table {
     width: 96%;
@@ -415,65 +374,30 @@ table {
     border-collapse: collapse;
     table-layout: fixed;
     page-break-inside: auto;
-    font-size: 12pt;
-    font-family: "BookmanOldStyle";
+    font-size: 11pt;
+    font-family: "WFH Bookman", "Bookman Old Style", serif;
 }
-thead { display: table-row-group; }
-tfoot { display: table-row-group; }
+thead { display: table-header-group; }
+tfoot { display: table-footer-group; }
 tbody { page-break-inside: auto; }
 tr { page-break-inside: avoid; page-break-after: auto; }
 th, td {
     border: 1px solid #000;
     padding: 3px;
     font-size: 12pt;
-    font-family: "BookmanOldStyle";
+    font-family: "WFH Bookman", "Bookman Old Style", serif;
     page-break-inside: avoid;
-    vertical-align: top;
-    line-height: 1.25;
-    white-space: normal;
     word-break: break-word;
-    overflow-wrap: break-word;
 }
 th {
     font-weight: bold;
     background-color: #f2f2f2;
-}
-td.col-task, td.col-accomplishment {
-    white-space: pre-wrap;
 }
 th.col-task, td.col-task { text-align: left; width: 32%; }
 th.col-accomplishment, td.col-accomplishment { text-align: left; width: 28%; }
 th.col-date, td.col-date { text-align: center; width: 18%; }
 th.col-priority, td.col-priority { text-align: center; width: 10%; }
 th.col-station, td.col-station { text-align: left; width: 12%; }
-.table-block {
-    width: 100%;
-}
-.table-block-continued {
-    page-break-before: always;
-    break-before: page;
-    padding-top: 1.08in;
-}
-.prepared-by {
-    width: 2.55in;
-    margin: 1.9in 0.20in 0 auto;
-    text-align: left;
-    page-break-inside: avoid;
-    break-inside: avoid;
-    page-break-before: avoid;
-    font-family: "BookmanOldStyle";
-    font-size: 12pt;
-    line-height: 1.2;
-}
-.prepared-by-label {
-    margin: 0 0 0.02in;
-    font-weight: 700;
-}
-.prepared-by-name {
-    margin: 0.18in 0 0;
-    font-weight: 700;
-    text-transform: uppercase;
-}
 </style>
 </head>
 <body>
@@ -484,7 +408,6 @@ th.col-station, td.col-station { text-align: left; width: 12%; }
 <h1 class="report-title">WORK FROM HOME INDIVIDUAL ACCOMPLISHMENT REPORT</h1>
 <p class="report-date">{$subtitleEscaped}</p>
 <hr class="report-title-line">
-<p class="employee-name">Name: {$employeeNameEscaped}</p>
 </div>
 
 <div class="page-footer">
@@ -493,41 +416,21 @@ th.col-station, td.col-station { text-align: left; width: 12%; }
 </div>
 
 <div class="page-content">
-{$tablesHtml}
-<div class="prepared-by">
-<p class="prepared-by-label">Prepared by:</p>
-<p class="prepared-by-name">{$employeeNameEscaped}</p>
-</div>
+<p class="employee-name">Name: {$employeeNameEscaped}</p>
+<table>
+<thead><tr>
+<th class="col-task">Targeted Task/ Assignments/ Output</th>
+<th class="col-accomplishment">Actual Accomplishment/Output</th>
+<th class="col-date">Date</th>
+<th class="col-priority">Priority</th>
+<th class="col-station">Station</th>
+</tr></thead>
+<tbody>{$rows}</tbody>
+</table>
 </div>
 </body>
 </html>
 HTML;
-    }
-
-    private function estimateWfhPdfRowUnits(string $targetedTask, string $accomplishment): float
-    {
-        $targetLines = $this->estimateWfhPdfWrappedLines($targetedTask, 34);
-        $accomplishmentLines = $this->estimateWfhPdfWrappedLines($accomplishment, 30);
-
-        return (float) max($targetLines, $accomplishmentLines) + 0.35;
-    }
-
-    private function estimateWfhPdfWrappedLines(string $value, int $maxCharsPerLine): int
-    {
-        $normalized = str_replace(["\r\n", "\r"], "\n", trim($value));
-        if ($normalized === '') {
-            return 1;
-        }
-
-        $segments = preg_split('/\n/u', $normalized) ?: [];
-        $lineCount = 0;
-
-        foreach ($segments as $segment) {
-            $segmentLength = mb_strlen($segment, 'UTF-8');
-            $lineCount += max(1, (int) ceil($segmentLength / max(1, $maxCharsPerLine)));
-        }
-
-        return max(1, $lineCount);
     }
 
     private function buildWfhPdfFontFaceCss(): string
@@ -540,7 +443,7 @@ HTML;
         $fontUri = $this->toFileUri($fontPath);
 
         return '@font-face {'
-            .' font-family: "BookmanOldStyle";'
+            .' font-family: "WFH Bookman";'
             .' src: url("'.$fontUri.'") format("truetype");'
             .' font-weight: normal;'
             .' font-style: normal;'
