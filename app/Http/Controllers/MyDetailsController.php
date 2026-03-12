@@ -257,6 +257,23 @@ class MyDetailsController extends Controller
                     $official->division_office_name = trim($businessUnitName);
                 }
 
+                $departmentName = null;
+                if (Schema::hasTable('tbl_department') && Schema::hasColumn('tbl_department', 'department_name')) {
+                    if (! empty($official->department_id)) {
+                        $departmentName = DB::table('tbl_department')
+                            ->where('department_id', $official->department_id)
+                            ->value('department_name');
+                    }
+                    if (($departmentName === null || $departmentName === '') && ! empty($official->office) && ctype_digit(trim((string) $official->office))) {
+                        $departmentName = DB::table('tbl_department')
+                            ->where('department_id', (int) $official->office)
+                            ->value('department_name');
+                    }
+                }
+                if (is_string($departmentName) && trim($departmentName) !== '') {
+                    $official->department_name = trim($departmentName);
+                }
+
                 $rawReportingManager = trim((string) ($official->reporting_manager ?? ''));
                 if ($rawReportingManager !== '' && ctype_digit($rawReportingManager)) {
                     $managerHrid = (int) $rawReportingManager;

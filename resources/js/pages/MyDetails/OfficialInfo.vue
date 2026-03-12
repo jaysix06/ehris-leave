@@ -295,7 +295,7 @@ function submit(): void {
                         </div>
                         <div class="ehris-pds-official-row">
                             <dt>DEPARTMENT</dt>
-                            <dd>{{ val(officialInfo.office) }}</dd>
+                            <dd>{{ val(officialInfo.department_name ?? officialInfo.office) }}</dd>
                         </div>
                         <div class="ehris-pds-official-row">
                             <dt>REPORTING MANAGER</dt>

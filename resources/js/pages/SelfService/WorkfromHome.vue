@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, router } from '@inertiajs/vue3';
-import { ArrowRight, BookOpen, CheckCircle2, Download, Eye, FolderOpen, ListPlus, Pause, Pencil, Play, Search, Trash2, X } from 'lucide-vue-next';
+import { ArrowRight, BookOpen, CheckCircle2, Download, Eye, FolderOpen, ListPlus, Pause, Pencil, Play, RotateCcw, Search, Trash2, X } from 'lucide-vue-next';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Calendar as VCalendar, DatePicker } from 'v-calendar';
 import { toast } from 'vue3-toastify';
@@ -250,6 +250,18 @@ function updateTaskStatus(taskId: number, status: string, fromStatus?: string): 
     });
 }
 
+function reEnterTask(taskId: number): void {
+    taskActionLoading.value = true;
+    router.put(`/self-service/wfh-time-in-out/tasks/${taskId}`, { status: 'Not Started' }, {
+        preserveScroll: true,
+        onFinish: () => { taskActionLoading.value = false; },
+        onSuccess: () => {
+            closeViewModal();
+            toast.success('Task re-entered. It is back in Tasks.');
+        },
+    });
+}
+
 const showDeleteModal = ref(false);
 const pendingDeleteTaskId = ref<number | null>(null);
 
@@ -335,17 +347,15 @@ const exportDateRangeForPicker = computed({
 });
 
 function openExportModal(): void {
-    if (!exportDateRange.value) {
-        const now = new Date();
-        const start = new Date(now.getFullYear(), now.getMonth(), 1);
-        exportDateRange.value = { start, end: new Date(now) };
-    }
+    exportDateRange.value = null;
     exportDateRangeKey.value += 1;
     showExportModal.value = true;
 }
 
 function closeExportModal(): void {
     showExportModal.value = false;
+    exportDateRange.value = null;
+    exportDateRangeKey.value += 1;
 }
 
 function formatExportDate(d: Date): string {
@@ -399,8 +409,32 @@ function doExportWithRange(): void {
         .finally(() => { exportPdfLoading.value = false; });
 }
 
-// User's Manuals modal (wide)
+// User's Manuals modal (wide) – left menu + separate pages
 const showUserManualModal = ref(false);
+const manualPageIndex = ref(0);
+const manualSections = [
+    { id: 'manual-intro', label: 'How to use' },
+    { id: 'manual-clock', label: 'Clock In and Clock Out' },
+    { id: 'manual-calendar', label: 'Task calendar' },
+    { id: 'manual-create', label: 'Create a task' },
+    { id: 'manual-manage', label: 'Manage task status' },
+    { id: 'manual-search', label: 'Search and sort' },
+    { id: 'manual-export', label: 'Export report' },
+] as const;
+function setManualPage(index: number): void {
+    manualPageIndex.value = index;
+}
+function openUserManual(): void {
+    manualPageIndex.value = 0;
+    showUserManualModal.value = true;
+}
+const zoomedManualImage = ref<{ src: string; alt: string } | null>(null);
+function openManualImage(src: string, alt: string): void {
+    zoomedManualImage.value = { src, alt };
+}
+function closeManualImage(): void {
+    zoomedManualImage.value = null;
+}
 
 // Create Task modal
 const showCreateTaskModal = ref(false);
@@ -650,7 +684,7 @@ function toggleClock(): void {
                 <button
                     type="button"
                     class="inline-flex items-center gap-2 rounded-lg border border-white/30 bg-white px-5 py-3 text-base font-semibold text-neutral-800 shadow-md transition hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                    @click="showUserManualModal = true"
+                    @click="openUserManual"
                 >
                     <BookOpen class="size-5" />
                     User's Manuals
@@ -820,7 +854,7 @@ function toggleClock(): void {
                             />
                         </div>
                         <div class="flex flex-wrap items-center gap-2">
-                            <div class="flex items-center gap-2">
+                            <div v-if="tasksTab === 'open'" class="flex items-center gap-2">
                                 <label for="task-status-sort" class="text-xs font-medium text-muted-foreground">Sort by status</label>
                                 <select
                                     id="task-status-sort"
@@ -953,6 +987,15 @@ function toggleClock(): void {
                                     >
                                         <Eye class="size-3.5" />
                                         View
+                                    </button>
+                                    <button
+                                        type="button"
+                                        :disabled="taskActionLoading"
+                                        class="inline-flex items-center gap-1 rounded border border-primary bg-primary/10 px-2 py-1.5 text-xs font-medium text-primary hover:bg-primary/20 disabled:opacity-60"
+                                        @click="reEnterTask(t.id)"
+                                    >
+                                        <RotateCcw class="size-3.5" />
+                                        Re-enter
                                     </button>
                                 </div>
                             </li>
@@ -1276,7 +1319,7 @@ function toggleClock(): void {
             </div>
         </Teleport>
 
-        <!-- User's Manuals (wide modal) – in-app guide, not PDF -->
+        <!-- User's Manuals (wide modal) – left menu + right content -->
         <Teleport to="body">
             <div
                 v-if="showUserManualModal"
@@ -1284,104 +1327,349 @@ function toggleClock(): void {
                 @click.self="showUserManualModal = false"
             >
                 <div
-                    class="w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-xl border border-border bg-card p-6 shadow-lg"
+                    class="flex w-[90vw] max-w-6xl h-[85vh] min-h-[32rem] overflow-hidden rounded-xl border border-border bg-card shadow-lg"
                     role="dialog"
                     aria-modal="true"
                     aria-labelledby="user-manual-title"
                 >
-                    <div class="mb-6 flex items-center justify-between border-b border-border pb-4">
-                        <h2 id="user-manual-title" class="flex items-center gap-2 text-xl font-semibold text-foreground">
-                            <BookOpen class="size-6 text-primary" />
-                            User's Manual – WFH Attendance
-                        </h2>
-                        <button
-                            type="button"
-                            class="rounded p-1 text-muted-foreground hover:bg-muted"
-                            aria-label="Close"
-                            @click="showUserManualModal = false"
-                        >
-                            <X class="size-5" />
-                        </button>
+                    <div class="mb-6 flex flex-col border-b border-border p-4 sm:border-b-0 sm:mb-0 sm:min-w-[11rem] sm:border-r sm:border-border sm:bg-muted/30">
+                        <div class="flex items-center justify-between border-b border-border pb-3 sm:border-b-0 sm:pb-0 sm:mb-4">
+                            <h2 id="user-manual-title" class="flex items-center gap-2 text-lg font-semibold text-foreground">
+                                <BookOpen class="size-5 text-primary" />
+                                <span class="hidden sm:inline">User's Manual</span>
+                            </h2>
+                            <button
+                                type="button"
+                                class="rounded p-1 text-muted-foreground hover:bg-muted sm:hidden"
+                                aria-label="Close"
+                                @click="showUserManualModal = false"
+                            >
+                                <X class="size-5" />
+                            </button>
+                        </div>
+                        <nav class="flex flex-row gap-2 overflow-x-auto py-2 sm:flex-col sm:overflow-x-visible sm:gap-0 sm:py-0" aria-label="Manual sections">
+                            <button
+                                v-for="(s, idx) in manualSections"
+                                :key="s.id"
+                                type="button"
+                                class="shrink-0 rounded-md px-3 py-2 text-left text-sm font-medium transition hover:bg-muted hover:text-foreground sm:rounded-r-none sm:border-r-2 sm:pr-4"
+                                :class="manualPageIndex === idx ? 'bg-muted text-foreground sm:border-primary' : 'text-muted-foreground sm:border-transparent sm:hover:border-primary/50'"
+                                @click="setManualPage(idx)"
+                            >
+                                {{ s.label }}
+                            </button>
+                        </nav>
                     </div>
+                    <div class="flex flex-1 flex-col min-w-0">
+                        <div class="flex items-center justify-between border-b border-border p-4 pb-3">
+                            <h3 class="text-lg font-semibold text-foreground">WFH Attendance</h3>
+                            <button
+                                type="button"
+                                class="rounded p-1 text-muted-foreground hover:bg-muted hidden sm:block"
+                                aria-label="Close"
+                                @click="showUserManualModal = false"
+                            >
+                                <X class="size-5" />
+                            </button>
+                        </div>
+                        <div class="flex-1 overflow-y-auto p-4 pt-0 text-base text-foreground">
+                            <!-- Page 0: How to use -->
+                            <div v-show="manualPageIndex === 0" class="flex min-h-[min(60vh,28rem)] flex-col items-center justify-center space-y-6 py-6 text-center">
+                                <h4 class="text-2xl font-semibold text-foreground">How to use the WFH Attendance page</h4>
+                                <p class="max-w-2xl text-lg leading-relaxed text-muted-foreground">
+                                    This page lets you record your work-from-home time and manage your tasks. Choose a topic from the menu on the left.
+                                </p>
+                                <p class="max-w-2xl rounded-md bg-primary/10 px-4 py-3 text-center text-lg font-semibold leading-relaxed text-foreground">
+                                    You can click any photo in this manual to zoom in and view it in full size.
+                                </p>
+                            </div>
 
-                    <div class="space-y-6 text-sm text-foreground">
-                        <section>
-                            <h3 class="mb-2 font-semibold text-foreground">How to use the WFH Attendance page</h3>
-                            <p class="text-muted-foreground">
-                                This page lets you record your work-from-home time and manage your tasks. Follow the steps below.
-                            </p>
-                        </section>
+                            <!-- Page 1: Clock In and Clock Out -->
+                            <div v-show="manualPageIndex === 1" class="space-y-2">
+                                <h4 class="text-xl font-medium text-foreground">Clock In and Clock Out</h4>
+                                <p class="text-muted-foreground">
+                                    The clock card on the right shows how long you have worked this week and whether you are currently clocked in or out.
+                                </p>
+                                <button type="button" class="mt-1 block h-52 max-w-sm overflow-hidden rounded-md border border-border cursor-zoom-in hover:ring-2 hover:ring-primary/50 focus:outline-none focus:ring-2 focus:ring-primary text-left" @click="openManualImage('/Users_Manual/ClockIn.png', 'Clock card')">
+                                    <img src="/Users_Manual/ClockIn.png" alt="Clock card" class="h-full w-full object-cover object-[right_center]" />
+                                </button>
+                                <ul class="list-inside list-disc space-y-3 text-muted-foreground">
+                                    <li class="flex flex-col gap-1">
+                                        <span><strong class="text-foreground">Click</strong> the green <strong>Clock In</strong> button to start recording time.</span>
+                                        <button type="button" class="mt-1 block h-48 max-w-xs overflow-hidden rounded-md border border-border cursor-zoom-in hover:ring-2 hover:ring-primary/50 focus:outline-none focus:ring-2 focus:ring-primary text-left" @click="openManualImage('/Users_Manual/ClockIn_btn.png', 'Clock In button')">
+                                            <img src="/Users_Manual/ClockIn_btn.png" alt="Clock In button" class="h-full w-full object-cover object-[right_bottom]" />
+                                        </button>
+                                    </li>
+                                    <li class="flex flex-col gap-1">
+                                        <span><strong class="text-foreground">Click</strong> <strong>Clock Out</strong> when you finish.</span>
+                                        <button type="button" class="mt-1 block h-48 max-w-xs overflow-hidden rounded-md border border-border cursor-zoom-in hover:ring-2 hover:ring-primary/50 focus:outline-none focus:ring-2 focus:ring-primary text-left" @click="openManualImage('/Users_Manual/Clockout_btn.png', 'Clock Out button')">
+                                            <img src="/Users_Manual/Clockout_btn.png" alt="Clock Out button" class="h-full w-full object-cover object-[right_bottom]" />
+                                        </button>
+                                    </li>
+                                    <li class="flex flex-col gap-1">
+                                        <span><strong class="text-foreground">Click</strong> the <strong>View time</strong> link to open your time logs. When you are done, <strong class="text-foreground">click</strong> <strong>Back to WFH Attendance</strong> to return.</span>
+                                        <div class="mt-1 flex flex-wrap gap-2">
+                                            <button type="button" class="block h-48 max-w-xs overflow-hidden rounded-md border border-border cursor-zoom-in hover:ring-2 hover:ring-primary/50 focus:outline-none focus:ring-2 focus:ring-primary text-left" @click="openManualImage('/Users_Manual/ViewTime_btn.png', 'View time link')">
+                                                <img src="/Users_Manual/ViewTime_btn.png" alt="View time link" class="h-full w-full object-cover object-[right_center]" />
+                                            </button>
+                                            <button type="button" class="block h-48 max-w-xs overflow-hidden rounded-md border border-border cursor-zoom-in hover:ring-2 hover:ring-primary/50 focus:outline-none focus:ring-2 focus:ring-primary text-left" @click="openManualImage('/Users_Manual/Back_btn.png', 'Back to WFH Attendance')">
+                                                <img src="/Users_Manual/Back_btn.png" alt="Back to WFH Attendance" class="h-full w-full object-cover object-[left_top]" />
+                                            </button>
+                                        </div>
+                                    </li>
+                                </ul>
+                            </div>
 
-                        <section class="space-y-2">
-                            <h4 class="font-medium text-foreground">1.) Clock In and Clock Out</h4>
+                            <!-- Page 2: Task calendar -->
+                            <div v-show="manualPageIndex === 2" class="space-y-2">
+                                <h4 class="text-xl font-medium text-foreground">Task calendar</h4>
+                                <p class="text-muted-foreground">
+                                    The Task calendar on the left shows your tasks by due date. Dates with tasks are marked.
+                                </p>
+                                <ul class="list-inside list-disc space-y-3 text-muted-foreground">
+                                    <li class="flex flex-col gap-1">
+                                        <span><strong class="text-foreground">Click</strong> (or hover) over a date to see which tasks are due.</span>
+                                        <button type="button" class="mt-1 block h-48 max-w-xs overflow-hidden rounded-md border border-border cursor-zoom-in hover:ring-2 hover:ring-primary/50 focus:outline-none focus:ring-2 focus:ring-primary text-left" @click="openManualImage('/Users_Manual/CalendarHover.png', 'Calendar hover on date')">
+                                            <img src="/Users_Manual/CalendarHover.png" alt="Calendar hover on date" class="h-full w-full object-cover object-center" />
+                                        </button>
+                                    </li>
+                                    <li class="flex flex-col gap-1">
+                                        <span><strong class="text-foreground">Click</strong> the arrows to move between months.</span>
+                                        <button type="button" class="mt-1 block h-48 max-w-xs overflow-hidden rounded-md border border-border cursor-zoom-in hover:ring-2 hover:ring-primary/50 focus:outline-none focus:ring-2 focus:ring-primary text-left" @click="openManualImage('/Users_Manual/Calendarbtn.png', 'Task calendar')">
+                                            <img src="/Users_Manual/Calendarbtn.png" alt="Task calendar" class="h-full w-full object-cover object-[left_center]" />
+                                        </button>
+                                    </li>
+                                </ul>
+                            </div>
+
+                            <!-- Page 3: Create a task -->
+                            <div v-show="manualPageIndex === 3" class="space-y-2">
+                                <h4 class="text-xl font-medium text-foreground">Create a task</h4>
+                                <p class="text-muted-foreground">
+                                    Enter the task title, priority, target (description), and due date. You can select a date range on the calendar (weekdays only). The task appears in the list and on the calendar.
+                                </p>
+                                <p class="text-lg font-medium text-muted-foreground">Steps (in order):</p>
+                                <ul class="list-inside list-disc space-y-3 text-muted-foreground">
+                                    <li class="flex flex-col gap-1">
+                                        <span><strong class="text-foreground">Click</strong> <strong>Create Task</strong> in the Tasks section to open the form.</span>
+                                        <button type="button" class="mt-1 block h-48 max-w-xs overflow-hidden rounded-md border border-border cursor-zoom-in hover:ring-2 hover:ring-primary/50 focus:outline-none focus:ring-2 focus:ring-primary text-left" @click="openManualImage('/Users_Manual/CreateTask_btn.png', 'Create Task button')">
+                                            <img src="/Users_Manual/CreateTask_btn.png" alt="Create Task button" class="h-full w-full object-cover object-[left_top]" />
+                                        </button>
+                                    </li>
+                                    <li class="flex flex-col gap-1">
+                                        <span><strong class="text-foreground">Task title</strong> — Enter a short name (e.g. <em>Prepare Q1 report</em>, <em>Review attendance records</em>).</span>
+                                        <button type="button" class="mt-1 block h-48 max-w-xs overflow-hidden rounded-md border border-border cursor-zoom-in hover:ring-2 hover:ring-primary/50 focus:outline-none focus:ring-2 focus:ring-primary text-left" @click="openManualImage('/Users_Manual/TaskTitle.png', 'Task title field')">
+                                            <img src="/Users_Manual/TaskTitle.png" alt="Task title field" class="h-full w-full object-cover object-[center_top]" />
+                                        </button>
+                                    </li>
+                                    <li class="flex flex-col gap-1">
+                                        <span><strong class="text-foreground">Priority</strong> — Choose <strong>Low</strong>, <strong>Medium</strong>, or <strong>High</strong>.</span>
+                                        <button type="button" class="mt-1 block h-48 max-w-xs overflow-hidden rounded-md border border-border cursor-zoom-in hover:ring-2 hover:ring-primary/50 focus:outline-none focus:ring-2 focus:ring-primary text-left" @click="openManualImage('/Users_Manual/Priority.png', 'Priority selector')">
+                                            <img src="/Users_Manual/Priority.png" alt="Priority selector" class="h-full w-full object-cover object-[center_top]" />
+                                        </button>
+                                    </li>
+                                    <li class="flex flex-col gap-1">
+                                        <span><strong class="text-foreground">Target (description)</strong> — Enter what you need to accomplish (e.g. <em>Compile data and submit to HR by Friday</em>).</span>
+                                        <button type="button" class="mt-1 block h-48 max-w-xs overflow-hidden rounded-md border border-border cursor-zoom-in hover:ring-2 hover:ring-primary/50 focus:outline-none focus:ring-2 focus:ring-primary text-left" @click="openManualImage('/Users_Manual/TaskTarget.png', 'Task target field')">
+                                            <img src="/Users_Manual/TaskTarget.png" alt="Task target field" class="h-full w-full object-cover object-top" />
+                                        </button>
+                                    </li>
+                                    <li class="flex flex-col gap-1">
+                                        <span><strong class="text-foreground">Due date range</strong> — Click a start date and an end date on the calendar (e.g. March 10 to March 12).</span>
+                                        <button type="button" class="mt-1 block h-48 max-w-xs overflow-hidden rounded-md border border-border cursor-zoom-in hover:ring-2 hover:ring-primary/50 focus:outline-none focus:ring-2 focus:ring-primary text-left" @click="openManualImage('/Users_Manual/Picking_Date.png', 'Picking due date')">
+                                            <img src="/Users_Manual/Picking_Date.png" alt="Picking due date" class="h-full w-full object-cover object-[center_center]" />
+                                        </button>
+                                    </li>
+                                    <li class="flex flex-col gap-1">
+                                        <span><strong class="text-foreground">Click</strong> <strong>Save New Task</strong> to create the task.</span>
+                                        <button type="button" class="mt-1 block h-48 max-w-xs overflow-hidden rounded-md border border-border cursor-zoom-in hover:ring-2 hover:ring-primary/50 focus:outline-none focus:ring-2 focus:ring-primary text-left" @click="openManualImage('/Users_Manual/SaveTask_btn.png', 'Save New Task button')">
+                                            <img src="/Users_Manual/SaveTask_btn.png" alt="Save New Task button" class="h-full w-full object-cover object-[center_bottom]" />
+                                        </button>
+                                    </li>
+                                </ul>
+                            </div>
+
+                            <!-- Page 4: Manage task status -->
+                            <div v-show="manualPageIndex === 4" class="space-y-2">
+                                <h4 class="text-xl font-medium text-foreground">Manage task status</h4>
                             <p class="text-muted-foreground">
-                                The clock card on the right shows how long you have worked this week and whether you are currently clocked in or out.
+                                Each task has a <strong>View</strong> button and action buttons. Completed tasks move to the <strong>Completed Tasks</strong> tab. You can edit or delete from the view modal (delete is not available for completed tasks). From the Completed Tasks tab you can <strong>Re-enter</strong> a task to move it back to the open Tasks list.
                             </p>
-                            <ul class="list-inside list-disc space-y-1 text-muted-foreground">
-                                <li><strong class="text-foreground">Click</strong> the green <strong>Clock In</strong> button to start recording time.</li>
-                                <li><strong class="text-foreground">Click</strong> <strong>Clock Out</strong> when you finish.</li>
-                                <li><strong class="text-foreground">Click</strong> the <strong>View time</strong> link to open your time logs. When you are done, <strong class="text-foreground">click</strong> <strong>Back to WFH Attendance</strong> to return.</li>
+                                <ul class="list-inside list-disc space-y-3 text-muted-foreground">
+                                <li class="flex flex-col gap-1">
+                                    <span><strong class="text-foreground">Click</strong> <strong>View</strong> to see task details.</span>
+                                    <div class="mt-1 flex flex-wrap gap-2">
+                                        <button type="button" class="block h-48 max-w-xs overflow-hidden rounded-md border border-border cursor-zoom-in hover:ring-2 hover:ring-primary/50 focus:outline-none focus:ring-2 focus:ring-primary text-left" @click="openManualImage('/Users_Manual/View_btn.png', 'View button')">
+                                            <img src="/Users_Manual/View_btn.png" alt="View button" class="h-full w-full object-cover object-[left_center]" />
+                                        </button>
+                                        <button type="button" class="block h-48 max-w-xs overflow-hidden rounded-md border border-border cursor-zoom-in hover:ring-2 hover:ring-primary/50 focus:outline-none focus:ring-2 focus:ring-primary text-left" @click="openManualImage('/Users_Manual/TaskDetail.png', 'Task detail modal')">
+                                            <img src="/Users_Manual/TaskDetail.png" alt="Task detail modal" class="h-full w-full object-cover object-[center_center]" />
+                                        </button>
+                                    </div>
+                                </li>
+                                <li class="flex flex-col gap-1">
+                                    <span><strong class="text-foreground">Click</strong> <strong>Start Task</strong> when the task is Not Started.</span>
+                                    <button type="button" class="mt-1 block h-48 max-w-xs overflow-hidden rounded-md border border-border cursor-zoom-in hover:ring-2 hover:ring-primary/50 focus:outline-none focus:ring-2 focus:ring-primary text-left" @click="openManualImage('/Users_Manual/StartTask_btn.png', 'Start Task button')">
+                                        <img src="/Users_Manual/StartTask_btn.png" alt="Start Task button" class="h-full w-full object-cover object-center" />
+                                    </button>
+                                </li>
+                                <li class="flex flex-col gap-1">
+                                    <span><strong class="text-foreground">Click</strong> <strong>Hold Task</strong> or <strong>Complete Task</strong> when In Progress.</span>
+                                    <button type="button" class="mt-1 block h-48 max-w-xs overflow-hidden rounded-md border border-border cursor-zoom-in hover:ring-2 hover:ring-primary/50 focus:outline-none focus:ring-2 focus:ring-primary text-left" @click="openManualImage('/Users_Manual/Hold_Complete_btn.png', 'Hold and Complete Task buttons')">
+                                        <img src="/Users_Manual/Hold_Complete_btn.png" alt="Hold and Complete Task buttons" class="h-full w-full object-cover object-[left_center]" />
+                                    </button>
+                                </li>
+                                <li class="flex flex-col gap-1">
+                                    <span><strong class="text-foreground">Click</strong> <strong>Resume Task</strong> when the task is On Hold.</span>
+                                    <button type="button" class="mt-1 block h-48 max-w-xs overflow-hidden rounded-md border border-border cursor-zoom-in hover:ring-2 hover:ring-primary/50 focus:outline-none focus:ring-2 focus:ring-primary text-left" @click="openManualImage('/Users_Manual/ResumeTask_btn.png', 'Resume Task button')">
+                                        <img src="/Users_Manual/ResumeTask_btn.png" alt="Resume Task button" class="h-full w-full object-cover object-center" />
+                                    </button>
+                                </li>
                             </ul>
-                        </section>
-
-                        <section class="space-y-2">
-                            <h4 class="font-medium text-foreground">2.) Create a task</h4>
-                            <p class="text-muted-foreground">
-                                Enter the task title, target (description), priority, and due date. You can select a date range on the calendar (weekdays only). The task appears in the list and on the calendar.
-                            </p>
-                            <ul class="list-inside list-disc space-y-1 text-muted-foreground">
-                                <li><strong class="text-foreground">Click</strong> <strong>Create Task</strong> in the Tasks section.</li>
-                                <li><strong class="text-foreground">Click</strong> a start date and end date on the calendar to set the due date range.</li>
+                            <p class="text-lg font-medium text-muted-foreground mt-2">Completing a task (accomplishment report):</p>
+                            <ul class="list-inside list-disc space-y-3 text-muted-foreground">
+                                <li class="flex flex-col gap-1">
+                                    <span>When a task is <strong>In Progress</strong>, <strong class="text-foreground">click</strong> <strong>Complete Task</strong>.</span>
+                                    <button type="button" class="mt-1 block h-48 max-w-xs overflow-hidden rounded-md border border-border cursor-zoom-in hover:ring-2 hover:ring-primary/50 focus:outline-none focus:ring-2 focus:ring-primary text-left" @click="openManualImage('/Users_Manual/CompleteTask_btn2.png', 'Complete Task button')">
+                                        <img src="/Users_Manual/CompleteTask_btn2.png" alt="Complete Task button" class="h-full w-full object-cover object-[left_center]" />
+                                    </button>
+                                </li>
+                                <li class="flex flex-col gap-1">
+                                    <span>A modal opens. You must write an <strong>Accomplishment Report</strong> — describe what you actually did or delivered for this task (e.g. <em>Submitted the Q1 draft to HR; revised section 3 per feedback</em>).</span>
+                                    <button type="button" class="mt-1 block h-48 max-w-xs overflow-hidden rounded-md border border-border cursor-zoom-in hover:ring-2 hover:ring-primary/50 focus:outline-none focus:ring-2 focus:ring-primary text-left" @click="openManualImage('/Users_Manual/AccomplishReport.png', 'Accomplishment report modal')">
+                                        <img src="/Users_Manual/AccomplishReport.png" alt="Accomplishment report modal" class="h-full w-full object-cover object-[center_center]" />
+                                    </button>
+                                </li>
+                                <li>This report is required and is included in the exported PDF under “Actual Accomplishment/Output”.</li>
+                                <li class="flex flex-col gap-1">
+                                    <span><strong class="text-foreground">Click</strong> <strong>Complete Task</strong> in the modal to save and mark the task complete, or <strong>Cancel</strong> to return without completing.</span>
+                                    <button type="button" class="mt-1 block h-48 max-w-xs overflow-hidden rounded-md border border-border cursor-zoom-in hover:ring-2 hover:ring-primary/50 focus:outline-none focus:ring-2 focus:ring-primary text-left" @click="openManualImage('/Users_Manual/AccomplishReport%20Complete_Cancel.png', 'Complete and Cancel buttons')">
+                                        <img src="/Users_Manual/AccomplishReport%20Complete_Cancel.png" alt="Complete and Cancel buttons" class="h-full w-full object-cover object-[center_bottom]" />
+                                    </button>
+                                </li>
                             </ul>
-                        </section>
-
-                        <section class="space-y-2">
-                            <h4 class="font-medium text-foreground">3.) Task calendar</h4>
-                            <p class="text-muted-foreground">
-                                The Task calendar on the left shows your tasks by due date. Dates with tasks are marked.
-                            </p>
-                            <ul class="list-inside list-disc space-y-1 text-muted-foreground">
-                                <li><strong class="text-foreground">Click</strong> (or hover) over a date to see which tasks are due.</li>
-                                <li><strong class="text-foreground">Click</strong> the arrows to move between months.</li>
+                            <p class="text-lg font-medium text-muted-foreground mt-2">Completed Tasks tab:</p>
+                            <ul class="list-inside list-disc space-y-3 text-muted-foreground">
+                                <li class="flex flex-col gap-1">
+                                    <span><strong class="text-foreground">Click</strong> the <strong>Completed Tasks</strong> tab to view tasks you have finished. Completed tasks appear in this list.</span>
+                                    <button type="button" class="mt-1 block h-48 max-w-xs overflow-hidden rounded-md border border-border cursor-zoom-in hover:ring-2 hover:ring-primary/50 focus:outline-none focus:ring-2 focus:ring-primary text-left" @click="openManualImage('/Users_Manual/CompleteTaskMenu_btn%20-%20Copy.png', 'Completed Tasks tab')">
+                                        <img src="/Users_Manual/CompleteTaskMenu_btn%20-%20Copy.png" alt="Completed Tasks tab" class="h-full w-full object-cover object-[left_top]" />
+                                    </button>
+                                </li>
                             </ul>
-                        </section>
-
-                        <section class="space-y-2">
-                            <h4 class="font-medium text-foreground">4.) Manage task status</h4>
-                            <p class="text-muted-foreground">
-                                Each task has a <strong>View</strong> button and action buttons. Completed tasks move to the <strong>Completed Tasks</strong> tab. You can edit or delete from the view modal (delete is not available for completed tasks).
-                            </p>
-                            <ul class="list-inside list-disc space-y-1 text-muted-foreground">
-                                <li><strong class="text-foreground">Click</strong> <strong>View</strong> to see task details.</li>
-                                <li><strong class="text-foreground">Click</strong> <strong>Start Task</strong> when the task is Not Started.</li>
-                                <li><strong class="text-foreground">Click</strong> <strong>Hold Task</strong> or <strong>Complete Task</strong> when In Progress.</li>
-                                <li><strong class="text-foreground">Click</strong> <strong>Resume Task</strong> when the task is On Hold.</li>
+                            <ul class="list-inside list-disc space-y-3 text-muted-foreground mt-2">
+                                <li class="flex flex-col gap-1">
+                                    <span>For completed tasks: <strong class="text-foreground">click</strong> <strong>Re-enter</strong> to move the task back to the Tasks list (status becomes Not Started).</span>
+                                    <button type="button" class="mt-1 block h-48 max-w-xs overflow-hidden rounded-md border border-border cursor-zoom-in hover:ring-2 hover:ring-primary/50 focus:outline-none focus:ring-2 focus:ring-primary text-left" @click="openManualImage('/Users_Manual/ReEnter_btn.png', 'Re-enter button')">
+                                        <img src="/Users_Manual/ReEnter_btn.png" alt="Re-enter button" class="h-full w-full object-cover object-[left_center]" />
+                                    </button>
+                                </li>
                             </ul>
-                        </section>
-
-                        <section class="space-y-2">
-                            <h4 class="font-medium text-foreground">5.) Search and sort</h4>
-                            <p class="text-muted-foreground">
-                                Filter by title or target; order the list by status or priority.
-                            </p>
-                            <ul class="list-inside list-disc space-y-1 text-muted-foreground">
-                                <li><strong class="text-foreground">Click</strong> in the <strong>Search Task</strong> field and type to filter.</li>
-                                <li><strong class="text-foreground">Click</strong> <strong>Sort by status</strong> or <strong>Sort by priority</strong> to reorder the list.</li>
+                            <p class="text-muted-foreground font-medium mt-2">How to edit a task:</p>
+                            <ul class="list-inside list-disc space-y-3 text-muted-foreground">
+                                <li><strong class="text-foreground">Click</strong> <strong>View</strong> on the task you want to edit (edit is not available for completed tasks).</li>
+                                <li class="flex flex-col gap-1">
+                                    <span>In the task details modal, <strong class="text-foreground">click</strong> the <strong>Edit</strong> (pencil) button.</span>
+                                    <button type="button" class="mt-1 block h-48 max-w-xs overflow-hidden rounded-md border border-border cursor-zoom-in hover:ring-2 hover:ring-primary/50 focus:outline-none focus:ring-2 focus:ring-primary text-left" @click="openManualImage('/Users_Manual/Edit_btn.png', 'Edit button')">
+                                        <img src="/Users_Manual/Edit_btn.png" alt="Edit button" class="h-full w-full object-cover object-center" />
+                                    </button>
+                                </li>
+                                <li class="flex flex-col gap-1">
+                                    <span>Change the title, priority, target (description), or due date range as needed.</span>
+                                    <button type="button" class="mt-1 block h-48 max-w-xs overflow-hidden rounded-md border border-border cursor-zoom-in hover:ring-2 hover:ring-primary/50 focus:outline-none focus:ring-2 focus:ring-primary text-left" @click="openManualImage('/Users_Manual/EditingTask.png', 'Editing task')">
+                                        <img src="/Users_Manual/EditingTask.png" alt="Editing task" class="h-full w-full object-cover object-[center_top]" />
+                                    </button>
+                                </li>
+                                <li class="flex flex-col gap-1">
+                                    <span><strong class="text-foreground">Click</strong> <strong>Save Changes</strong> to apply, or <strong>Cancel</strong> to close without saving.</span>
+                                    <button type="button" class="mt-1 block h-48 max-w-xs overflow-hidden rounded-md border border-border cursor-zoom-in hover:ring-2 hover:ring-primary/50 focus:outline-none focus:ring-2 focus:ring-primary text-left" @click="openManualImage('/Users_Manual/SaveEdit_btn.png', 'Save Changes button')">
+                                        <img src="/Users_Manual/SaveEdit_btn.png" alt="Save Changes button" class="h-full w-full object-cover object-center" />
+                                    </button>
+                                </li>
                             </ul>
-                        </section>
-
-                        <section class="space-y-2">
-                            <h4 class="font-medium text-foreground">6.) Export report</h4>
-                            <p class="text-muted-foreground">
-                                Export all tasks (open and completed) in a date range as a PDF. The report uses the official header and footer when available.
-                            </p>
-                            <ul class="list-inside list-disc space-y-1 text-muted-foreground">
-                                <li><strong class="text-foreground">Click</strong> <strong>Export</strong> to open the export dialog.</li>
-                                <li><strong class="text-foreground">Click</strong> a start and end date on the calendar to choose the range, then <strong class="text-foreground">click</strong> <strong>Export</strong> to download the PDF.</li>
+                            <p class="text-lg font-medium text-muted-foreground mt-2">How to delete a task:</p>
+                            <ul class="list-inside list-disc space-y-3 text-muted-foreground">
+                                <li class="flex flex-col gap-1">
+                                    <span>In the <strong>Tasks</strong> list (open tasks only), <strong class="text-foreground">click</strong> <strong>Delete Task</strong> (trash icon) on the task you want to remove. Delete is not available for completed tasks.</span>
+                                    <button type="button" class="mt-1 block h-48 max-w-xs overflow-hidden rounded-md border border-border cursor-zoom-in hover:ring-2 hover:ring-primary/50 focus:outline-none focus:ring-2 focus:ring-primary text-left" @click="openManualImage('/Users_Manual/DeleteTask_btn.png', 'Delete Task button')">
+                                        <img src="/Users_Manual/DeleteTask_btn.png" alt="Delete Task button" class="h-full w-full object-cover object-[left_center]" />
+                                    </button>
+                                </li>
+                                <li class="flex flex-col gap-1">
+                                    <span>In the confirmation dialog, <strong class="text-foreground">click</strong> <strong>Delete</strong> to confirm (this cannot be undone), or <strong>Cancel</strong> to keep the task.</span>
+                                    <button type="button" class="mt-1 block h-48 max-w-xs overflow-hidden rounded-md border border-border cursor-zoom-in hover:ring-2 hover:ring-primary/50 focus:outline-none focus:ring-2 focus:ring-primary text-left" @click="openManualImage('/Users_Manual/DeleteConfirmation_btn.png', 'Delete confirmation dialog')">
+                                        <img src="/Users_Manual/DeleteConfirmation_btn.png" alt="Delete confirmation dialog" class="h-full w-full object-cover object-center" />
+                                    </button>
+                                </li>
                             </ul>
-                        </section>
+                            </div>
+
+                            <!-- Page 5: Search and sort -->
+                            <div v-show="manualPageIndex === 5" class="space-y-2">
+                                <h4 class="text-xl font-medium text-foreground">Search and sort</h4>
+                                <p class="text-muted-foreground">
+                                    Filter by title or target; order the list by status or priority.
+                                </p>
+                                <ul class="list-inside list-disc space-y-3 text-muted-foreground">
+                                    <li class="flex flex-col gap-1">
+                                        <span><strong class="text-foreground">Click</strong> in the <strong>Search Task</strong> field and type to filter.</span>
+                                        <button type="button" class="mt-1 block h-48 max-w-xs overflow-hidden rounded-md border border-border cursor-zoom-in hover:ring-2 hover:ring-primary/50 focus:outline-none focus:ring-2 focus:ring-primary text-left" @click="openManualImage('/Users_Manual/Searching.png', 'Search Task field')">
+                                            <img src="/Users_Manual/Searching.png" alt="Search Task field" class="h-full w-full object-cover object-[left_top]" />
+                                        </button>
+                                    </li>
+                                    <li class="flex flex-col gap-1">
+                                        <span><strong class="text-foreground">Click</strong> <strong>Sort by status</strong> or <strong>Sort by priority</strong> to reorder the list.</span>
+                                        <div class="mt-1 flex flex-wrap gap-2">
+                                            <button type="button" class="block h-48 max-w-xs overflow-hidden rounded-md border border-border cursor-zoom-in hover:ring-2 hover:ring-primary/50 focus:outline-none focus:ring-2 focus:ring-primary text-left" @click="openManualImage('/Users_Manual/Sorting1.png', 'Sort by status or priority')">
+                                                <img src="/Users_Manual/Sorting1.png" alt="Sort by status or priority" class="h-full w-full object-cover object-[left_top]" />
+                                            </button>
+                                            <button type="button" class="block h-48 max-w-xs overflow-hidden rounded-md border border-border cursor-zoom-in hover:ring-2 hover:ring-primary/50 focus:outline-none focus:ring-2 focus:ring-primary text-left" @click="openManualImage('/Users_Manual/Sorting2.png', 'Sorted task list')">
+                                                <img src="/Users_Manual/Sorting2.png" alt="Sorted task list" class="h-full w-full object-cover object-[left_top]" />
+                                            </button>
+                                        </div>
+                                    </li>
+                                </ul>
+                            </div>
+
+                            <!-- Page 6: Export report -->
+                            <div v-show="manualPageIndex === 6" class="space-y-2">
+                                <h4 class="text-xl font-medium text-foreground">Export report</h4>
+                                <p class="text-muted-foreground">
+                                    Export all tasks (open and completed) in a date range as a PDF. The report uses the official header and footer when available. The header and footer appear on every page; if you have many tasks, the table continues on the next pages with the same header and footer on each page.
+                                </p>
+                                <ul class="list-inside list-disc space-y-3 text-muted-foreground">
+                                    <li><strong class="text-foreground">Click</strong> <strong>Export</strong> to open the export dialog.</li>
+                                    <li>Choose a date range: <strong class="text-foreground">click</strong> a start date and an end date on the calendar (no range is pre-selected when you open the dialog).</li>
+                                    <li><strong class="text-foreground">Click</strong> <strong>Export</strong> to download the PDF.</li>
+                                </ul>
+                            </div>
+                        </div>
                     </div>
                 </div>
+            </div>
+            <!-- Manual image zoom lightbox -->
+            <div
+                v-if="zoomedManualImage"
+                class="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Zoomed image"
+                @click.self="closeManualImage"
+            >
+                <img
+                    :src="zoomedManualImage.src"
+                    :alt="zoomedManualImage.alt"
+                    class="max-h-[90vh] max-w-full rounded-lg border border-border object-contain shadow-2xl"
+                    @click.stop
+                />
+                <button
+                    type="button"
+                    class="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-white hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white"
+                    aria-label="Close zoom"
+                    @click="closeManualImage"
+                >
+                    <X class="size-5" />
+                </button>
             </div>
         </Teleport>
 

@@ -16,11 +16,10 @@ class EmployeeListController extends Controller
 {
     public function index(Request $request): Response
     {
-        // Get filter options
-        $schools = Employee::whereNotNull('office')
-            ->distinct()
-            ->pluck('office')
-            ->sort()
+        // Get filter options (from tbl_department, same as User List)
+        $schools = DB::table('tbl_department')
+            ->orderBy('department_name')
+            ->pluck('department_name')
             ->values();
 
         $schoolsGrouped = DB::table('tbl_department')
@@ -46,24 +45,32 @@ class EmployeeListController extends Controller
         $subjects = Employee::whereNotNull('subject_taught')
             ->distinct()
             ->pluck('subject_taught')
+            ->map(fn ($v) => is_string($v) ? trim($v) : $v)
+            ->filter(fn ($v) => $v !== '' && $v !== null)
             ->sort()
             ->values();
 
         $gradeLevels = Employee::whereNotNull('grade_level')
             ->distinct()
             ->pluck('grade_level')
+            ->map(fn ($v) => is_string($v) ? trim($v) : $v)
+            ->filter(fn ($v) => $v !== '' && $v !== null)
             ->sort()
             ->values();
 
         $employmentStatuses = Employee::whereNotNull('employ_status')
             ->distinct()
             ->pluck('employ_status')
+            ->map(fn ($v) => is_string($v) ? trim($v) : $v)
+            ->filter(fn ($v) => $v !== '' && $v !== null)
             ->sort()
             ->values();
 
         $roles = User::whereNotNull('role')
             ->distinct()
             ->pluck('role')
+            ->map(fn ($v) => is_string($v) ? trim($v) : $v)
+            ->filter(fn ($v) => $v !== '' && $v !== null)
             ->sort()
             ->values();
 
@@ -197,7 +204,7 @@ class EmployeeListController extends Controller
                 'job_title' => $employee->job_title,
                 'subject_taught' => $employee->subject_taught,
                 'grade_level' => $employee->grade_level,
-                'office' => $employee->office,
+                'office' => $employee->office_display ?? $employee->office,
                 'station_code' => $employee->station_code,
                 'salary_grade' => $employee->salary_grade,
                 'salary_step' => $employee->salary_step,
@@ -218,11 +225,21 @@ class EmployeeListController extends Controller
     private function buildEmployeeQuery(Request $request)
     {
         $query = Employee::query();
+        $empTable = (new Employee)->getTable();
+
+        // Join tbl_department so Office/School column shows department name (same as User List)
+        if (Schema::hasColumn($empTable, 'department_id')) {
+            $query->leftJoin('tbl_department as d', "{$empTable}.department_id", '=', 'd.department_id')
+                ->addSelect("{$empTable}.*", DB::raw('d.department_name as office_display'));
+        } else {
+            $query->leftJoin('tbl_department as d', DB::raw("CAST({$empTable}.office AS UNSIGNED)"), '=', 'd.department_id')
+                ->addSelect("{$empTable}.*", DB::raw('d.department_name as office_display'));
+        }
 
         if ($request->filled('school')) {
-            $query->where('office', $request->school);
+            $query->where('d.department_name', $request->school);
         } elseif ($request->filled('district')) {
-            $query->where('business_id', (string) $request->district);
+            $query->where("{$empTable}.business_id", (string) $request->district);
         }
 
         if ($request->filled('job_title')) {
@@ -246,9 +263,9 @@ class EmployeeListController extends Controller
         }
 
         if ($request->filled('role')) {
-            $query->join('tbl_user', 'tbl_emp_official_info.hrid', '=', 'tbl_user.hrId')
+            $query->join('tbl_user', "{$empTable}.hrid", '=', 'tbl_user.hrId')
                 ->where('tbl_user.role', $request->role)
-                ->select('tbl_emp_official_info.*');
+                ->select("{$empTable}.*", DB::raw('d.department_name as office_display'));
         }
 
         return $query;
