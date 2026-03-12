@@ -106,7 +106,7 @@ class WfhTimeInOutController extends Controller
             'due_date' => $request->input('due_date'),
             'due_date_end' => $request->input('due_date_end'),
             'add_to_calendar' => true,
-            'status' => 'Not Started',
+            'status' => 'In Progress',
         ]);
 
         return redirect()->route('self-service.wfh-time-in-out')->with('successMessage', 'Task created successfully.');

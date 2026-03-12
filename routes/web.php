@@ -45,6 +45,10 @@ Route::get('/', function () {
     ]);
 })->middleware('guest')->name('home');
 
+Route::get('manual/wfh-attendance', fn () => view('manual.wfh-attendance'))
+    ->middleware('guest')
+    ->name('manual.wfh-attendance');
+
 Route::get('auth/status', function (Request $request) {
     return response()
         ->json([

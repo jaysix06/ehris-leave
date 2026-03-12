@@ -1515,7 +1515,7 @@ function toggleClock(): void {
                             <div v-show="manualPageIndex === 4" class="space-y-2">
                                 <h4 class="text-xl font-medium text-foreground">Manage task status</h4>
                             <p class="text-muted-foreground">
-                                Each task has a <strong>View</strong> button and action buttons. Completed tasks move to the <strong>Completed Tasks</strong> tab. You can edit or delete from the view modal (delete is not available for completed tasks). From the Completed Tasks tab you can <strong>Re-enter</strong> a task to move it back to the open Tasks list.
+                                New tasks are created already <strong>In Progress</strong>. Each task has a <strong>View</strong> button and action buttons. Completed tasks move to the <strong>Completed Tasks</strong> tab. You can edit or delete from the view modal (delete is not available for completed tasks). From the Completed Tasks tab you can <strong>Re-enter</strong> a task to move it back to the open Tasks list.
                             </p>
                                 <ul class="list-inside list-disc space-y-3 text-muted-foreground">
                                 <li class="flex flex-col gap-1">
@@ -1528,12 +1528,6 @@ function toggleClock(): void {
                                             <img src="/Users_Manual/TaskDetail.png" alt="Task detail modal" class="h-full w-full object-cover object-[center_center]" />
                                         </button>
                                     </div>
-                                </li>
-                                <li class="flex flex-col gap-1">
-                                    <span><strong class="text-foreground">Click</strong> <strong>Start Task</strong> when the task is Not Started.</span>
-                                    <button type="button" class="mt-1 block h-48 max-w-xs overflow-hidden rounded-md border border-border cursor-zoom-in hover:ring-2 hover:ring-primary/50 focus:outline-none focus:ring-2 focus:ring-primary text-left" @click="openManualImage('/Users_Manual/StartTask_btn.png', 'Start Task button')">
-                                        <img src="/Users_Manual/StartTask_btn.png" alt="Start Task button" class="h-full w-full object-cover object-center" />
-                                    </button>
                                 </li>
                                 <li class="flex flex-col gap-1">
                                     <span><strong class="text-foreground">Click</strong> <strong>Hold Task</strong> or <strong>Complete Task</strong> when In Progress.</span>
