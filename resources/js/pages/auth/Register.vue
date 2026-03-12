@@ -211,7 +211,7 @@ const handleDistrictChange = (event: Event) => {
                             <select
                                 id="role"
                                 name="role"
-                                required
+                                :disabled="currentStep !== 2"
                                 :tabindex="6"
                                 class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                             >
@@ -231,7 +231,7 @@ const handleDistrictChange = (event: Event) => {
                             <select
                                 id="district"
                                 name="district"
-                                required
+                                :disabled="currentStep !== 2"
                                 :tabindex="7"
                                 class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                                 v-model="selectedDistrictId"
@@ -253,7 +253,7 @@ const handleDistrictChange = (event: Event) => {
                             <select
                                 id="station"
                                 name="station"
-                                required
+                                :disabled="currentStep !== 2"
                                 :tabindex="8"
                                 class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                             >
