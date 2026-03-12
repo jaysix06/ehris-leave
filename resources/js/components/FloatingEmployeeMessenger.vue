@@ -628,13 +628,20 @@ onBeforeUnmount(() => {
         >
             <section
                 v-if="isOpen"
-                class="pointer-events-auto flex h-[min(620px,calc(100dvh-5.5rem))] w-[calc(100vw-1rem)] max-w-[700px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white text-slate-900 shadow-2xl sm:h-[620px] sm:w-[min(88vw,700px)]"
+                class="pointer-events-auto fixed inset-0 z-[80] flex h-dvh w-screen flex-col overflow-hidden bg-white text-slate-900 shadow-2xl sm:static sm:h-[620px] sm:w-[min(88vw,700px)] sm:max-w-[700px] sm:rounded-2xl sm:border sm:border-slate-200"
             >
-                <header class="flex items-center border-b border-slate-200 bg-slate-50 px-4 py-3">
+                <header class="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3">
                     <div class="flex items-center gap-2 text-sm font-semibold text-slate-700">
                         <Users class="h-4 w-4 text-slate-500" />
                         <span>Employees</span>
                     </div>
+                    <button
+                        type="button"
+                        class="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-200 hover:text-slate-700"
+                        @click="isOpen = false"
+                    >
+                        <X class="h-4 w-4" />
+                    </button>
                 </header>
 
                 <div class="min-h-0 flex flex-1 flex-col sm:flex-row">
@@ -939,4 +946,3 @@ onBeforeUnmount(() => {
         </Transition>
     </div>
 </template>
-
