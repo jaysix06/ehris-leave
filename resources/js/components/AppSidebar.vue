@@ -162,7 +162,6 @@ const parsedPermissionAccess = computed<{ allow: Set<string>; hidden: Set<string
     return { allow, hidden };
 });
 
-// Step 4: nav is visible if role allow-list or per-user allow-list grants it.
 const canViewNavKey = (key: string): boolean => {
     const normalizedKey = normalizeNavKey(key);
     const roleAllowed = currentRoleAccess.value.allow.map(normalizeNavKey);
@@ -172,8 +171,6 @@ const canViewNavKey = (key: string): boolean => {
     return hasRoleWildcard || hasPermissionWildcard || roleAllowed.includes(normalizedKey) || parsedPermissionAccess.value.allow.has(normalizedKey);
 };
 
-// Step 5: build final sidebar recursively. Hidden keys always win.
-// If a parent key is allowed, children inherit visibility unless explicitly hidden.
 const buildVisibleNavItems = (items: SidebarNavItem[], hiddenKeys: Set<string>, parentAllowed: boolean = false): NavItem[] => {
     const visibleItems: NavItem[] = [];
 
