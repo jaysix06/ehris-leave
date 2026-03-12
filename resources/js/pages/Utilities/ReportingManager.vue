@@ -78,7 +78,7 @@ const refreshTable = () => {
                     <DataTable
                         :key="tableKey"
                         :columns="columns"
-                        ajax-url="/api/utilities/reporting-manager/datatables"
+                        ajax-url="/utilities/reporting-manager/datatables"
                         :get-ajax-params="getAjaxParams"
                         row-key="id"
                         :per-page-options="[10, 25, 50, 100]"
@@ -90,3 +90,4 @@ const refreshTable = () => {
         </div>
     </AppLayout>
 </template>
+

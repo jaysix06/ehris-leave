@@ -76,7 +76,7 @@ const loadingMessages = ref(false);
 const sendingMessage = ref(false);
 const error = ref<string | null>(null);
 const contacts = ref<Contact[]>([]);
-const nextContactsUrl = ref<string | null>('/api/utilities/users?per_page=60');
+const nextContactsUrl = ref<string | null>('/utilities/users?per_page=60');
 const nextConversationsCursor = ref<string | null>(null);
 const activeConversationId = ref<number | string | null>(null);
 const messageInput = ref('');
@@ -296,7 +296,7 @@ const loadInitialContacts = async () => {
     if (q !== '') {
         params.set('search', q);
     }
-    nextContactsUrl.value = `/api/utilities/users?${params.toString()}`;
+    nextContactsUrl.value = `/utilities/users?${params.toString()}`;
     await fetchContactsPage(nextContactsUrl.value, { showLoader: true, append: false });
 };
 
@@ -312,7 +312,7 @@ const refreshContacts = async () => {
     if (q !== '') {
         params.set('search', q);
     }
-    await fetchContactsPage(`/api/utilities/users?${params.toString()}`);
+    await fetchContactsPage(`/utilities/users?${params.toString()}`);
 };
 
 const conversationListUrl = (cursor?: string | null): string => {
@@ -580,7 +580,7 @@ watch(searchQuery, (value) => {
             params.set('search', q);
         }
 
-        nextContactsUrl.value = `/api/utilities/users?${params.toString()}`;
+        nextContactsUrl.value = `/utilities/users?${params.toString()}`;
         void fetchContactsPage(nextContactsUrl.value, { showLoader: true, append: false });
     }, 300);
 });
@@ -600,7 +600,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <div ref="messengerRootRef" class="fixed right-6 bottom-6 z-[70] flex flex-col-reverse items-end gap-3">
+    <div ref="messengerRootRef" class="fixed right-2 bottom-2 z-[70] flex flex-col-reverse items-end gap-2 sm:right-6 sm:bottom-6 sm:gap-3">
         <div class="pointer-events-auto">
             <button
                 type="button"
@@ -628,7 +628,7 @@ onBeforeUnmount(() => {
         >
             <section
                 v-if="isOpen"
-                class="pointer-events-auto flex h-[620px] w-[min(92vw,820px)] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white text-slate-900 shadow-2xl"
+                class="pointer-events-auto flex h-[min(620px,calc(100dvh-5.5rem))] w-[calc(100vw-1rem)] max-w-[700px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white text-slate-900 shadow-2xl sm:h-[620px] sm:w-[min(88vw,700px)]"
             >
                 <header class="flex items-center border-b border-slate-200 bg-slate-50 px-4 py-3">
                     <div class="flex items-center gap-2 text-sm font-semibold text-slate-700">
@@ -638,7 +638,10 @@ onBeforeUnmount(() => {
                 </header>
 
                 <div class="min-h-0 flex flex-1 flex-col sm:flex-row">
-                    <aside class="min-h-0 w-full border-r border-slate-200 sm:w-[320px] flex flex-col">
+                    <aside
+                        class="min-h-0 w-full border-r border-slate-200 sm:w-[280px]"
+                        :class="activeConversationId ? 'hidden sm:flex sm:flex-col' : 'flex flex-col'"
+                    >
                         <!-- Search bar -->
                         <div class="border-b border-slate-200 px-3 py-2">
                             <div class="relative">
@@ -834,7 +837,10 @@ onBeforeUnmount(() => {
                         </div>
                     </aside>
 
-                    <section class="flex min-h-0 flex-1 flex-col bg-slate-50">
+                    <section
+                        class="min-h-0 flex-1 flex-col bg-slate-50"
+                        :class="activeConversationId ? 'flex' : 'hidden sm:flex'"
+                    >
                         <header class="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
                             <div class="flex items-center gap-3">
                                 <button
@@ -871,7 +877,7 @@ onBeforeUnmount(() => {
                             </div>
                         </header>
 
-                        <div ref="messagesContainer" class="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+                        <div ref="messagesContainer" class="min-h-0 flex-1 overflow-y-auto px-3 py-3 sm:px-4 sm:py-4">
                             <div v-if="!selectedContact" class="flex h-full items-center justify-center text-sm text-slate-400">
                                 Choose an employee from the list to start messaging.
                             </div>
@@ -884,7 +890,7 @@ onBeforeUnmount(() => {
                                     <div class="mt-1 text-xs text-slate-400">Send a message to start the conversation.</div>
                                 </div>
                             </div>
-                            <ul v-else class="space-y-3">
+                            <ul v-else class="space-y-2.5 sm:space-y-3">
                                 <li
                                     v-for="message in selectedMessages"
                                     :key="message.id"
@@ -892,7 +898,7 @@ onBeforeUnmount(() => {
                                     :class="message.mine ? 'justify-end' : 'justify-start'"
                                 >
                                     <div
-                                        class="max-w-[80%] rounded-2xl px-3 py-2 text-sm shadow-sm"
+                                        class="max-w-[85%] rounded-2xl px-3 py-2 text-sm shadow-sm sm:max-w-[80%]"
                                         :class="
                                             message.mine
                                                 ? 'bg-blue-600 text-white rounded-br-md'
@@ -908,7 +914,7 @@ onBeforeUnmount(() => {
                             </ul>
                         </div>
 
-                        <form class="border-t border-slate-200 bg-white p-3" @submit.prevent="void sendMessage()">
+                        <form class="border-t border-slate-200 bg-white p-2.5 sm:p-3" @submit.prevent="void sendMessage()">
                             <div class="flex items-end gap-2">
                                 <textarea
                                     v-model="messageInput"
@@ -933,3 +939,4 @@ onBeforeUnmount(() => {
         </Transition>
     </div>
 </template>
+

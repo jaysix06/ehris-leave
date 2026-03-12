@@ -117,7 +117,7 @@ function onSurveyTableClick(e: MouseEvent) {
         e.stopPropagation();
         const id = updateBtn.getAttribute('data-id');
         if (!id) return;
-        fetch(`/api/utilities/survey-management/${id}`)
+        fetch(`/utilities/survey-management/${id}`)
             .then((res) => res.json())
             .then((data) => {
                 editSurvey.title = data.survey?.title ?? '';
@@ -310,7 +310,7 @@ function optionsList(frmOption: string): string[] {
                     <DataTable
                         :key="tableKey"
                         :columns="columns"
-                        ajax-url="/api/utilities/survey-management/datatables"
+                        ajax-url="/utilities/survey-management/datatables"
                         :get-ajax-params="getAjaxParams"
                         row-key="id"
                         :per-page-options="[10, 25, 50]"
@@ -555,3 +555,4 @@ function optionsList(frmOption: string): string[] {
     color: hsl(var(--primary));
 }
 </style>
+

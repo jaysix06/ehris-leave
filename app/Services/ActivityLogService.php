@@ -4,6 +4,8 @@ namespace App\Services;
 
 use App\Models\ActivityLog;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class ActivityLogService
 {
@@ -15,12 +17,21 @@ class ActivityLogService
         $userId = $userId ?? Auth::id();
 
         if ($userId) {
-            ActivityLog::create([
-                'fk_user_id' => $userId,
-                'activity' => $activity,
-                'module' => $module,
-                'created_at' => now(),
-            ]);
+            try {
+                ActivityLog::create([
+                    'fk_user_id' => $userId,
+                    'activity' => $activity,
+                    'module' => $module,
+                    'created_at' => now(),
+                ]);
+            } catch (Throwable $exception) {
+                Log::warning('Activity log write failed.', [
+                    'user_id' => $userId,
+                    'module' => $module,
+                    'activity' => $activity,
+                    'exception' => $exception->getMessage(),
+                ]);
+            }
         }
     }
 

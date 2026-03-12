@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { Head, usePage } from '@inertiajs/vue3';
+import { echo } from '@laravel/echo-vue';
+import { AlertCircle, CheckCircle2, Download, RefreshCw, UserPlus } from 'lucide-vue-next';
+import Swal from 'sweetalert2';
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
-import AppLayout from '@/layouts/AppLayout.vue';
-import utilitiesRoutes from '@/routes/utilities';
-import type { BreadcrumbItem } from '@/types';
-import { Button } from '@/components/ui/button';
 import { DataTable, type DataTableColumn } from '@/components/DataTable';
+import { Button } from '@/components/ui/button';
 import {
     Dialog,
     DialogContent,
@@ -20,8 +20,9 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { Check, Download, Pencil, RefreshCw, Trash2, UserPlus, X } from 'lucide-vue-next';
-import Swal from 'sweetalert2';
+import AppLayout from '@/layouts/AppLayout.vue';
+import utilitiesRoutes from '@/routes/utilities';
+import type { BreadcrumbItem } from '@/types';
 
 const pageTitle = 'Utilities - User List';
 
@@ -56,6 +57,12 @@ type DepartmentOption = {
     name: string;
 };
 
+type UserSummaryStats = {
+    inactiveAccounts: number;
+    registeredToday: number;
+    date: string | null;
+};
+
 const dataTableWrapperRef = ref<HTMLElement | null>(null);
 const refreshTrigger = ref(0);
 
@@ -84,6 +91,18 @@ const state = reactive<{
     departments: [],
     isDepartmentsLoading: false,
     isActionLoading: false,
+});
+
+const summaryStats = reactive<{
+    inactiveAccounts: number;
+    registeredToday: number;
+    date: string | null;
+    isLoading: boolean;
+}>({
+    inactiveAccounts: 0,
+    registeredToday: 0,
+    date: null,
+    isLoading: false,
 });
 
 const getCookieValue = (name: string): string => {
@@ -125,10 +144,10 @@ const getStatusUpdateUrl = (userId: number): string => {
             const u = new URL(base, window.location.origin);
             return u.toString();
         } catch {
-            return `${window.location.origin}/api/utilities/users/${userId}/status`;
+            return `${window.location.origin}/utilities/users/${userId}/status`;
         }
     }
-    return `${window.location.origin}/api/utilities/users/${userId}/status`;
+    return `${window.location.origin}/utilities/users/${userId}/status`;
 };
 
 const normalizeNullableText = (value: unknown): string => {
@@ -158,11 +177,14 @@ const buildNameFromParts = (row: {
     return row.email ?? '';
 };
 
-const displayName = (row: UserRow): string => buildNameFromParts(row);
-
 const getAjaxParams = computed(() => () => ({
     _refresh: String(refreshTrigger.value),
 }));
+const reverbEnabled = import.meta.env.VITE_REVERB_ENABLED !== 'false';
+
+const formatSummaryCount = (value: number): string => {
+    return new Intl.NumberFormat().format(value);
+};
 
 const userColumns: DataTableColumn[] = [
     {
@@ -195,15 +217,16 @@ const userColumns: DataTableColumn[] = [
     {
         key: 'active',
         label: 'Status',
-        width: '8rem',
+        width: '7rem',
         data: 'active',
         thClass: 'text-center',
         tdClass: 'text-center',
         render: (data: unknown) => {
             const active = data === true || data === '1';
-            const cls = active ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-700 border-slate-200';
-            const label = active ? 'Active' : 'Inactive';
-            return `<span class="inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${cls}">${label}</span>`;
+            if (active) {
+                return '<span class="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"><span class="size-1.5 rounded-full bg-emerald-500"></span>Active</span>';
+            }
+            return '<span class="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-xs font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-800/40 dark:text-slate-400"><span class="size-1.5 rounded-full bg-slate-400"></span>Inactive</span>';
         },
     },
     {
@@ -212,7 +235,7 @@ const userColumns: DataTableColumn[] = [
         data: null,
         orderable: false,
         searchable: false,
-        width: '12rem',
+        width: '10rem',
         thClass: 'text-center',
         tdClass: 'text-center',
         render: (_data: unknown, type: string, row: { _raw?: UserRow } & Record<string, unknown>) => {
@@ -222,12 +245,15 @@ const userColumns: DataTableColumn[] = [
             const active = r.active;
             const esc = (s: string | number) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
             const emailLabel = (r.personal_email ?? r.email ?? '').trim();
+
+            const btnBase = 'inline-flex size-7 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring';
+
             return `
-                <div class="ehris-user-list-actions flex flex-wrap items-center justify-end gap-1">
-                    <button type="button" class="ehris-btn ehris-btn-edit inline-flex size-8 items-center justify-center rounded-md border border-input bg-background hover:bg-muted" data-user-list-action="edit" data-user-id="${esc(id)}" title="Edit"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></button>
-                    <button type="button" class="ehris-btn ehris-btn-reset-password inline-flex size-8 items-center justify-center rounded-md border border-input bg-background hover:bg-muted" data-user-list-action="resetPassword" data-user-id="${esc(id)}" data-user-email="${esc(emailLabel)}" title="Reset password"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></button>
-                    ${!active ? `<button type="button" class="ehris-btn ehris-btn-activate inline-flex size-8 items-center justify-center rounded-md bg-emerald-600 text-white hover:bg-emerald-700" data-user-list-action="activate" data-user-id="${esc(id)}" title="Activate"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg></button>` : `<button type="button" class="ehris-btn ehris-btn-deactivate inline-flex size-8 items-center justify-center rounded-md bg-amber-500 text-white hover:bg-amber-600" data-user-list-action="deactivate" data-user-id="${esc(id)}" title="Deactivate"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>`}
-                    <button type="button" class="ehris-btn ehris-btn-delete inline-flex size-8 items-center justify-center rounded-md border border-destructive/50 text-destructive hover:bg-destructive hover:text-destructive-foreground" data-user-list-action="delete" data-user-id="${esc(id)}" title="Delete"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg></button>
+                <div class="ehris-user-list-actions flex items-center justify-center gap-1">
+                    <button type="button" class="${btnBase} border border-input bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground" data-user-list-action="edit" data-user-id="${esc(id)}" title="Edit user"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></button>
+                    <button type="button" class="${btnBase} border border-input bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground" data-user-list-action="resetPassword" data-user-id="${esc(id)}" data-user-email="${esc(emailLabel)}" title="Reset password"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></button>
+                    ${!active ? `<button type="button" class="${btnBase} bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-700 dark:hover:bg-emerald-600" data-user-list-action="activate" data-user-id="${esc(id)}" title="Activate account"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>` : `<button type="button" class="${btnBase} bg-amber-500 text-white hover:bg-amber-600 dark:bg-amber-600 dark:hover:bg-amber-500" data-user-list-action="deactivate" data-user-id="${esc(id)}" title="Deactivate account"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>`}
+                    <button type="button" class="${btnBase} border border-destructive/40 text-destructive hover:bg-destructive hover:text-white" data-user-list-action="delete" data-user-id="${esc(id)}" title="Delete user"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg></button>
                 </div>`;
         },
     },
@@ -313,7 +339,7 @@ const getCreateUserUrl = (): string => {
             // fall through
         }
     }
-    return `${window.location.origin}/api/utilities/users`;
+    return `${window.location.origin}/utilities/users`;
 };
 
 const saveNewUser = async () => {
@@ -350,7 +376,7 @@ const saveNewUser = async () => {
         }
         createState.isOpen = false;
         state.statusMessage = 'New user created successfully.';
-        refreshTrigger.value += 1;
+        refreshUserList();
         void Swal.fire({ icon: 'success', title: 'User created', text: 'New user has been created.' });
     } catch (error: unknown) {
         console.error(error);
@@ -370,7 +396,7 @@ const getExportUsersExcelUrl = (): string => {
             // fall through
         }
     }
-    return `${window.location.origin}/api/utilities/users/export/excel`;
+    return `${window.location.origin}/utilities/users/export/excel`;
 };
 
 const exportUsersExcel = () => {
@@ -399,7 +425,7 @@ const fetchUserForEdit = async (userId: number) => {
     try {
         const url =
             (utilitiesRoutes?.userList?.show?.(userId) as { url: string } | undefined)?.url ??
-            `${window.location.origin}/api/utilities/users/${userId}`;
+            `${window.location.origin}/utilities/users/${userId}`;
         const res = await fetch(url, {
             method: 'GET',
             headers: { Accept: 'application/json' },
@@ -430,7 +456,7 @@ const saveUserEdits = async () => {
     try {
         const url =
             (utilitiesRoutes?.userList?.update?.(editState.userId) as { url: string } | undefined)?.url ??
-            `${window.location.origin}/api/utilities/users/${editState.userId}`;
+            `${window.location.origin}/utilities/users/${editState.userId}`;
         const payload = {
             email: toNullIfBlank(editState.form.email),
             lastname: toNullIfBlank(editState.form.lastname),
@@ -467,7 +493,7 @@ const saveUserEdits = async () => {
         }
         editState.isOpen = false;
         state.statusMessage = 'User details updated successfully.';
-        refreshTrigger.value += 1;
+        refreshUserList();
         void Swal.fire({ icon: 'success', title: 'User updated', text: 'User details were updated successfully.' });
     } catch (error: unknown) {
         console.error(error);
@@ -495,7 +521,7 @@ const deleteUser = async (userId: number, displayNameLabel: string) => {
     try {
         const url =
             (utilitiesRoutes?.userList?.destroy?.(userId) as { url: string } | undefined)?.url ??
-            `${window.location.origin}/api/utilities/users/${userId}`;
+            `${window.location.origin}/utilities/users/${userId}`;
         const response = await fetch(url, {
             method: 'DELETE',
             headers: {
@@ -508,7 +534,7 @@ const deleteUser = async (userId: number, displayNameLabel: string) => {
         });
         if (!response.ok) throw new Error(`Failed to delete user (HTTP ${response.status})`);
         state.statusMessage = 'User deleted successfully.';
-        refreshTrigger.value += 1;
+        refreshUserList();
         void Swal.fire({ icon: 'success', title: 'User deleted', text: 'The user has been deleted.' });
     } catch (error: unknown) {
         console.error(error);
@@ -559,7 +585,7 @@ const updateStatus = async (userId: number, active: boolean, displayNameLabel: s
             throw new Error(`Failed to update status (HTTP ${response.status})`);
         }
         state.statusMessage = active ? 'User activated successfully.' : 'User deactivated successfully.';
-        refreshTrigger.value += 1;
+        refreshUserList();
         void Swal.fire({ icon: 'success', title: active ? 'User activated' : 'User deactivated', text: displayNameLabel });
     } catch (error: unknown) {
         console.error(error);
@@ -581,7 +607,7 @@ const getResetPasswordUrl = (userId: number): string => {
             // fall through
         }
     }
-    return `${window.location.origin}/api/utilities/users/${userId}/reset-password`;
+    return `${window.location.origin}/utilities/users/${userId}/reset-password`;
 };
 
 const resetUserPassword = async (userId: number, displayEmail: string) => {
@@ -614,7 +640,7 @@ const resetUserPassword = async (userId: number, displayEmail: string) => {
         });
         if (!response.ok) throw new Error(`Failed to reset password (HTTP ${response.status})`);
         state.statusMessage = 'Password reset successfully.';
-        refreshTrigger.value += 1;
+        refreshUserList();
         void Swal.fire({ icon: 'success', title: 'Password Reset!', text: 'User password has been successfully reset!' });
     } catch (error: unknown) {
         console.error(error);
@@ -625,8 +651,54 @@ const resetUserPassword = async (userId: number, displayEmail: string) => {
     }
 };
 
-const refreshTable = () => {
+const getSummaryStatsUrl = (): string => {
+    const base = (utilitiesRoutes?.userList?.summaryStats as ((...args: any[]) => { url: string }) | undefined)?.().url;
+    if (base) {
+        try {
+            return new URL(base, window.location.origin).toString();
+        } catch {
+            // fall through
+        }
+    }
+
+    return `${window.location.origin}/utilities/user-list/summary-stats`;
+};
+
+const fetchSummaryStats = async () => {
+    if (summaryStats.isLoading) return;
+    summaryStats.isLoading = true;
+    try {
+        const response = await fetch(getSummaryStatsUrl(), {
+            method: 'GET',
+            headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin',
+        });
+        if (!response.ok) throw new Error(`Failed to load summary stats (HTTP ${response.status})`);
+        const data = (await response.json()) as UserSummaryStats;
+        summaryStats.inactiveAccounts = Number(data.inactiveAccounts ?? 0);
+        summaryStats.registeredToday = Number(data.registeredToday ?? 0);
+        summaryStats.date = data.date ?? null;
+    } catch (error: unknown) {
+        console.error(error);
+        summaryStats.inactiveAccounts = 0;
+        summaryStats.registeredToday = 0;
+        summaryStats.date = null;
+    } finally {
+        summaryStats.isLoading = false;
+    }
+};
+
+const refreshUserList = () => {
     refreshTrigger.value += 1;
+    void fetchSummaryStats();
+};
+
+const refreshTable = () => {
+    refreshUserList();
+};
+
+const handleUserListRealtimeUpdate = () => {
+    refreshUserList();
 };
 
 const handleTableAction = (e: Event) => {
@@ -658,7 +730,7 @@ const fetchDepartments = async () => {
     if (state.isDepartmentsLoading) return;
     state.isDepartmentsLoading = true;
     try {
-        const response = await fetch(`${window.location.origin}/api/utilities/departments`, {
+        const response = await fetch(`${window.location.origin}/utilities/departments`, {
             method: 'GET',
             headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
             credentials: 'same-origin',
@@ -676,6 +748,14 @@ const fetchDepartments = async () => {
 
 onMounted(() => {
     fetchDepartments();
+    void fetchSummaryStats();
+    if (reverbEnabled) {
+        try {
+            echo().channel('user-list').listen('.UserListUpdated', handleUserListRealtimeUpdate);
+        } catch {
+            // Reverb not connected; real-time updates disabled
+        }
+    }
     nextTick(() => {
         dataTableWrapperRef.value?.addEventListener('click', handleTableAction);
     });
@@ -683,6 +763,13 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
     dataTableWrapperRef.value?.removeEventListener('click', handleTableAction);
+    if (reverbEnabled) {
+        try {
+            echo().channel('user-list').stopListening('UserListUpdated');
+        } catch {
+            // ignore
+        }
+    }
 });
 </script>
 
@@ -690,76 +777,108 @@ onBeforeUnmount(() => {
     <Head :title="pageTitle" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
-        <div class="p-6">
-            <div class="rounded-lg border border-sidebar-border/70 bg-background p-6 space-y-6">
-                <header class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                    <div>
-                        <h1 class="text-2xl font-semibold">{{ pageTitle }}</h1>
-                        <p class="mt-1 text-sm text-muted-foreground">
-                            View all registered EHRIS accounts. New registrations appear here as
-                            <span class="font-semibold">Inactive</span> until an administrator activates them.
-                        </p>
-                    </div>
-                    <div class="flex flex-wrap items-center gap-2">
-                        <Button
-                            type="button"
-                            class="bg-red-600 hover:bg-red-700 text-white"
-                            size="sm"
-                            :disabled="state.isActionLoading"
-                            @click="exportUsersExcel"
-                        >
-                            <Download class="mr-2 size-4" />
-                            Export users
-                        </Button>
-                        <Button
-                            type="button"
-                            class="bg-red-600 hover:bg-red-700 text-white"
-                            size="sm"
-                            :disabled="state.isActionLoading"
-                            @click="openCreateModal"
-                        >
-                            <UserPlus class="mr-2 size-4" />
-                            New user
-                        </Button>
-                        <TooltipProvider :delay-duration="0">
-                            <Tooltip>
-                                <TooltipTrigger as-child>
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        :disabled="state.isActionLoading"
-                                        @click="refreshTable"
-                                    >
-                                        <RefreshCw class="mr-2 size-4" />
-                                        Refresh
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Reload the user list</TooltipContent>
-                            </Tooltip>
-                        </TooltipProvider>
-                        <p v-if="state.statusMessage" class="text-sm text-emerald-600 dark:text-emerald-400">
-                            {{ state.statusMessage }}
-                        </p>
-                        <p v-if="state.error" class="text-sm text-destructive">
-                            {{ state.error }}
-                        </p>
-                    </div>
-                </header>
+        <div class="p-6 space-y-6">
+            <Transition name="fade">
+                <div
+                    v-if="state.statusMessage"
+                    class="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
+                >
+                    <CheckCircle2 class="size-4 shrink-0" />
+                    {{ state.statusMessage }}
+                </div>
+            </Transition>
 
-                <section ref="dataTableWrapperRef" class="rounded-md border border-border bg-card overflow-x-auto">
+            <Transition name="fade">
+                <div
+                    v-if="state.error"
+                    class="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-2.5 text-sm text-destructive"
+                >
+                    <AlertCircle class="size-4 shrink-0" />
+                    {{ state.error }}
+                </div>
+            </Transition>
+
+            <section class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <article class="rounded-lg border border-border bg-card p-4 shadow-sm">
+                    <p class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Inactive Accounts</p>
+                    <p class="mt-2 text-3xl font-semibold text-foreground">
+                        <span v-if="summaryStats.isLoading" class="inline-block h-8 w-20 animate-pulse rounded bg-muted" />
+                        <span v-else>{{ formatSummaryCount(summaryStats.inactiveAccounts) }}</span>
+                    </p>
+                    <p class="mt-1 text-xs text-muted-foreground">Total users with inactive status.</p>
+                </article>
+                <article class="rounded-lg border border-border bg-card p-4 shadow-sm">
+                    <p class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Registered Today</p>
+                    <p class="mt-2 text-3xl font-semibold text-foreground">
+                        <span v-if="summaryStats.isLoading" class="inline-block h-8 w-20 animate-pulse rounded bg-muted" />
+                        <span v-else>{{ formatSummaryCount(summaryStats.registeredToday) }}</span>
+                    </p>
+                    <p class="mt-1 text-xs text-muted-foreground">Accounts created on {{ summaryStats.date ?? 'today' }}.</p>
+                </article>
+            </section>
+
+            <section class="rounded-lg border border-border bg-card shadow-sm">
+                <div ref="dataTableWrapperRef" class="overflow-x-auto p-4">
                     <DataTable
                         :columns="userColumns"
-                        ajax-url="/api/utilities/users/datatables"
+                        ajax-url="/utilities/users/datatables"
                         :get-ajax-params="getAjaxParams"
                         row-key="id"
                         :loading="state.isActionLoading"
                         empty-message="No users found."
                         :per-page-options="[10, 25, 50, 100]"
                         :default-order="[0, 'desc']"
-                    />
-                </section>
-            </div>
+                    >
+                        <template #header-actions>
+                            <div class="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                                <TooltipProvider :delay-duration="0">
+                                    <Tooltip>
+                                        <TooltipTrigger as-child>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                :disabled="state.isActionLoading"
+                                                @click="exportUsersExcel"
+                                            >
+                                                <Download class="mr-1.5 size-4" />
+                                                Export
+                                            </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>Download users as CSV</TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    :disabled="state.isActionLoading"
+                                    @click="openCreateModal"
+                                >
+                                    <UserPlus class="mr-1.5 size-4" />
+                                    New user
+                                </Button>
+                                <TooltipProvider :delay-duration="0">
+                                    <Tooltip>
+                                        <TooltipTrigger as-child>
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                class="size-8"
+                                                :disabled="state.isActionLoading"
+                                                @click="refreshTable"
+                                            >
+                                                <RefreshCw class="size-4" />
+                                            </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>Reload the user list</TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
+                            </div>
+                        </template>
+                    </DataTable>
+                </div>
+            </section>
         </div>
     </AppLayout>
 
@@ -1051,14 +1170,24 @@ onBeforeUnmount(() => {
     min-width: 2rem;
 }
 
-/* Data table alignment */
-:deep(section .data-table-wrapper table.dataTable thead th.text-center),
-:deep(section .data-table-wrapper table.dataTable tbody td.text-center) {
+:deep(.data-table-wrapper table.dataTable thead th.text-center),
+:deep(.data-table-wrapper table.dataTable tbody td.text-center) {
     text-align: center;
 }
 
-:deep(section .data-table-wrapper table.dataTable thead th),
-:deep(section .data-table-wrapper table.dataTable tbody td) {
+:deep(.data-table-wrapper table.dataTable thead th),
+:deep(.data-table-wrapper table.dataTable tbody td) {
     vertical-align: middle;
 }
+
+.fade-enter-active,
+.fade-leave-active {
+    transition: opacity 0.25s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+    opacity: 0;
+}
 </style>
+

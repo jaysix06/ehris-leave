@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Utilities;
 
+use App\Events\UserListUpdated;
 use App\Http\Controllers\Controller;
 use App\Mail\AccountActivatedMail;
 use App\Mail\PasswordResetMail;
@@ -199,6 +200,30 @@ class UserListController extends Controller
     }
 
     /**
+     * API endpoint: user list summary statistics.
+     */
+    public function summaryStats()
+    {
+        $this->authorizeAdmin();
+
+        $today = now()->toDateString();
+
+        $inactiveAccounts = DB::table('tbl_user')
+            ->where('active', 0)
+            ->count();
+
+        $registeredToday = DB::table('tbl_user')
+            ->whereDate('date_created', $today)
+            ->count();
+
+        return response()->json([
+            'inactiveAccounts' => $inactiveAccounts,
+            'registeredToday' => $registeredToday,
+            'date' => $today,
+        ]);
+    }
+
+    /**
      * API endpoint: create a new user (admin/manual).
      *
      * This is different from self-service registration.
@@ -246,6 +271,7 @@ class UserListController extends Controller
         $user->save();
 
         ActivityLogService::logCreate('User', "Created user: {$user->personal_email}", $user->getKey());
+        UserListUpdated::dispatch('created', (int) $user->getKey());
 
         return response()->json([
             'id' => $user->getKey(),
@@ -448,6 +474,7 @@ class UserListController extends Controller
             'User',
             "Updated user: {$user->email}"
         );
+        UserListUpdated::dispatch($user->active ? 'activated' : 'deactivated', (int) $user->getKey());
 
         return response()->json([
             'id' => $user->getKey(),
@@ -493,6 +520,7 @@ class UserListController extends Controller
         }
 
         $user->save();
+        UserListUpdated::dispatch('updated', (int) $user->getKey());
 
         $office = null;
         if ($user->department_id) {
@@ -534,6 +562,7 @@ class UserListController extends Controller
 
         $id = $user->getKey();
         $user->delete();
+        UserListUpdated::dispatch('deleted', (int) $id);
 
         return response()->json([
             'id' => $id,
