@@ -240,12 +240,11 @@ const sortedEducation = computed(() => {
             <button
                 v-if="canEdit"
                 type="button"
-                class="ehris-btn-grade-subject"
+                class="ehris-edit-btn"
                 aria-label="Edit education background"
                 @click="openEdit"
             >
                 <Pencil class="size-4" />
-                <span>Edit</span>
             </button>
         </div>
 
@@ -285,7 +284,7 @@ const sortedEducation = computed(() => {
                         <p v-for="(msg, key) in errors" :key="key">{{ msg }}</p>
                     </div>
 
-                    <div class="flex-1 min-h-0 overflow-y-auto pr-2 space-y-6">
+                    <div class="ehris-education-scroll flex-1 min-h-0 overflow-y-auto pr-2 space-y-6">
                         <section class="ehris-edu-section">
                             <div class="ehris-edu-section-header">
                                 <h4 class="ehris-edu-section-title">Graduate Studies</h4>
@@ -612,6 +611,9 @@ const sortedEducation = computed(() => {
     width: 100%;
     max-width: 100%;
 }
+.ehris-education-scroll {
+    padding-right: 0.5rem;
+}
 .ehris-family-errors {
     margin-bottom: 1rem;
     padding: 0.75rem 1rem;
@@ -703,5 +705,40 @@ const sortedEducation = computed(() => {
     min-height: 2.25rem;
     padding: 0.5rem 0.75rem;
     font-size: 0.9375rem;
+}
+
+@media (max-width: 768px) {
+    .ehris-education-dialog {
+        width: calc(100vw - 1rem);
+        max-width: calc(100vw - 1rem);
+        max-height: calc(100dvh - 1rem);
+        padding: 0.875rem;
+    }
+
+    .ehris-education-scroll {
+        padding-right: 0;
+    }
+
+    .ehris-edu-section {
+        padding: 0.625rem;
+    }
+
+    .ehris-edu-section-header,
+    .ehris-edu-entry-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .ehris-edu-field-row {
+        flex-direction: column;
+        gap: 0.625rem;
+    }
+
+    .ehris-edu-field-period,
+    .ehris-edu-field-inline,
+    .ehris-edu-input-year {
+        max-width: 100%;
+        width: 100%;
+    }
 }
 </style>

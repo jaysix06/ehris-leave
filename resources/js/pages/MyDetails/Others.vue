@@ -1,17 +1,37 @@
 <script setup lang="ts">
-import { ChevronDown, FileText, Pencil } from 'lucide-vue-next';
-import { ref } from 'vue';
+import { router } from '@inertiajs/vue3';
+import { ChevronDown, FileText, Plus, Trash2 } from 'lucide-vue-next';
+import { computed, ref, watch } from 'vue';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Spinner } from '@/components/ui/spinner';
+
+type AwardRow = {
+    award_title: string;
+    category: string;
+    school_year: string;
+    award: string;
+};
 
 function val(v: unknown): string {
     if (v == null || v === '') return '—';
     return String(v);
 }
 
-defineProps<{
+function valInput(v: unknown): string {
+    if (v == null || String(v).trim() === '') {
+        return '';
+    }
+
+    return String(v);
+}
+
+const props = defineProps<{
     serviceRecord?: Record<string, unknown>[];
     leaveHistory?: Record<string, unknown>[];
     documents?: Record<string, unknown>[];
     awards?: Record<string, unknown>[];
+    awardsUpdateUrl?: string;
     performance?: Record<string, unknown>[];
     researches?: Record<string, unknown>[];
     expertise?: Record<string, unknown>[];
@@ -28,6 +48,93 @@ const accordionOpen = ref<Record<string, boolean>>({
     expertise: false,
     affiliation: false,
 });
+
+const canEditAwards = computed(() => Boolean(props.awardsUpdateUrl));
+const awardsProcessing = ref(false);
+const awardsErrors = ref<Record<string, string>>({});
+const awardsForm = ref<AwardRow[]>([]);
+
+function emptyAwardRow(): AwardRow {
+    return {
+        award_title: '',
+        category: '',
+        school_year: '',
+        award: '',
+    };
+}
+
+function isAwardRowFilled(row: AwardRow): boolean {
+    return (
+        row.award_title.trim() !== ''
+        || row.category.trim() !== ''
+        || row.school_year.trim() !== ''
+        || row.award.trim() !== ''
+    );
+}
+
+function syncAwardsForm(): void {
+    const rows = (props.awards ?? []).map((item) => ({
+        award_title: valInput(item.award_title),
+        category: valInput(item.category),
+        school_year: valInput(item.school_year),
+        award: valInput(item.award),
+    }));
+
+    if (rows.length === 0 && canEditAwards.value) {
+        awardsForm.value = [emptyAwardRow()];
+        return;
+    }
+
+    awardsForm.value = rows;
+}
+
+watch(
+    () => [props.awards, canEditAwards.value] as const,
+    () => {
+        syncAwardsForm();
+    },
+    { immediate: true },
+);
+
+function addAwardRow(): void {
+    awardsForm.value = [...awardsForm.value, emptyAwardRow()];
+}
+
+function removeAwardRow(index: number): void {
+    if (awardsForm.value.length <= 1) {
+        awardsForm.value = [emptyAwardRow()];
+        return;
+    }
+
+    awardsForm.value = awardsForm.value.filter((_, idx) => idx !== index);
+}
+
+function submitAwards(): void {
+    if (!props.awardsUpdateUrl) {
+        return;
+    }
+
+    awardsProcessing.value = true;
+    awardsErrors.value = {};
+
+    const payload = awardsForm.value
+        .filter((row) => isAwardRowFilled(row))
+        .map((row) => ({ ...row }));
+
+    router.post(
+        props.awardsUpdateUrl,
+        { awards: payload } as { awards: AwardRow[] },
+        {
+            preserveScroll: true,
+            onFinish: () => {
+                awardsProcessing.value = false;
+            },
+            onError: (errs) => {
+                awardsErrors.value = (errs as Record<string, string>) || {};
+            },
+        },
+    );
+}
 
 function toggleAccordion(key: string) {
     accordionOpen.value[key] = !accordionOpen.value[key];
@@ -46,9 +153,6 @@ function toggleAccordion(key: string) {
             >
                 <h3>Service Record</h3>
                 <div class="ehris-accordion-actions">
-                    <button type="button" class="ehris-edit-btn" aria-label="Edit service record" @click.stop>
-                        <Pencil class="size-4" />
-                    </button>
                     <ChevronDown
                         class="ehris-accordion-chevron"
                         :class="{ 'ehris-accordion-chevron-open': accordionOpen.serviceRecord }"
@@ -92,9 +196,6 @@ function toggleAccordion(key: string) {
             >
                 <h3>Leave History</h3>
                 <div class="ehris-accordion-actions">
-                    <button type="button" class="ehris-edit-btn" aria-label="Edit leave history" @click.stop>
-                        <Pencil class="size-4" />
-                    </button>
                     <ChevronDown
                         class="ehris-accordion-chevron"
                         :class="{ 'ehris-accordion-chevron-open': accordionOpen.leaveHistory }"
@@ -140,9 +241,6 @@ function toggleAccordion(key: string) {
             >
                 <h3>Documents</h3>
                 <div class="ehris-accordion-actions">
-                    <button type="button" class="ehris-edit-btn" aria-label="Edit documents" @click.stop>
-                        <Pencil class="size-4" />
-                    </button>
                     <ChevronDown
                         class="ehris-accordion-chevron"
                         :class="{ 'ehris-accordion-chevron-open': accordionOpen.documents }"
@@ -171,9 +269,6 @@ function toggleAccordion(key: string) {
             >
                 <h3>Awards</h3>
                 <div class="ehris-accordion-actions">
-                    <button type="button" class="ehris-edit-btn" aria-label="Edit awards" @click.stop>
-                        <Pencil class="size-4" />
-                    </button>
                     <ChevronDown
                         class="ehris-accordion-chevron"
                         :class="{ 'ehris-accordion-chevron-open': accordionOpen.awards }"
@@ -181,25 +276,56 @@ function toggleAccordion(key: string) {
                 </div>
             </button>
             <div v-show="accordionOpen.awards" class="ehris-accordion-content">
-                <div class="ehris-table-wrap" v-if="awards && awards.length">
-            <table class="ehris-table">
-                <thead>
-                    <tr>
-                        <th>Award title</th>
-                        <th>Category</th>
-                        <th>School year</th>
-                        <th>Award</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr v-for="(item, i) in awards" :key="i">
-                        <td>{{ val(item.award_title) }}</td>
-                        <td>{{ val(item.category) }}</td>
-                        <td>{{ val(item.school_year) }}</td>
-                        <td>{{ val(item.award) }}</td>
-                    </tr>
-                </tbody>
-            </table>
+                <div v-if="canEditAwards" class="mb-3 flex items-center justify-end gap-2">
+                    <Button type="button" size="sm" variant="outline" @click="addAwardRow">
+                        <Plus class="mr-1 size-4" />
+                        Add row
+                    </Button>
+                    <Button type="button" size="sm" :disabled="awardsProcessing" @click="submitAwards">
+                        <Spinner v-if="awardsProcessing" class="mr-2 size-4" />
+                        Save
+                    </Button>
+                </div>
+
+                <p v-if="awardsErrors.message" class="ehris-form-error mb-3">{{ awardsErrors.message }}</p>
+
+                <div class="ehris-table-wrap" v-if="awardsForm.length">
+                    <table class="ehris-table">
+                        <thead>
+                            <tr>
+                                <th>Award title</th>
+                                <th>Category</th>
+                                <th>School year</th>
+                                <th>Award</th>
+                                <th v-if="canEditAwards" class="w-[68px] text-center">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="(item, i) in awardsForm" :key="`award-row-${i}`">
+                                <td>
+                                    <Input v-if="canEditAwards" v-model="item.award_title" />
+                                    <span v-else>{{ val(item.award_title) }}</span>
+                                </td>
+                                <td>
+                                    <Input v-if="canEditAwards" v-model="item.category" />
+                                    <span v-else>{{ val(item.category) }}</span>
+                                </td>
+                                <td>
+                                    <Input v-if="canEditAwards" v-model="item.school_year" />
+                                    <span v-else>{{ val(item.school_year) }}</span>
+                                </td>
+                                <td>
+                                    <Input v-if="canEditAwards" v-model="item.award" />
+                                    <span v-else>{{ val(item.award) }}</span>
+                                </td>
+                                <td v-if="canEditAwards" class="text-center">
+                                    <Button type="button" variant="ghost" size="icon" @click="removeAwardRow(i)">
+                                        <Trash2 class="size-4" />
+                                    </Button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
                 <p v-else class="ehris-muted">No awards on file.</p>
             </div>
@@ -215,9 +341,6 @@ function toggleAccordion(key: string) {
             >
                 <h3>Performance</h3>
                 <div class="ehris-accordion-actions">
-                    <button type="button" class="ehris-edit-btn" aria-label="Edit performance" @click.stop>
-                        <Pencil class="size-4" />
-                    </button>
                     <ChevronDown
                         class="ehris-accordion-chevron"
                         :class="{ 'ehris-accordion-chevron-open': accordionOpen.performance }"
@@ -261,9 +384,6 @@ function toggleAccordion(key: string) {
             >
                 <h3>Researches</h3>
                 <div class="ehris-accordion-actions">
-                    <button type="button" class="ehris-edit-btn" aria-label="Edit researches" @click.stop>
-                        <Pencil class="size-4" />
-                    </button>
                     <ChevronDown
                         class="ehris-accordion-chevron"
                         :class="{ 'ehris-accordion-chevron-open': accordionOpen.researches }"
@@ -303,9 +423,6 @@ function toggleAccordion(key: string) {
             >
                 <h3>Expertise</h3>
                 <div class="ehris-accordion-actions">
-                    <button type="button" class="ehris-edit-btn" aria-label="Edit expertise" @click.stop>
-                        <Pencil class="size-4" />
-                    </button>
                     <ChevronDown
                         class="ehris-accordion-chevron"
                         :class="{ 'ehris-accordion-chevron-open': accordionOpen.expertise }"
@@ -332,9 +449,6 @@ function toggleAccordion(key: string) {
             >
                 <h3>Membership in Association/Organization</h3>
                 <div class="ehris-accordion-actions">
-                    <button type="button" class="ehris-edit-btn" aria-label="Edit affiliation" @click.stop>
-                        <Pencil class="size-4" />
-                    </button>
                     <ChevronDown
                         class="ehris-accordion-chevron"
                         :class="{ 'ehris-accordion-chevron-open': accordionOpen.affiliation }"

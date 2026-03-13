@@ -1,11 +1,42 @@
 <script setup lang="ts">
-import { Pencil } from 'lucide-vue-next';
+import { router } from '@inertiajs/vue3';
+import { Plus, Trash2 } from 'lucide-vue-next';
+import { computed, ref, watch } from 'vue';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Spinner } from '@/components/ui/spinner';
+
+type VoluntaryWorkRow = {
+    name_address_org: string;
+    inclusive_date_from: string;
+    inclusive_date_to: string;
+    number_hours: string;
+    position_nature_of_work: string;
+};
 
 type VoluntaryWorkItem = Record<string, unknown>;
 
+const props = defineProps<{
+    voluntaryWork?: VoluntaryWorkItem[];
+    voluntaryWorkUpdateUrl?: string;
+}>();
+
+const canEdit = computed(() => Boolean(props.voluntaryWorkUpdateUrl));
+const processing = ref(false);
+const errors = ref<Record<string, string>>({});
+const formRows = ref<VoluntaryWorkRow[]>([]);
+
 function val(v: unknown): string {
-    if (v == null || String(v).trim() === '') return '—';
+    if (v == null || String(v).trim() === '') {
+        return '';
+    }
+
     return String(v);
+}
+
+function displayVal(v: unknown): string {
+    const value = val(v);
+    return value === '' ? '—' : value;
 }
 
 function pick(item: VoluntaryWorkItem, keys: string[]): unknown {
@@ -19,41 +50,149 @@ function pick(item: VoluntaryWorkItem, keys: string[]): unknown {
     return null;
 }
 
-function dateRange(item: VoluntaryWorkItem): string {
-    const from = val(pick(item, ['inclusive_date_from', 'date_from', 'start_date']));
-    const to = val(pick(item, ['inclusive_date_to', 'date_to', 'end_date']));
-    return `${from} – ${to}`;
+function emptyRow(): VoluntaryWorkRow {
+    return {
+        name_address_org: '',
+        inclusive_date_from: '',
+        inclusive_date_to: '',
+        number_hours: '',
+        position_nature_of_work: '',
+    };
 }
 
-defineProps<{
-    voluntaryWork?: VoluntaryWorkItem[];
-}>();
+function isRowFilled(row: VoluntaryWorkRow): boolean {
+    return (
+        row.name_address_org.trim() !== ''
+        || row.inclusive_date_from.trim() !== ''
+        || row.inclusive_date_to.trim() !== ''
+        || row.number_hours.trim() !== ''
+        || row.position_nature_of_work.trim() !== ''
+    );
+}
+
+function syncRows(): void {
+    const rows = (props.voluntaryWork ?? []).map((item) => ({
+        name_address_org: val(pick(item, ['name_address_org', 'organization', 'org_name', 'name_of_organization', 'affiliation'])),
+        inclusive_date_from: val(pick(item, ['inclusive_date_from', 'date_from', 'start_date'])),
+        inclusive_date_to: val(pick(item, ['inclusive_date_to', 'date_to', 'end_date'])),
+        number_hours: val(pick(item, ['number_hours', 'hours', 'no_of_hours'])),
+        position_nature_of_work: val(pick(item, ['position_nature_of_work', 'position', 'nature_of_work', 'position_title'])),
+    }));
+
+    if (rows.length === 0 && canEdit.value) {
+        formRows.value = [emptyRow()];
+        return;
+    }
+
+    formRows.value = rows;
+}
+
+watch(
+    () => [props.voluntaryWork, canEdit.value] as const,
+    () => {
+        syncRows();
+    },
+    { immediate: true },
+);
+
+function addRow(): void {
+    formRows.value = [...formRows.value, emptyRow()];
+}
+
+function removeRow(index: number): void {
+    if (formRows.value.length <= 1) {
+        formRows.value = [emptyRow()];
+        return;
+    }
+
+    formRows.value = formRows.value.filter((_, idx) => idx !== index);
+}
+
+function submit(): void {
+    if (!props.voluntaryWorkUpdateUrl) {
+        return;
+    }
+
+    processing.value = true;
+    errors.value = {};
+
+    const payload = formRows.value
+        .filter((row) => isRowFilled(row))
+        .map((row) => ({ ...row }));
+
+    router.post(
+        props.voluntaryWorkUpdateUrl,
+        { voluntaryWork: payload } as { voluntaryWork: VoluntaryWorkRow[] },
+        {
+            preserveScroll: true,
+            onFinish: () => {
+                processing.value = false;
+            },
+            onError: (errs) => {
+                errors.value = (errs as Record<string, string>) || {};
+            },
+        },
+    );
+}
 </script>
 
 <template>
     <section class="ehris-card">
         <div class="ehris-card-header">
             <h3>Voluntary Work / Civic Involvement</h3>
-            <button type="button" class="ehris-edit-btn" aria-label="Edit voluntary work">
-                <Pencil class="size-4" />
-            </button>
+            <div v-if="canEdit" class="flex items-center gap-2">
+                <Button type="button" size="sm" variant="outline" @click="addRow">
+                    <Plus class="mr-1 size-4" />
+                    Add row
+                </Button>
+                <Button type="button" size="sm" :disabled="processing" @click="submit">
+                    <Spinner v-if="processing" class="mr-2 size-4" />
+                    Save
+                </Button>
+            </div>
         </div>
-        <div class="ehris-table-wrap" v-if="voluntaryWork && voluntaryWork.length">
+
+        <p v-if="errors.message" class="ehris-form-error mb-3">{{ errors.message }}</p>
+
+        <div class="ehris-table-wrap" v-if="formRows.length">
             <table class="ehris-table">
                 <thead>
                     <tr>
                         <th>Organization</th>
-                        <th>Inclusive dates</th>
+                        <th>From</th>
+                        <th>To</th>
                         <th>Hours</th>
                         <th>Position / Nature of work</th>
+                        <th v-if="canEdit" class="w-[68px] text-center">Action</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <tr v-for="(item, i) in voluntaryWork" :key="i">
-                        <td>{{ val(pick(item, ['name_address_org', 'organization', 'org_name', 'name_of_organization', 'affiliation'])) }}</td>
-                        <td>{{ dateRange(item) }}</td>
-                        <td>{{ val(pick(item, ['number_hours', 'hours', 'no_of_hours'])) }}</td>
-                        <td>{{ val(pick(item, ['position_nature_of_work', 'position', 'nature_of_work', 'position_title'])) }}</td>
+                    <tr v-for="(item, i) in formRows" :key="`voluntary-work-row-${i}`">
+                        <td>
+                            <Input v-if="canEdit" v-model="item.name_address_org" />
+                            <span v-else>{{ displayVal(item.name_address_org) }}</span>
+                        </td>
+                        <td>
+                            <Input v-if="canEdit" v-model="item.inclusive_date_from" type="date" />
+                            <span v-else>{{ displayVal(item.inclusive_date_from) }}</span>
+                        </td>
+                        <td>
+                            <Input v-if="canEdit" v-model="item.inclusive_date_to" type="date" />
+                            <span v-else>{{ displayVal(item.inclusive_date_to) }}</span>
+                        </td>
+                        <td>
+                            <Input v-if="canEdit" v-model="item.number_hours" />
+                            <span v-else>{{ displayVal(item.number_hours) }}</span>
+                        </td>
+                        <td>
+                            <Input v-if="canEdit" v-model="item.position_nature_of_work" />
+                            <span v-else>{{ displayVal(item.position_nature_of_work) }}</span>
+                        </td>
+                        <td v-if="canEdit" class="text-center">
+                            <Button type="button" variant="ghost" size="icon" @click="removeRow(i)">
+                                <Trash2 class="size-4" />
+                            </Button>
+                        </td>
                     </tr>
                 </tbody>
             </table>

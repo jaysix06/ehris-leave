@@ -134,11 +134,6 @@ const props = defineProps<{
     educationUpdateUrl?: string;
     officialUpdateUrl?: string;
     personalUpdateUrl?: string;
-    eligibilityUpdateUrl?: string;
-    workExperienceUpdateUrl?: string;
-    voluntaryWorkUpdateUrl?: string;
-    trainingUpdateUrl?: string;
-    awardsUpdateUrl?: string;
     canEditOfficialInfo?: boolean;
     workExperience?: Record<string, unknown>[];
     eligibility?: Record<string, unknown>[];
@@ -306,32 +301,19 @@ function sectionProps(index: number): Record<string, unknown> {
         case 3:
             return { education: props.education, educationUpdateUrl: props.educationUpdateUrl };
         case 4:
-            return {
-                eligibility: props.eligibility,
-                eligibilityUpdateUrl: props.eligibilityUpdateUrl,
-            };
+            return { eligibility: props.eligibility };
         case 5:
-            return {
-                workExperience: props.workExperience,
-                workExperienceUpdateUrl: props.workExperienceUpdateUrl,
-            };
+            return { workExperience: props.workExperience };
         case 6:
-            return {
-                voluntaryWork: props.voluntaryWork,
-                voluntaryWorkUpdateUrl: props.voluntaryWorkUpdateUrl,
-            };
+            return { voluntaryWork: props.voluntaryWork };
         case 7:
-            return {
-                training: props.training,
-                trainingUpdateUrl: props.trainingUpdateUrl,
-            };
+            return { training: props.training };
         case 8:
             return {
                 serviceRecord: props.serviceRecord,
                 leaveHistory: props.leaveHistory,
                 documents: props.documents,
                 awards: props.awards,
-                awardsUpdateUrl: props.awardsUpdateUrl,
                 performance: props.performance,
                 researches: props.researches,
                 expertise: props.expertise,
@@ -617,9 +599,8 @@ onBeforeUnmount(() => {
 }
 
 .ehris-tabs {
-    min-height: 3rem;
+    min-height: 3.25rem;
     padding-bottom: 0.5rem;
-    gap: 0.5rem;
     overflow-x: auto;
     overflow-y: hidden;
     -webkit-overflow-scrolling: touch;

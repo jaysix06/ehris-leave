@@ -72,6 +72,8 @@ it('keeps WFH PDF header and footer images from stretching', function () {
         ->and($html)->toContain('page-break-inside: auto;')
         ->and($html)->toContain('tbody { page-break-inside: auto; }')
         ->and($html)->toContain('font-size: 12pt;')
+        ->and($html)->toContain('font-family: "BookmanOldStyle" !important;')
+        ->and($html)->toContain('th.col-date, td.col-date { font-family: "BookmanOldStyle" !important; }')
         ->and($html)->toContain('font-family: "BookmanOldStyle";')
         ->and($html)->toContain('vertical-align: top;')
         ->and($html)->toContain('line-height: 1.25;')
@@ -86,6 +88,33 @@ it('keeps WFH PDF header and footer images from stretching', function () {
         ->and((bool) preg_match('/\.footer-image\s*\{\s*width:\s*100%;/s', $html))->toBeFalse()
         ->and((bool) preg_match('/<hr class="report-title-line">\s*<p class="employee-name">/s', $html))->toBeTrue()
         ->and((bool) preg_match('/<div class="page-content">[\s\S]*<div class="prepared-by">/s', $html))->toBeTrue();
+});
+
+it('splits lengthy rows into continuation rows for stable page breaks', function () {
+    $controller = new WfhTimeInOutController;
+    $method = new ReflectionMethod(WfhTimeInOutController::class, 'buildWfhPdfHtml');
+    $method->setAccessible(true);
+
+    $html = $method->invoke(
+        $controller,
+        null,
+        null,
+        '(March 01, 2026-March 31, 2026)',
+        'Jane Doe',
+        'Sample Station',
+        [
+            [
+                'targeted_task' => str_repeat('Very long targeted task detail ', 80),
+                'accomplishment' => str_repeat('Very long accomplishment detail ', 80),
+                'date_range' => '03/01/2026-03/31/2026',
+                'priority' => 'High',
+            ],
+        ]
+    );
+
+    expect(substr_count($html, '<tr>'))->toBeGreaterThan(2)
+        ->and($html)->toContain('<td class="col-date">03/01/2026-03/31/2026</td>')
+        ->and($html)->toContain('<td class="col-date"></td>');
 });
 
 it('formats employee name with middle initial for PDF', function () {

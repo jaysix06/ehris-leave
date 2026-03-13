@@ -420,6 +420,11 @@ class MyDetailsController extends Controller
                 'familyUpdateUrl' => route('my-details.family.store'),
                 'officialUpdateUrl' => route('my-details.official.store'),
                 'personalUpdateUrl' => route('my-details.personal.store'),
+                'eligibilityUpdateUrl' => route('my-details.eligibility.store'),
+                'workExperienceUpdateUrl' => route('my-details.work-experience.store'),
+                'voluntaryWorkUpdateUrl' => route('my-details.voluntary-work.store'),
+                'trainingUpdateUrl' => route('my-details.training.store'),
+                'awardsUpdateUrl' => route('my-details.awards.store'),
                 'canEditOfficialInfo' => $this->canEditOfficialInfo($authUser, $dbProfile),
                 'officialOptions' => $officialOptions,
             ],
@@ -937,6 +942,289 @@ class MyDetailsController extends Controller
         }
 
         return redirect()->route('my-details')->with('success', 'Family background updated.');
+    }
+
+    public function updateEligibility(Request $request)
+    {
+        $hrid = $this->resolveMyDetailsHrid($request);
+        if ($hrid === null) {
+            return redirect()->route('my-details')
+                ->withErrors(['message' => 'Unable to identify employee.']);
+        }
+
+        $table = 'tbl_emp_civil_service_info';
+        if (! Schema::hasTable($table)) {
+            return redirect()->route('my-details')
+                ->withErrors(['message' => 'Eligibility table not found.']);
+        }
+
+        $data = $request->validate([
+            'eligibility' => ['required', 'array'],
+            'eligibility.*.title' => ['nullable', 'string', 'max:255'],
+            'eligibility.*.rating' => ['nullable', 'string', 'max:64'],
+            'eligibility.*.date_exam' => ['nullable', 'string', 'max:64'],
+            'eligibility.*.place_exam' => ['nullable', 'string', 'max:255'],
+            'eligibility.*.license_no' => ['nullable', 'string', 'max:128'],
+        ]);
+
+        $rows = collect($data['eligibility'] ?? [])
+            ->map(function (array $row) use ($table, $hrid): array {
+                return $this->mapMyDetailsRowToTable($table, $hrid, $row, [
+                    'title' => ['title'],
+                    'rating' => ['rating'],
+                    'date_exam' => ['date_exam'],
+                    'place_exam' => ['place_exam'],
+                    'license_no' => ['license_no'],
+                ]);
+            })
+            ->filter(fn (array $row): bool => $this->myDetailsRowHasValues($row))
+            ->values()
+            ->all();
+
+        $this->replaceMyDetailsRowsForHrid($table, $hrid, $rows);
+
+        return redirect()->route('my-details')->with('success', 'Eligibility updated.');
+    }
+
+    public function updateWorkExperience(Request $request)
+    {
+        $hrid = $this->resolveMyDetailsHrid($request);
+        if ($hrid === null) {
+            return redirect()->route('my-details')
+                ->withErrors(['message' => 'Unable to identify employee.']);
+        }
+
+        $table = 'tbl_emp_work_experience_info';
+        if (! Schema::hasTable($table)) {
+            return redirect()->route('my-details')
+                ->withErrors(['message' => 'Work experience table not found.']);
+        }
+
+        $data = $request->validate([
+            'workExperience' => ['required', 'array'],
+            'workExperience.*.company_name' => ['nullable', 'string', 'max:255'],
+            'workExperience.*.position_title' => ['nullable', 'string', 'max:255'],
+            'workExperience.*.inclusive_date_from' => ['nullable', 'string', 'max:64'],
+            'workExperience.*.inclusive_date_to' => ['nullable', 'string', 'max:64'],
+            'workExperience.*.employment_status' => ['nullable', 'string', 'max:128'],
+        ]);
+
+        $rows = collect($data['workExperience'] ?? [])
+            ->map(function (array $row) use ($table, $hrid): array {
+                return $this->mapMyDetailsRowToTable($table, $hrid, $row, [
+                    'company_name' => ['company_name', 'agency_office_company'],
+                    'position_title' => ['position_title', 'position'],
+                    'inclusive_date_from' => ['inclusive_date_from', 'date_from', 'start_date'],
+                    'inclusive_date_to' => ['inclusive_date_to', 'date_to', 'end_date'],
+                    'employment_status' => ['employment_status', 'status'],
+                ]);
+            })
+            ->filter(fn (array $row): bool => $this->myDetailsRowHasValues($row))
+            ->values()
+            ->all();
+
+        $this->replaceMyDetailsRowsForHrid($table, $hrid, $rows);
+
+        return redirect()->route('my-details')->with('success', 'Work experience updated.');
+    }
+
+    public function updateVoluntaryWork(Request $request)
+    {
+        $hrid = $this->resolveMyDetailsHrid($request);
+        if ($hrid === null) {
+            return redirect()->route('my-details')
+                ->withErrors(['message' => 'Unable to identify employee.']);
+        }
+
+        $table = $this->resolveFirstExistingMyDetailsTable([
+            'tbl_emp_voluntary_work',
+            'tbl_voluntary_work',
+        ]);
+        if ($table === null) {
+            return redirect()->route('my-details')
+                ->withErrors(['message' => 'Voluntary work table not found.']);
+        }
+
+        $data = $request->validate([
+            'voluntaryWork' => ['required', 'array'],
+            'voluntaryWork.*.name_address_org' => ['nullable', 'string', 'max:255'],
+            'voluntaryWork.*.inclusive_date_from' => ['nullable', 'string', 'max:64'],
+            'voluntaryWork.*.inclusive_date_to' => ['nullable', 'string', 'max:64'],
+            'voluntaryWork.*.number_hours' => ['nullable', 'string', 'max:64'],
+            'voluntaryWork.*.position_nature_of_work' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $rows = collect($data['voluntaryWork'] ?? [])
+            ->map(function (array $row) use ($table, $hrid): array {
+                return $this->mapMyDetailsRowToTable($table, $hrid, $row, [
+                    'name_address_org' => ['name_address_org', 'organization', 'org_name', 'name_of_organization', 'affiliation'],
+                    'inclusive_date_from' => ['inclusive_date_from', 'date_from', 'start_date'],
+                    'inclusive_date_to' => ['inclusive_date_to', 'date_to', 'end_date'],
+                    'number_hours' => ['number_hours', 'hours', 'no_of_hours'],
+                    'position_nature_of_work' => ['position_nature_of_work', 'position', 'nature_of_work', 'position_title'],
+                ]);
+            })
+            ->filter(fn (array $row): bool => $this->myDetailsRowHasValues($row))
+            ->values()
+            ->all();
+
+        $this->replaceMyDetailsRowsForHrid($table, $hrid, $rows);
+
+        return redirect()->route('my-details')->with('success', 'Voluntary work updated.');
+    }
+
+    public function updateTraining(Request $request)
+    {
+        $hrid = $this->resolveMyDetailsHrid($request);
+        if ($hrid === null) {
+            return redirect()->route('my-details')
+                ->withErrors(['message' => 'Unable to identify employee.']);
+        }
+
+        $table = 'tbl_emp_training';
+        if (! Schema::hasTable($table)) {
+            return redirect()->route('my-details')
+                ->withErrors(['message' => 'Training table not found.']);
+        }
+
+        $data = $request->validate([
+            'training' => ['required', 'array'],
+            'training.*.training_title' => ['nullable', 'string', 'max:255'],
+            'training.*.training_venue' => ['nullable', 'string', 'max:255'],
+            'training.*.start_date' => ['nullable', 'string', 'max:64'],
+            'training.*.end_date' => ['nullable', 'string', 'max:64'],
+            'training.*.number_hours' => ['nullable', 'string', 'max:64'],
+        ]);
+
+        $rows = collect($data['training'] ?? [])
+            ->map(function (array $row) use ($table, $hrid): array {
+                return $this->mapMyDetailsRowToTable($table, $hrid, $row, [
+                    'training_title' => ['training_title', 'title', 'title_of_training'],
+                    'training_venue' => ['training_venue', 'venue', 'conducted_sponsored_by'],
+                    'start_date' => ['start_date', 'inclusive_date_from', 'date_from'],
+                    'end_date' => ['end_date', 'inclusive_date_to', 'date_to'],
+                    'number_hours' => ['number_hours', 'hours', 'no_of_hours'],
+                ]);
+            })
+            ->filter(fn (array $row): bool => $this->myDetailsRowHasValues($row))
+            ->values()
+            ->all();
+
+        $this->replaceMyDetailsRowsForHrid($table, $hrid, $rows);
+
+        return redirect()->route('my-details')->with('success', 'Training updated.');
+    }
+
+    public function updateAwards(Request $request)
+    {
+        $hrid = $this->resolveMyDetailsHrid($request);
+        if ($hrid === null) {
+            return redirect()->route('my-details')
+                ->withErrors(['message' => 'Unable to identify employee.']);
+        }
+
+        $table = 'tbl_awards';
+        if (! Schema::hasTable($table)) {
+            return redirect()->route('my-details')
+                ->withErrors(['message' => 'Awards table not found.']);
+        }
+
+        $data = $request->validate([
+            'awards' => ['required', 'array'],
+            'awards.*.award_title' => ['nullable', 'string', 'max:255'],
+            'awards.*.category' => ['nullable', 'string', 'max:255'],
+            'awards.*.school_year' => ['nullable', 'string', 'max:64'],
+            'awards.*.award' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $rows = collect($data['awards'] ?? [])
+            ->map(function (array $row) use ($table, $hrid): array {
+                return $this->mapMyDetailsRowToTable($table, $hrid, $row, [
+                    'award_title' => ['award_title', 'title', 'distinction'],
+                    'category' => ['category'],
+                    'school_year' => ['school_year', 'year'],
+                    'award' => ['award'],
+                ]);
+            })
+            ->filter(fn (array $row): bool => $this->myDetailsRowHasValues($row))
+            ->values()
+            ->all();
+
+        $this->replaceMyDetailsRowsForHrid($table, $hrid, $rows);
+
+        return redirect()->route('my-details')->with('success', 'Awards updated.');
+    }
+
+    private function resolveMyDetailsHrid(Request $request): mixed
+    {
+        $authUser = $request->user();
+        if (! $authUser) {
+            return null;
+        }
+
+        $profile = Schema::hasTable('tbl_user')
+            ? User::query()->select('hrId')->where('email', $authUser->email)->first()
+            : null;
+
+        return $profile?->hrId ?? $authUser?->hrId ?? $authUser?->id ?? null;
+    }
+
+    private function resolveFirstExistingMyDetailsTable(array $tables): ?string
+    {
+        foreach ($tables as $table) {
+            if (Schema::hasTable($table)) {
+                return $table;
+            }
+        }
+
+        return null;
+    }
+
+    private function replaceMyDetailsRowsForHrid(string $table, mixed $hrid, array $rows): void
+    {
+        DB::table($table)->where('hrid', $hrid)->delete();
+
+        foreach ($rows as $row) {
+            DB::table($table)->insert($row);
+        }
+    }
+
+    private function mapMyDetailsRowToTable(string $table, mixed $hrid, array $row, array $fieldMap): array
+    {
+        $payload = ['hrid' => $hrid];
+
+        foreach ($fieldMap as $inputKey => $candidateColumns) {
+            $value = $row[$inputKey] ?? null;
+            $resolvedValue = is_string($value) ? trim($value) : $value;
+            if ($resolvedValue === '') {
+                $resolvedValue = null;
+            }
+
+            foreach ($candidateColumns as $column) {
+                if (Schema::hasColumn($table, $column)) {
+                    $payload[$column] = $resolvedValue;
+
+                    break;
+                }
+            }
+        }
+
+        return $payload;
+    }
+
+    private function myDetailsRowHasValues(array $row): bool
+    {
+        foreach ($row as $key => $value) {
+            if ($key === 'hrid') {
+                continue;
+            }
+
+            if ($value !== null && trim((string) $value) !== '') {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function canEditOfficialRole(?User $authUser, ?User $profile): bool
