@@ -55,8 +55,11 @@ it('keeps WFH PDF header and footer images from stretching', function () {
         ->and($html)->toContain('margin: 0.05in auto 0;')
         ->and($html)->toContain('text-align: left;')
         ->and($html)->toContain('.prepared-by {')
+        ->and($html)->toContain('position: fixed;')
+        ->and($html)->toContain('right: 0.25in;')
+        ->and($html)->toContain('bottom: 0.58in;')
         ->and($html)->toContain('width: 2.55in;')
-        ->and($html)->toContain('margin: 0.28in 0.20in 0 auto;')
+        ->and($html)->toContain('margin: 0;')
         ->and($html)->toContain('text-align: left;')
         ->and($html)->toContain('line-height: 1.2;')
         ->and($html)->toContain('break-inside: avoid;')
@@ -85,7 +88,7 @@ it('keeps WFH PDF header and footer images from stretching', function () {
         ->and((bool) preg_match('/\.header-image\s*\{\s*width:\s*100%;/s', $html))->toBeFalse()
         ->and((bool) preg_match('/\.footer-image\s*\{\s*width:\s*100%;/s', $html))->toBeFalse()
         ->and((bool) preg_match('/<hr class="report-title-line">\s*<p class="employee-name">/s', $html))->toBeTrue()
-        ->and((bool) preg_match('/<div class="page-content">[\s\S]*<div class="prepared-by">/s', $html))->toBeTrue();
+        ->and((bool) preg_match('/<div class="prepared-by">[\s\S]*<div class="page-content">/s', $html))->toBeTrue();
 });
 
 it('formats employee name with middle initial for PDF', function () {

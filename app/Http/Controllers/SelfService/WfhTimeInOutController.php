@@ -456,12 +456,15 @@ th.col-station, td.col-station { text-align: left; width: 15%; }
     padding-top: 1.08in;
 }
 .prepared-by {
+    position: fixed;
+    right: 0.25in;
+    bottom: 0.58in;
+    z-index: 2;
     width: 2.55in;
-    margin: 1.9in 0.20in 0 auto;
+    margin: 0;
     text-align: left;
     page-break-inside: avoid;
     break-inside: avoid;
-    page-break-before: avoid;
     font-family: "BookmanOldStyle";
     font-size: 12pt;
     line-height: 1.2;
@@ -493,12 +496,13 @@ th.col-station, td.col-station { text-align: left; width: 15%; }
 <p class="footer-text">© {$yearEscaped} DepEd</p>
 </div>
 
-<div class="page-content">
-{$tablesHtml}
 <div class="prepared-by">
 <p class="prepared-by-label">Prepared by:</p>
 <p class="prepared-by-name">{$employeeNameEscaped}</p>
 </div>
+
+<div class="page-content">
+{$tablesHtml}
 </div>
 </body>
 </html>
