@@ -350,36 +350,27 @@ class TimeLogsController extends Controller
                 $amOut = $data['am_out'] ?? null;
                 $pmIn = $data['pm_in'] ?? null;
 
-                $hasAm = $amOut !== null && $firstIn->lt($noon);
-                $hasPm = $pmIn !== null || $firstIn->gte($noon);
-                $fullDaySingleSegment = $hasAm && ! $hasPm && $lastOut->gt($noon);
+                $workedSeconds = 0;
 
-                if ($fullDaySingleSegment) {
-                    // Single long shift spanning AM and PM (e.g. 8:00–17:00): force split into AM + PM
-                    $amArr = $firstIn->format('g:i');
-                    $amDep = $cap1245->format('g:i');
-
-                    $onePm = $firstIn->copy()->setTime(13, 0, 0);
-                    $pmArr = $onePm->format('g:i'); // always show 1:00 PM as PM start
-                    $pmDep = $lastOut->format('g:i');
-                } else {
-                    if ($hasAm) {
-                        $amArr = $firstIn->format('g:i');
-                        $amDepTime = $amOut->gt($cap1245) ? $cap1245 : $amOut;
-                        $amDep = $amDepTime->format('g:i');
-                    }
-
-                    if ($hasPm) {
-                        $basePmIn = $pmIn ?? $firstIn;
-                        $pmArrTime = $basePmIn->lt($floor1215) ? $floor1215 : $basePmIn;
-                        $pmArr = $pmArrTime->format('g:i');
-                        $pmDep = $lastOut->format('g:i');
-                    }
+                if ($amOut !== null && $firstIn->lt($noon)) {
+                    $amArrTime = $firstIn;
+                    $amDepTime = $amOut->gt($cap1245) ? $cap1245 : $amOut;
+                    $amArr = $amArrTime->format('g:i');
+                    $amDep = $amDepTime->format('g:i');
+                    $workedSeconds += $amArrTime->diffInSeconds($amDepTime);
                 }
+
+                if ($pmIn !== null || $firstIn->gte($noon)) {
+                    $basePmIn = $pmIn ?? $firstIn;
+                    $pmArrTime = $basePmIn->lt($floor1215) ? $floor1215 : $basePmIn;
+                    $pmArr = $pmArrTime->format('g:i');
+                    $pmDep = $lastOut->format('g:i');
+                    $workedSeconds += $pmArrTime->diffInSeconds($lastOut);
+                }
+
                 $requiredSeconds = 8 * 3600;
-                $totalSeconds = (int) ($data['total_seconds'] ?? 0);
-                if ($totalSeconds < $requiredSeconds) {
-                    $undertimeSeconds = $requiredSeconds - $totalSeconds;
+                if ($workedSeconds < $requiredSeconds) {
+                    $undertimeSeconds = $requiredSeconds - $workedSeconds;
                     $utHours = (string) (int) floor($undertimeSeconds / 3600);
                     $utMins = (string) (int) floor(($undertimeSeconds % 3600) / 60);
                 } else {
@@ -432,6 +423,7 @@ class TimeLogsController extends Controller
                 $noon = $firstIn->copy()->setTime(12, 0, 0);
                 $cap1245 = $firstIn->copy()->setTime(12, 45, 0);
                 $floor1215 = $firstIn->copy()->setTime(12, 15, 0);
+
                 $amArr = '';
                 $amDep = '';
                 $pmArr = '';
@@ -442,36 +434,28 @@ class TimeLogsController extends Controller
 
                 $hasAm = $amOut !== null && $firstIn->lt($noon);
                 $hasPm = $pmIn !== null || $firstIn->gte($noon);
-                $fullDaySingleSegment = $hasAm && ! $hasPm && $lastOut->gt($noon);
 
-                if ($fullDaySingleSegment) {
-                    // Single long shift spanning AM and PM (e.g. 8:00–17:00): force split into AM + PM
-                    $amArr = $firstIn->format('g:i');
-                    $amDep = $cap1245->format('g:i'); // always cap at 12:45
+                $workedSeconds = 0;
 
-                    $onePm = $firstIn->copy()->setTime(13, 0, 0);
-                    $pmArr = $onePm->format('g:i'); // always show 1:00 PM as PM start
-                    $pmDep = $lastOut->format('g:i');
-                } else {
-                    // Morning segment: only if there is an AM record
-                    if ($hasAm) {
-                        $amArr = $firstIn->format('g:i');
-                        $amDepTime = $amOut->gt($cap1245) ? $cap1245 : $amOut;
-                        $amDep = $amDepTime->format('g:i');
-                    }
-
-                    // Afternoon segment: if there is an explicit PM record or everything is after noon
-                    if ($hasPm) {
-                        $basePmIn = $pmIn ?? $firstIn;
-                        $pmArrTime = $basePmIn->lt($floor1215) ? $floor1215 : $basePmIn;
-                        $pmArr = $pmArrTime->format('g:i');
-                        $pmDep = $lastOut->format('g:i');
-                    }
+                if ($hasAm) {
+                    $amArrTime = $firstIn;
+                    $amDepTime = $amOut->gt($cap1245) ? $cap1245 : $amOut;
+                    $amArr = $amArrTime->format('g:i');
+                    $amDep = $amDepTime->format('g:i');
+                    $workedSeconds += $amArrTime->diffInSeconds($amDepTime);
                 }
+
+                if ($hasPm) {
+                    $basePmIn = $pmIn ?? $firstIn;
+                    $pmArrTime = $basePmIn->lt($floor1215) ? $floor1215 : $basePmIn;
+                    $pmArr = $pmArrTime->format('g:i');
+                    $pmDep = $lastOut->format('g:i');
+                    $workedSeconds += $pmArrTime->diffInSeconds($lastOut);
+                }
+
                 $requiredSeconds = 8 * 3600;
-                $totalSeconds = (int) ($data['total_seconds'] ?? 0);
-                if ($totalSeconds < $requiredSeconds) {
-                    $undertimeSeconds = $requiredSeconds - $totalSeconds;
+                if ($workedSeconds < $requiredSeconds) {
+                    $undertimeSeconds = $requiredSeconds - $workedSeconds;
                     $utHours = (string) (int) floor($undertimeSeconds / 3600);
                     $utMins = (string) (int) floor(($undertimeSeconds % 3600) / 60);
                 } else {
@@ -503,7 +487,7 @@ class TimeLogsController extends Controller
             .'<div class="f48-info f48-name-block"><span class="f48-name-line">'.$h($employeeName).'</span></div>'
             .'<div class="f48-info f48-label-name f48-label-below">(Name)</div>'
             .'<div class="f48-info">For the month of <span class="f48-info-line f48-info-line-center" style="min-width:90px;">'.$h($monthName).'</span>, <span class="f48-info-line f48-info-line-center" style="min-width:36px;">'.$h($year2).'</span></div>'
-            .'<div class="f48-info f48-hours-row"><span class="f48-hours-left">Official hours of arrival</span> Regular Days <span class="f48-info-line f48-days-line">&nbsp;</span></div>'
+            .'<div class="f48-info f48-hours-row"><span class="f48-hours-left">Official hours of arrival</span> Regular Days <span class="f48-info-line f48-days-line">8:00 AM - 5:00 PM</span></div>'
             .'<div class="f48-info f48-hours-row"><span class="f48-hours-left">and departure</span> Saturdays <span class="f48-info-line f48-days-line">&nbsp;</span></div>'
             .$emptyBlock
             .'<div class="f48-header-sep"></div>'
