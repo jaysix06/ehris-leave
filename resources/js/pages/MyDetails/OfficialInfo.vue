@@ -173,12 +173,11 @@ function submit(): void {
             <button
                 v-if="props.canEditOfficialInfo"
                 type="button"
-                class="ehris-btn-grade-subject"
+                class="ehris-edit-btn"
                 aria-label="Edit official information"
                 @click="openEdit"
             >
                 <Pencil class="size-4" />
-                <span>Edit</span>
             </button>
         </div>
         <div v-if="officialInfo" class="ehris-pds-official-form">
@@ -309,7 +308,7 @@ function submit(): void {
         <p v-else class="ehris-muted">No official information on file.</p>
 
         <Dialog :open="editModalOpen" @update:open="(v) => { editModalOpen = v; }">
-            <DialogContent class="sm:max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+            <DialogContent class="ehris-edit-dialog-content sm:max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
                 <DialogHeader>
                     <DialogTitle>Edit Official Information</DialogTitle>
                 </DialogHeader>
@@ -580,9 +579,26 @@ function submit(): void {
     margin-top: 0.5rem;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 768px) {
+    .ehris-edit-dialog-content {
+        width: calc(100vw - 1rem);
+        max-width: calc(100vw - 1rem);
+        max-height: calc(100dvh - 1rem);
+        padding: 0.875rem;
+    }
+
+    .ehris-modal-scroll {
+        padding-right: 0;
+    }
+
+    .ehris-modal-section {
+        padding: 0.625rem;
+        margin-bottom: 0.625rem;
+    }
+
     .ehris-modal-grid {
         grid-template-columns: 1fr;
+        gap: 0.625rem;
     }
 }
 
@@ -598,12 +614,24 @@ function submit(): void {
     }
 
     .ehris-pds-official-row {
-        grid-template-columns: 1fr;
+        grid-template-columns: minmax(122px, 44%) minmax(0, 1fr);
+        align-items: stretch;
     }
 
     .ehris-pds-official-row dt {
-        border-right: none;
-        border-bottom: 1px solid hsl(var(--border));
+        display: flex;
+        align-items: center;
+        border-right: 1px solid hsl(var(--border));
+        border-bottom: none;
+        padding: 0.5rem 0.625rem;
+        line-height: 1.2;
+    }
+
+    .ehris-pds-official-row dd {
+        padding: 0.5rem 0.625rem;
+        min-height: 2.25rem;
+        align-items: flex-start;
+        line-height: 1.3;
     }
 }
 </style>

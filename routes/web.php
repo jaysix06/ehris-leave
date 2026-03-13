@@ -323,6 +323,21 @@ Route::post('my-details/personal', [MyDetailsController::class, 'updatePersonalI
 Route::post('my-details/family', [MyDetailsController::class, 'updateFamilyBackground'])
     ->middleware(['auth', 'verified'])
     ->name('my-details.family.store');
+Route::post('my-details/eligibility', [MyDetailsController::class, 'updateEligibility'])
+    ->middleware(['auth', 'verified'])
+    ->name('my-details.eligibility.store');
+Route::post('my-details/work-experience', [MyDetailsController::class, 'updateWorkExperience'])
+    ->middleware(['auth', 'verified'])
+    ->name('my-details.work-experience.store');
+Route::post('my-details/voluntary-work', [MyDetailsController::class, 'updateVoluntaryWork'])
+    ->middleware(['auth', 'verified'])
+    ->name('my-details.voluntary-work.store');
+Route::post('my-details/training', [MyDetailsController::class, 'updateTraining'])
+    ->middleware(['auth', 'verified'])
+    ->name('my-details.training.store');
+Route::post('my-details/awards', [MyDetailsController::class, 'updateAwards'])
+    ->middleware(['auth', 'verified'])
+    ->name('my-details.awards.store');
 
 Route::get('utilities', function () {
     return Inertia::render('Utilities');

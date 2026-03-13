@@ -441,24 +441,19 @@ function submit(): void {
             <h3>Family information</h3>
             <button
                 type="button"
-                class="ehris-edit-btn"
+                class="ehris-btn-grade-subject"
                 aria-label="Edit family information"
                 :disabled="!canEdit"
                 @click="openEdit"
             >
                 <Pencil class="size-4" />
+                <span>Edit</span>
             </button>
         </div>
 
         <template v-if="hasFamilyData">
             <div class="ehris-pds-family-sheet">
                 <table class="ehris-pds-family-table">
-                    <colgroup>
-                        <col class="ehris-pds-family-col-1">
-                        <col class="ehris-pds-family-col-2">
-                        <col class="ehris-pds-family-col-3">
-                        <col class="ehris-pds-family-col-4">
-                    </colgroup>
                     <tbody>
                         <tr class="ehris-pds-head-row">
                             <th colspan="2">
@@ -492,11 +487,11 @@ function submit(): void {
                         </tr>
                         <tr class="ehris-pds-head-row">
                             <th colspan="2">
-                                <span class="ehris-pds-no">III.</span>
+                                <span class="ehris-pds-no">24.</span>
                                 <span>FATHER'S SURNAME</span>
                             </th>
                             <th colspan="2">
-                                <span class="ehris-pds-no">IV.</span>
+                                <span class="ehris-pds-no">25.</span>
                                 <span>MOTHER'S MAIDEN NAME</span>
                             </th>
                         </tr>
@@ -525,128 +520,11 @@ function submit(): void {
                     </tbody>
                 </table>
             </div>
-
-            <div class="ehris-pds-family-mobile">
-                <section class="ehris-family-mobile-section">
-                    <h4 class="ehris-family-mobile-title">I. SPOUSE</h4>
-                    <dl class="ehris-family-mobile-list">
-                        <div class="ehris-family-mobile-row">
-                            <dt>SURNAME</dt>
-                            <dd>{{ displayVal(spouseEntry?.lastname) }}</dd>
-                        </div>
-                        <div class="ehris-family-mobile-row">
-                            <dt>FIRST NAME</dt>
-                            <dd>{{ displayVal(spouseEntry?.firstname) }}</dd>
-                        </div>
-                        <div class="ehris-family-mobile-row">
-                            <dt>MIDDLE NAME</dt>
-                            <dd>{{ displayVal(spouseEntry?.middlename) }}</dd>
-                        </div>
-                        <div class="ehris-family-mobile-row">
-                            <dt>NAME EXTENSION</dt>
-                            <dd>{{ displayVal(spouseEntry?.extension) }}</dd>
-                        </div>
-                        <div class="ehris-family-mobile-row">
-                            <dt>DATE OF BIRTH</dt>
-                            <dd>{{ displayDate(spouseEntry?.dob) }}</dd>
-                        </div>
-                        <div class="ehris-family-mobile-row">
-                            <dt>OCCUPATION</dt>
-                            <dd>{{ displayVal(spouseEntry?.occupation) }}</dd>
-                        </div>
-                        <div class="ehris-family-mobile-row">
-                            <dt>EMPLOYER/BUSINESS</dt>
-                            <dd>{{ displayVal(spouseEntry?.employer_name) }}</dd>
-                        </div>
-                        <div class="ehris-family-mobile-row">
-                            <dt>BUSINESS ADDRESS</dt>
-                            <dd>{{ displayVal(spouseEntry?.business_add) }}</dd>
-                        </div>
-                        <div class="ehris-family-mobile-row">
-                            <dt>TELEPHONE NO.</dt>
-                            <dd>{{ displayVal(formatPhilippineLandline(spouseEntry?.tel_num)) }}</dd>
-                        </div>
-                        <div class="ehris-family-mobile-row">
-                            <dt>DECEASED</dt>
-                            <dd>{{ displayVal(spouseEntry?.deceased) }}</dd>
-                        </div>
-                    </dl>
-                </section>
-
-                <section class="ehris-family-mobile-section">
-                    <h4 class="ehris-family-mobile-title">II. CHILDREN</h4>
-                    <div v-if="childrenEntries.length === 0" class="ehris-family-mobile-empty">
-                        No children listed.
-                    </div>
-                    <div v-else class="ehris-family-mobile-children">
-                        <article
-                            v-for="(child, idx) in childrenEntries"
-                            :key="`child-mobile-${idx}`"
-                            class="ehris-family-mobile-child"
-                        >
-                            <p class="ehris-family-mobile-child-name">{{ displayVal(child.fullName) }}</p>
-                            <p class="ehris-family-mobile-child-dob">Date of Birth: {{ displayDate(child.dob) }}</p>
-                        </article>
-                    </div>
-                </section>
-
-                <section class="ehris-family-mobile-section">
-                    <h4 class="ehris-family-mobile-title">III. FATHER</h4>
-                    <dl class="ehris-family-mobile-list">
-                        <div class="ehris-family-mobile-row">
-                            <dt>SURNAME</dt>
-                            <dd>{{ displayVal(fatherEntry?.lastname) }}</dd>
-                        </div>
-                        <div class="ehris-family-mobile-row">
-                            <dt>FIRST NAME</dt>
-                            <dd>{{ displayVal(fatherEntry?.firstname) }}</dd>
-                        </div>
-                        <div class="ehris-family-mobile-row">
-                            <dt>MIDDLE NAME</dt>
-                            <dd>{{ displayVal(fatherEntry?.middlename) }}</dd>
-                        </div>
-                        <div class="ehris-family-mobile-row">
-                            <dt>NAME EXTENSION</dt>
-                            <dd>{{ displayVal(fatherEntry?.extension) }}</dd>
-                        </div>
-                        <div class="ehris-family-mobile-row">
-                            <dt>DECEASED</dt>
-                            <dd>{{ displayVal(fatherEntry?.deceased) }}</dd>
-                        </div>
-                    </dl>
-                </section>
-
-                <section class="ehris-family-mobile-section">
-                    <h4 class="ehris-family-mobile-title">IV. MOTHER (MAIDEN NAME)</h4>
-                    <dl class="ehris-family-mobile-list">
-                        <div class="ehris-family-mobile-row">
-                            <dt>SURNAME</dt>
-                            <dd>{{ displayVal(motherEntry?.lastname) }}</dd>
-                        </div>
-                        <div class="ehris-family-mobile-row">
-                            <dt>FIRST NAME</dt>
-                            <dd>{{ displayVal(motherEntry?.firstname) }}</dd>
-                        </div>
-                        <div class="ehris-family-mobile-row">
-                            <dt>MIDDLE NAME</dt>
-                            <dd>{{ displayVal(motherEntry?.middlename) }}</dd>
-                        </div>
-                        <div class="ehris-family-mobile-row">
-                            <dt>NAME EXTENSION</dt>
-                            <dd>{{ displayVal(motherEntry?.extension) }}</dd>
-                        </div>
-                        <div class="ehris-family-mobile-row">
-                            <dt>DECEASED</dt>
-                            <dd>{{ displayVal(motherEntry?.deceased) }}</dd>
-                        </div>
-                    </dl>
-                </section>
-            </div>
         </template>
         <p v-else class="ehris-muted">No family information on file.</p>
 
         <Dialog :open="editModalOpen" @update:open="(v) => { editModalOpen = v; }">
-            <DialogContent class="ehris-edit-dialog-content sm:max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+            <DialogContent class="sm:max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
                 <DialogHeader>
                     <DialogTitle>Edit Family Background</DialogTitle>
                 </DialogHeader>
@@ -656,7 +534,7 @@ function submit(): void {
                         <p v-for="(msg, key) in errors" :key="key">{{ msg }}</p>
                     </div>
 
-                    <div class="ehris-family-modal-scroll flex-1 min-h-0 overflow-y-auto pr-2 space-y-4">
+                    <div class="flex-1 min-h-0 overflow-y-auto pr-2 space-y-4">
                         <div class="ehris-family-section">
                             <div class="ehris-family-section-title">Spouse</div>
                             <div class="grid gap-3 md:grid-cols-2">
@@ -863,38 +741,15 @@ function submit(): void {
 </template>
 
 <style scoped>
-.ehris-family-modal-scroll {
-    padding-right: 0.5rem;
-}
-
 .ehris-pds-family-sheet {
     overflow-x: auto;
-    overflow-y: hidden;
-    -webkit-overflow-scrolling: touch;
 }
 
 .ehris-pds-family-table {
     width: 100%;
-    min-width: 760px;
     border-collapse: collapse;
     table-layout: fixed;
     font-size: 0.875rem;
-}
-
-.ehris-pds-family-col-1 {
-    width: 22%;
-}
-
-.ehris-pds-family-col-2 {
-    width: 28%;
-}
-
-.ehris-pds-family-col-3 {
-    width: 28%;
-}
-
-.ehris-pds-family-col-4 {
-    width: 22%;
 }
 
 .ehris-pds-family-table th,
@@ -999,144 +854,5 @@ function submit(): void {
     position: absolute;
     top: 0.6rem;
     right: 0.6rem;
-}
-
-.ehris-pds-family-mobile {
-    display: none;
-}
-
-.ehris-family-mobile-section {
-    border: 1px solid hsl(var(--border));
-    border-radius: 0.5rem;
-    overflow: hidden;
-    background: hsl(var(--background));
-}
-
-.ehris-family-mobile-title {
-    margin: 0;
-    padding: 0.55rem 0.7rem;
-    background: hsl(var(--muted));
-    color: hsl(var(--muted-foreground));
-    font-size: 0.78rem;
-    font-weight: 700;
-    letter-spacing: 0.02em;
-    text-transform: uppercase;
-}
-
-.ehris-family-mobile-list {
-    margin: 0;
-}
-
-.ehris-family-mobile-row {
-    display: grid;
-    grid-template-columns: minmax(122px, 44%) minmax(0, 1fr);
-    border-top: 1px solid hsl(var(--border));
-}
-
-.ehris-family-mobile-row:first-child {
-    border-top: none;
-}
-
-.ehris-family-mobile-row dt {
-    margin: 0;
-    padding: 0.5rem 0.625rem;
-    border-right: 1px solid hsl(var(--border));
-    background: hsl(var(--muted));
-    color: hsl(var(--muted-foreground));
-    font-size: 0.72rem;
-    font-weight: 600;
-    line-height: 1.2;
-    text-transform: uppercase;
-}
-
-.ehris-family-mobile-row dd {
-    margin: 0;
-    padding: 0.5rem 0.625rem;
-    min-width: 0;
-    font-size: 0.84rem;
-    line-height: 1.3;
-    color: hsl(var(--foreground));
-    overflow-wrap: anywhere;
-    word-break: break-word;
-}
-
-.ehris-family-mobile-empty {
-    padding: 0.65rem 0.7rem;
-    font-size: 0.84rem;
-    color: hsl(var(--muted-foreground));
-}
-
-.ehris-family-mobile-children {
-    display: grid;
-    gap: 0.5rem;
-    padding: 0.65rem 0.7rem;
-}
-
-.ehris-family-mobile-child {
-    border: 1px solid hsl(var(--border));
-    border-radius: 0.4rem;
-    padding: 0.5rem 0.625rem;
-    background: hsl(var(--card));
-}
-
-.ehris-family-mobile-child-name {
-    margin: 0;
-    font-size: 0.84rem;
-    font-weight: 600;
-    color: hsl(var(--foreground));
-}
-
-.ehris-family-mobile-child-dob {
-    margin: 0.2rem 0 0;
-    font-size: 0.78rem;
-    color: hsl(var(--muted-foreground));
-}
-
-@media (max-width: 768px) {
-    .ehris-edit-dialog-content {
-        width: calc(100vw - 1rem);
-        max-width: calc(100vw - 1rem);
-        max-height: calc(100dvh - 1rem);
-        padding: 0.875rem;
-    }
-
-    .ehris-family-modal-scroll {
-        padding-right: 0;
-    }
-
-    .ehris-family-section {
-        padding: 0.625rem;
-    }
-
-    .ehris-child-row {
-        padding: 0.625rem;
-        padding-right: 0.625rem;
-    }
-
-    .ehris-child-remove {
-        position: static;
-        margin-top: 0.5rem;
-    }
-}
-
-@media (max-width: 640px) {
-    .ehris-pds-family-sheet {
-        display: none;
-    }
-
-    .ehris-pds-family-mobile {
-        display: grid;
-        gap: 0.75rem;
-    }
-
-    .ehris-pds-family-table {
-        min-width: 720px;
-        font-size: 0.8125rem;
-    }
-
-    .ehris-pds-family-table th,
-    .ehris-pds-family-table td {
-        padding: 0.45rem 0.55rem;
-    }
 }
 </style>

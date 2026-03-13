@@ -437,12 +437,11 @@ function submit(): void {
             <h3>Personal information</h3>
             <button
                 type="button"
-                class="ehris-btn-grade-subject"
+                class="ehris-edit-btn"
                 aria-label="Edit personal information"
                 @click="openEdit"
             >
                 <Pencil class="size-4" />
-                <span>Edit</span>
             </button>
         </div>
 
@@ -535,7 +534,7 @@ function submit(): void {
         <p v-else class="ehris-muted">No personal information on file.</p>
 
         <Dialog :open="editModalOpen" @update:open="(v) => { editModalOpen = v; }">
-            <DialogContent class="sm:max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
+            <DialogContent class="ehris-edit-dialog-content sm:max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
                 <DialogHeader>
                     <DialogTitle>Edit Personal Information</DialogTitle>
                 </DialogHeader>
@@ -864,9 +863,26 @@ function submit(): void {
     margin-top: 0.5rem;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 768px) {
+    .ehris-edit-dialog-content {
+        width: calc(100vw - 1rem);
+        max-width: calc(100vw - 1rem);
+        max-height: calc(100dvh - 1rem);
+        padding: 0.875rem;
+    }
+
+    .ehris-modal-scroll {
+        padding-right: 0;
+    }
+
+    .ehris-modal-section {
+        padding: 0.625rem;
+        margin-bottom: 0.625rem;
+    }
+
     .ehris-modal-grid {
         grid-template-columns: 1fr;
+        gap: 0.625rem;
     }
 }
 
@@ -898,13 +914,29 @@ function submit(): void {
         grid-template-columns: 1fr;
     }
 
-    .ehris-pds-personal-row {
-        grid-template-columns: 1fr;
+    .ehris-pds-personal-row,
+    .ehris-pds-personal-content-horizontal .ehris-pds-personal-row {
+        grid-template-columns: minmax(122px, 44%) minmax(0, 1fr);
+        align-items: stretch;
     }
 
     .ehris-pds-personal-row dt {
-        border-right: none;
-        border-bottom: 1px solid hsl(var(--border));
+        display: flex;
+        align-items: center;
+        border-right: 1px solid hsl(var(--border));
+        border-bottom: none;
+        padding: 0.5rem 0.625rem;
+        line-height: 1.2;
+    }
+
+    .ehris-pds-personal-row dd {
+        padding: 0.5rem 0.625rem;
+        min-height: 2.25rem;
+        align-items: flex-start;
+        line-height: 1.3;
+        min-width: 0;
+        overflow-wrap: anywhere;
+        word-break: break-word;
     }
 }
 </style>
