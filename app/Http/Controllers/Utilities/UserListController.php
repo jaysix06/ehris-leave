@@ -9,6 +9,7 @@ use App\Mail\PasswordResetMail;
 use App\Models\JobTitle;
 use App\Models\User;
 use App\Services\ActivityLogService;
+use App\Services\OnlineUserService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -57,7 +58,7 @@ class UserListController extends Controller
     /**
      * API endpoint: paginated users with optional search.
      */
-    public function api(Request $request)
+    public function api(Request $request, OnlineUserService $onlineUserService)
     {
         $query = DB::table('tbl_user as u')
             ->leftJoin('tbl_department as d', 'u.department_id', '=', 'd.department_id')
@@ -99,6 +100,17 @@ class UserListController extends Controller
         $perPage = $perPage > 0 ? $perPage : 10;
 
         $users = $query->paginate($perPage)->withQueryString();
+        $onlineUsers = $onlineUserService->lookupForUserIds(
+            collect($users->items())->pluck('id')->all(),
+        );
+
+        $users->setCollection(
+            $users->getCollection()->map(function ($user) use ($onlineUsers) {
+                $user->online = isset($onlineUsers[(int) $user->id]);
+
+                return $user;
+            }),
+        );
 
         return response()->json($users);
     }

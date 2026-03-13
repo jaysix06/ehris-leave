@@ -3,6 +3,7 @@
 use App\Models\Message;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Facades\DB;
 
 uses(DatabaseTransactions::class);
 
@@ -116,11 +117,39 @@ it('can list conversations with last message and unread count', function () {
 
     $response->assertSuccessful();
 
-    $conversations = $response->json();
+    $conversations = $response->json('data');
     expect($conversations)->toHaveCount(1);
     expect($conversations[0]['contact_id'])->toBe($this->receiver->getKey());
     expect($conversations[0]['last_message']['body'])->toBe('Hi back!');
     expect($conversations[0]['unread_count'])->toBe(1);
+});
+
+it('returns contact online status from active sessions in conversations', function () {
+    config()->set('session.driver', 'database');
+
+    Message::create([
+        'sender_id' => $this->receiver->getKey(),
+        'receiver_id' => $this->sender->getKey(),
+        'body' => 'Checking presence',
+    ]);
+
+    DB::table('sessions')->insert([
+        'id' => 'message-online-session',
+        'user_id' => $this->receiver->getKey(),
+        'ip_address' => '127.0.0.1',
+        'user_agent' => 'Pest',
+        'payload' => 'test-payload',
+        'last_activity' => now()->timestamp,
+    ]);
+
+    $response = $this->actingAs($this->sender)
+        ->getJson('/api/messages/conversations')
+        ->assertSuccessful();
+
+    $conversation = collect($response->json('data'))->firstWhere('contact_id', $this->receiver->getKey());
+
+    expect($conversation)->not->toBeNull();
+    expect($conversation['contact']['online'])->toBeTrue();
 });
 
 it('can mark messages as read', function () {

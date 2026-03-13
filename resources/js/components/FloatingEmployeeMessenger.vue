@@ -15,6 +15,7 @@ type ApiUser = {
     role?: string | null;
     office?: string | null;
     avatar?: string | null;
+    online?: boolean | number | null;
     active?: boolean | number | null;
 };
 
@@ -203,7 +204,7 @@ const toContact = (user: ApiUser): Contact => ({
     name: getName(user),
     role: (user.role ?? user.office ?? 'Employee').toString(),
     avatar: user.avatar ?? null,
-    online: Boolean(user.active),
+    online: Boolean(user.online),
 });
 
 const upsertContacts = (users: ApiUser[]) => {

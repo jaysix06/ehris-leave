@@ -5,9 +5,10 @@ namespace App\Http\Controllers;
 use App\Events\MessageSent;
 use App\Models\Message;
 use App\Models\User;
-use Illuminate\Support\Carbon;
+use App\Services\OnlineUserService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
@@ -16,7 +17,7 @@ class MessageController extends Controller
     /**
      * List conversations for the authenticated user with the latest message and unread count.
      */
-    public function conversations(Request $request): JsonResponse
+    public function conversations(Request $request, OnlineUserService $onlineUserService): JsonResponse
     {
         $userId = Auth::id();
         $perPage = max(5, min((int) $request->query('per_page', 25), 100));
@@ -56,6 +57,7 @@ class MessageController extends Controller
             ->map(fn ($id) => (int) $id)
             ->unique()
             ->values();
+        $onlineContacts = $onlineUserService->lookupForUserIds($contactIds->all());
 
         $contacts = User::query()
             ->whereIn('userId', $contactIds)
@@ -72,7 +74,7 @@ class MessageController extends Controller
             ])
             ->keyBy('userId');
 
-        $result = collect($conversationPage->items())->map(function ($row) use ($contacts, $userId) {
+        $result = collect($conversationPage->items())->map(function ($row) use ($contacts, $onlineContacts, $userId) {
             $contact = $contacts->get((int) $row->contact_id);
 
             $lastMessageCreatedAt = null;
@@ -91,6 +93,7 @@ class MessageController extends Controller
                     'extname' => $contact->extname,
                     'role' => $contact->role,
                     'avatar' => $contact->avatar,
+                    'online' => isset($onlineContacts[(int) $contact->userId]),
                     'active' => (bool) $contact->active,
                 ] : null,
                 'last_message' => [

@@ -87,6 +87,54 @@ it('returns datatables JSON containing created users', function () {
     expect($hasUser)->toBeTrue();
 });
 
+it('returns online status based on unexpired authenticated sessions', function () {
+    config()->set('session.driver', 'database');
+
+    $admin = createAdminUser();
+    $onlineUser = User::factory()->create([
+        'firstname' => 'Online',
+        'lastname' => 'Employee',
+    ]);
+    $offlineUser = User::factory()->create([
+        'firstname' => 'Offline',
+        'lastname' => 'Employee',
+    ]);
+
+    DB::table('sessions')->insert([
+        'id' => 'online-user-session',
+        'user_id' => $onlineUser->getKey(),
+        'ip_address' => '127.0.0.1',
+        'user_agent' => 'Pest',
+        'payload' => 'test-payload',
+        'last_activity' => now()->timestamp,
+    ]);
+
+    DB::table('sessions')->insert([
+        'id' => 'expired-user-session',
+        'user_id' => $offlineUser->getKey(),
+        'ip_address' => '127.0.0.1',
+        'user_agent' => 'Pest',
+        'payload' => 'test-payload',
+        'last_activity' => now()->subMinutes(config('session.lifetime') + 1)->timestamp,
+    ]);
+
+    $response = $this->actingAs($admin)
+        ->getJson('/utilities/users?per_page=100')
+        ->assertOk();
+
+    $rows = collect($response->json('data'));
+
+    expect($rows->firstWhere('id', $onlineUser->getKey()))->toMatchArray([
+        'id' => $onlineUser->getKey(),
+        'online' => true,
+    ]);
+
+    expect($rows->firstWhere('id', $offlineUser->getKey()))->toMatchArray([
+        'id' => $offlineUser->getKey(),
+        'online' => false,
+    ]);
+});
+
 it('returns summary stats for authenticated users', function () {
     $admin = createAdminUser();
     $today = now()->toDateString();
