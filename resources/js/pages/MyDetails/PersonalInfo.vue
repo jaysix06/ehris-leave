@@ -546,14 +546,14 @@ function submit(): void {
                         <div class="ehris-pds-personal-row"><dt>RESIDENTIAL - STREET</dt><dd>{{ val(contactInfo?.street_add) }}</dd></div>
                         <div class="ehris-pds-personal-row"><dt>RESIDENTIAL - SUBDIVISION/VILLAGE</dt><dd>{{ val(contactInfo?.subdivision_village) }}</dd></div>
                         <div class="ehris-pds-personal-row"><dt>RESIDENTIAL - BARANGAY</dt><dd>{{ val(contactInfo?.residential_barangay_name ?? contactInfo?.barangay) }}</dd></div>
-                        <div class="ehris-pds-personal-row"><dt>RESIDENTIAL - CITY/MUNICIPALITY</dt><dd>{{ val(contactInfo?.city_municipality) }}</dd></div>
+                        <div class="ehris-pds-personal-row"><dt>RESIDENTIAL - CITY/MUNICIPALITY</dt><dd>{{ val(contactInfo?.residential_city_name ?? contactInfo?.city_municipality) }}</dd></div>
                         <div class="ehris-pds-personal-row"><dt>RESIDENTIAL - PROVINCE</dt><dd>{{ val(contactInfo?.residential_province_name ?? contactInfo?.province) }}</dd></div>
                         <div class="ehris-pds-personal-row"><dt>RESIDENTIAL - ZIP CODE</dt><dd>{{ val(contactInfo?.zip_code) }}</dd></div>
                         <div class="ehris-pds-personal-row"><dt>PERMANENT - HOUSE/BLOCK/LOT</dt><dd>{{ val(contactInfo?.house_block_lotnum1) }}</dd></div>
                         <div class="ehris-pds-personal-row"><dt>PERMANENT - STREET</dt><dd>{{ val(contactInfo?.street_add1) }}</dd></div>
                         <div class="ehris-pds-personal-row"><dt>PERMANENT - SUBDIVISION/VILLAGE</dt><dd>{{ val(contactInfo?.subdivision_village1) }}</dd></div>
                         <div class="ehris-pds-personal-row"><dt>PERMANENT - BARANGAY</dt><dd>{{ val(contactInfo?.permanent_barangay_name ?? contactInfo?.barangay1) }}</dd></div>
-                        <div class="ehris-pds-personal-row"><dt>PERMANENT - CITY/MUNICIPALITY</dt><dd>{{ val(contactInfo?.city_municipality1) }}</dd></div>
+                        <div class="ehris-pds-personal-row"><dt>PERMANENT - CITY/MUNICIPALITY</dt><dd>{{ val(contactInfo?.permanent_city_name ?? contactInfo?.city_municipality1) }}</dd></div>
                         <div class="ehris-pds-personal-row"><dt>PERMANENT - PROVINCE</dt><dd>{{ val(contactInfo?.permanent_province_name ?? contactInfo?.province1) }}</dd></div>
                         <div class="ehris-pds-personal-row"><dt>PERMANENT - ZIP CODE</dt><dd>{{ val(contactInfo?.zip_code1) }}</dd></div>
                         <div class="ehris-pds-personal-row"><dt>TELEPHONE NO.</dt><dd>{{ val(formatPhilippineLandline(contactInfo?.phone_num)) }}</dd></div>

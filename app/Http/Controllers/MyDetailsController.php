@@ -96,9 +96,11 @@ class MyDetailsController extends Controller
                     'type' => 'single',
                     'query' => fn () => DB::table('tbl_emp_contact_info as c')
                         ->leftJoin('tbl_barangay as rb', 'rb.barangay_id', '=', 'c.barangay')
-                        ->leftJoin('tbl_province as rp', 'rp.province_id', '=', 'c.province')
+                        ->leftJoin('tbl_province as rp', 'rp.province_code', '=', 'c.province')
                         ->leftJoin('tbl_barangay as pb', 'pb.barangay_id', '=', 'c.barangay1')
-                        ->leftJoin('tbl_province as pp', 'pp.province_id', '=', 'c.province1')
+                        ->leftJoin('tbl_province as pp', 'pp.province_code', '=', 'c.province1')
+                        ->leftJoin('tbl_municipality as rm', 'rm.municipal_code', '=', 'c.city_municipality')
+                        ->leftJoin('tbl_municipality as pm', 'pm.municipal_code', '=', 'c.city_municipality1')
                         ->where('c.hrid', $hrid)
                         ->select([
                             'c.*',
@@ -106,6 +108,8 @@ class MyDetailsController extends Controller
                             'rp.province_name  as residential_province_name',
                             'pb.barangay_name as permanent_barangay_name',
                             'pp.province_name  as permanent_province_name',
+                            'rm.municipal_name as residential_city_name',
+                            'pm.municipal_name as permanent_city_name',
                         ])
                         ->first(),
                 ],
