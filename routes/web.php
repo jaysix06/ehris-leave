@@ -194,6 +194,8 @@ Route::delete('api/self-service/calendar/events/{event}', [CalendarController::c
     ->middleware(['auth'])->name('api.self-service.calendar.events.destroy');
 Route::get('self-service/time-logs', [TimeLogsController::class, 'index'])
     ->middleware(['auth', 'verified'])->name('self-service.time-logs');
+Route::get('self-service/time-logs/export/form-48', [TimeLogsController::class, 'exportForm48'])
+    ->middleware(['auth', 'verified'])->name('self-service.time-logs.export.form-48');
 Route::get('self-service/id-card', [IdCardController::class, 'show'])
     ->middleware(['auth', 'verified'])
     ->name('self-service.id-card');
