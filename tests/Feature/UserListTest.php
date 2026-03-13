@@ -5,6 +5,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Schema;
 use Inertia\Testing\AssertableInertia;
 
 uses(DatabaseTransactions::class);
@@ -25,11 +26,33 @@ it('requires authentication to access the user list', function () {
 it('renders the user list page for authenticated users', function () {
     $admin = createAdminUser();
 
+    if (! Schema::hasTable('tbl_job_title')) {
+        Schema::create('tbl_job_title', function ($table): void {
+            $table->id();
+            $table->string('job_title')->nullable();
+            $table->string('job_shorten')->nullable();
+        });
+    }
+
+    $jobTitle = 'Codex Test Title';
+    $existingJobTitle = DB::table('tbl_job_title')
+        ->where('job_title', $jobTitle)
+        ->exists();
+
+    if (! $existingJobTitle) {
+        DB::table('tbl_job_title')->insert([
+            'job_title' => $jobTitle,
+            'job_shorten' => 'CTT',
+        ]);
+    }
+
     $this->actingAs($admin)
         ->get('/utilities/user-list')
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('Utilities/UserList')
+            ->has('jobTitles')
+            ->where('jobTitles', fn ($jobTitles) => collect($jobTitles)->contains($jobTitle))
         );
 });
 
@@ -108,5 +131,28 @@ it('dispatches user-list realtime event when creating a user', function () {
 
     Event::assertDispatched(UserListUpdated::class, function (UserListUpdated $event) {
         return $event->action === 'created' && is_int($event->userId);
+    });
+});
+
+it('updates the personal email when editing a user', function () {
+    Event::fake([UserListUpdated::class]);
+
+    $admin = createAdminUser();
+    $user = User::factory()->create([
+        'personal_email' => 'before@example.com',
+        'role' => 'Employee',
+    ]);
+
+    $this->actingAs($admin)
+        ->patchJson("/utilities/users/{$user->getKey()}", [
+            'personal_email' => 'after@example.com',
+        ])
+        ->assertOk()
+        ->assertJsonPath('personal_email', 'after@example.com');
+
+    expect($user->fresh()->personal_email)->toBe('after@example.com');
+
+    Event::assertDispatched(UserListUpdated::class, function (UserListUpdated $event) use ($user) {
+        return $event->action === 'updated' && $event->userId === (int) $user->getKey();
     });
 });

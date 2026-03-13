@@ -54,6 +54,7 @@ function normalizeDateToIso(v: unknown): string {
 }
 
 const props = defineProps<{
+    profile?: Record<string, unknown> | null;
     officialInfo?: Record<string, unknown> | null;
     officialUpdateUrl?: string;
     canEditOfficialRole?: boolean;
@@ -126,7 +127,7 @@ function openEdit(): void {
         middlename: valInput(o.middlename),
         lastname: valInput(o.lastname),
         extension: valInput(o.extension),
-        email: valInput(o.email),
+        email: valInput(props.profile?.email ?? o.email),
         item_no: valInput(o.item_no),
         plantilla: valInput(o.plantilla),
         job_title: valInput(o.job_title),
@@ -219,10 +220,10 @@ function submit(): void {
                         <dt>DEPED EMAIL</dt>
                         <dd>
                             <a
-                                v-if="officialInfo.email && String(officialInfo.email).trim() !== ''"
-                                :href="`mailto:${officialInfo.email}`"
+                                v-if="(props.profile?.email ?? officialInfo.email) && String(props.profile?.email ?? officialInfo.email).trim() !== ''"
+                                :href="`mailto:${props.profile?.email ?? officialInfo.email}`"
                                 class="ehris-email-link"
-                            >{{ val(officialInfo.email) }}</a>
+                            >{{ val(props.profile?.email ?? officialInfo.email) }}</a>
                             <span v-else>N/A</span>
                         </dd>
                     </div>

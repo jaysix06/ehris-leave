@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ActivityLog;
 use App\Models\Attendance;
 use App\Models\Employee;
 use App\Models\PopupMessage;
@@ -14,12 +15,15 @@ use Inertia\Response;
 
 class DashboardController extends Controller
 {
+    private const LEAVE_TABLE = 'tbl_leave_applications';
+
     public function __invoke(Request $request): Response
     {
         $activePopups = [];
         $showPopups = false;
         $dashboardAttendance = $this->defaultAttendance();
         $dashboardAttendanceTrends = $this->defaultAttendanceTrends();
+        $overviewStats = $this->buildOverviewStats();
 
         if ($request->session()->get('show_popups_after_login', false)) {
             $activePopups = PopupMessage::query()
@@ -45,6 +49,7 @@ class DashboardController extends Controller
             'showPopups' => $showPopups,
             'dashboardAttendance' => $dashboardAttendance,
             'dashboardAttendanceTrends' => $dashboardAttendanceTrends,
+            'overviewStats' => $overviewStats,
         ]);
     }
 
@@ -70,6 +75,42 @@ class DashboardController extends Controller
             'recentTimeline' => [0, 0, 0, 0, 0, 0, 0],
             'monthlyLateCount' => 0,
             'monthlyUndertimeCount' => 0,
+        ];
+    }
+
+    /**
+     * @return array{activeEmployees: int, pendingRequests: int, currentlyClockedIn: int, todayActivityLogs: int}
+     */
+    private function buildOverviewStats(): array
+    {
+        $activeEmployees = Schema::hasTable('tbl_user')
+            ? User::query()->where('active', true)->count()
+            : 0;
+
+        $pendingRequests = Schema::hasTable(self::LEAVE_TABLE)
+            ? \Illuminate\Support\Facades\DB::table(self::LEAVE_TABLE)
+                ->whereIn('workflow_status', ['pending_rm', 'pending_hr', 'pending_sds'])
+                ->count()
+            : 0;
+
+        $currentlyClockedIn = Schema::hasTable('tbl_attendance')
+            ? Attendance::query()
+                ->whereNull('time_out')
+                ->distinct('hrid')
+                ->count('hrid')
+            : 0;
+
+        $todayActivityLogs = Schema::hasTable('activity_log')
+            ? ActivityLog::query()
+                ->whereDate('created_at', now()->toDateString())
+                ->count()
+            : 0;
+
+        return [
+            'activeEmployees' => $activeEmployees,
+            'pendingRequests' => $pendingRequests,
+            'currentlyClockedIn' => $currentlyClockedIn,
+            'todayActivityLogs' => $todayActivityLogs,
         ];
     }
 

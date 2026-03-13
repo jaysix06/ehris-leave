@@ -34,6 +34,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 const page = usePage();
 const roles = computed(() => (page.props.roles ?? []) as string[]);
+const jobTitleOptions = computed(() => (page.props.jobTitles ?? []) as string[]);
 
 type UserRow = {
     id: number;
@@ -65,19 +66,6 @@ type UserSummaryStats = {
 
 const dataTableWrapperRef = ref<HTMLElement | null>(null);
 const refreshTrigger = ref(0);
-
-const JOB_TITLE_OPTIONS = [
-    'Teacher I',
-    'Teacher II',
-    'Teacher III',
-    'Master Teacher I',
-    'Master Teacher II',
-    'Principal I',
-    'Principal II',
-    'Head Teacher I',
-    'Head Teacher II',
-    'Administrative Officer',
-] as const;
 
 const state = reactive<{
     error: string | null;
@@ -267,6 +255,7 @@ const editState = reactive<{
     form: {
         hrId: string;
         email: string;
+        personal_email: string;
         lastname: string;
         firstname: string;
         middlename: string;
@@ -283,6 +272,7 @@ const editState = reactive<{
     form: {
         hrId: '',
         email: '',
+        personal_email: '',
         lastname: '',
         firstname: '',
         middlename: '',
@@ -409,6 +399,7 @@ const openEditModal = (row: UserRow) => {
     editState.originalRow = row;
     editState.form.hrId = row.hrid === null ? '' : String(row.hrid);
     editState.form.email = normalizeNullableText(row.email);
+    editState.form.personal_email = normalizeNullableText(row.personal_email);
     editState.form.lastname = normalizeNullableText(row.lastname);
     editState.form.firstname = normalizeNullableText(row.firstname);
     editState.form.middlename = normalizeNullableText(row.middlename);
@@ -459,6 +450,7 @@ const saveUserEdits = async () => {
             `${window.location.origin}/utilities/users/${editState.userId}`;
         const payload = {
             email: toNullIfBlank(editState.form.email),
+            personal_email: toNullIfBlank(editState.form.personal_email),
             lastname: toNullIfBlank(editState.form.lastname),
             firstname: toNullIfBlank(editState.form.firstname),
             middlename: toNullIfBlank(editState.form.middlename),
@@ -962,6 +954,15 @@ onBeforeUnmount(() => {
                     </select>
                 </div>
                 <div class="space-y-1 sm:col-span-2">
+                    <label class="text-sm text-muted-foreground">Personal email</label>
+                    <input
+                        v-model="editState.form.personal_email"
+                        type="email"
+                        class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        placeholder="name@example.com"
+                    />
+                </div>
+                <div class="space-y-1 sm:col-span-2">
                     <label class="text-sm text-muted-foreground">Full name</label>
                     <input
                         :value="
@@ -1013,16 +1014,14 @@ onBeforeUnmount(() => {
                         <option
                             v-if="
                                 editState.form.job_title &&
-                                !JOB_TITLE_OPTIONS.includes(
-                                    editState.form.job_title as (typeof JOB_TITLE_OPTIONS)[number],
-                                )
+                                !jobTitleOptions.includes(editState.form.job_title)
                             "
                             :value="editState.form.job_title"
                         >
                             {{ editState.form.job_title }}
                         </option>
                         <option
-                            v-for="title in JOB_TITLE_OPTIONS"
+                            v-for="title in jobTitleOptions"
                             :key="title"
                             :value="title"
                         >
@@ -1129,16 +1128,13 @@ onBeforeUnmount(() => {
                         class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                     >
                         <option value="">—</option>
-                        <option value="Teacher I">Teacher I</option>
-                        <option value="Teacher II">Teacher II</option>
-                        <option value="Teacher III">Teacher III</option>
-                        <option value="Master Teacher I">Master Teacher I</option>
-                        <option value="Master Teacher II">Master Teacher II</option>
-                        <option value="Principal I">Principal I</option>
-                        <option value="Principal II">Principal II</option>
-                        <option value="Head Teacher I">Head Teacher I</option>
-                        <option value="Head Teacher II">Head Teacher II</option>
-                        <option value="Administrative Officer">Administrative Officer</option>
+                        <option
+                            v-for="title in jobTitleOptions"
+                            :key="title"
+                            :value="title"
+                        >
+                            {{ title }}
+                        </option>
                     </select>
                 </div>
 
@@ -1190,4 +1186,3 @@ onBeforeUnmount(() => {
     opacity: 0;
 }
 </style>
-

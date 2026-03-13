@@ -59,6 +59,7 @@ class MyDetailsController extends Controller
                 ->select([
                     'hrId',
                     'email',
+                    'personal_email',
                     'lastname',
                     'firstname',
                     'middlename',
@@ -681,6 +682,14 @@ class MyDetailsController extends Controller
             );
         }
 
+        if (Schema::hasTable('tbl_user') && array_key_exists('email', $data)) {
+            $officialEmail = $data['email'] === '' ? null : $data['email'];
+
+            User::query()
+                ->whereKey($profile?->getKey() ?? $authUser?->getAuthIdentifier())
+                ->update(['email' => $officialEmail]);
+        }
+
         return redirect()->route('my-details')->with('success', 'Official information updated.');
     }
 
@@ -853,6 +862,14 @@ class MyDetailsController extends Controller
                     array_merge($base, $contactPayload),
                 );
             }
+        }
+
+        if (Schema::hasTable('tbl_user') && array_key_exists('email', $data)) {
+            $personalEmail = $data['email'] === '' ? null : $data['email'];
+
+            User::query()
+                ->whereKey($profile?->getKey() ?? $authUser?->getAuthIdentifier())
+                ->update(['personal_email' => $personalEmail]);
         }
 
         return redirect()->route('my-details')->with('success', 'Personal information updated.');

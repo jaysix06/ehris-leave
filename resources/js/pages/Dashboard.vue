@@ -64,6 +64,12 @@ type DashboardAttendanceTrends = {
     monthlyLateCount: number;
     monthlyUndertimeCount: number;
 };
+type OverviewStats = {
+    activeEmployees: number;
+    pendingRequests: number;
+    currentlyClockedIn: number;
+    todayActivityLogs: number;
+};
 const dashboardAttendance = computed<DashboardAttendance>(() => {
     const source = (page.props.dashboardAttendance as Partial<DashboardAttendance> | undefined) ?? {};
     return {
@@ -81,6 +87,16 @@ const dashboardAttendanceTrends = computed<DashboardAttendanceTrends>(() => {
             : [0, 0, 0, 0, 0, 0, 0],
         monthlyLateCount: Number.isFinite(Number(source.monthlyLateCount)) ? Number(source.monthlyLateCount) : 0,
         monthlyUndertimeCount: Number.isFinite(Number(source.monthlyUndertimeCount)) ? Number(source.monthlyUndertimeCount) : 0,
+    };
+});
+const overviewStats = computed<OverviewStats>(() => {
+    const source = (page.props.overviewStats as Partial<OverviewStats> | undefined) ?? {};
+
+    return {
+        activeEmployees: Number.isFinite(Number(source.activeEmployees)) ? Number(source.activeEmployees) : 0,
+        pendingRequests: Number.isFinite(Number(source.pendingRequests)) ? Number(source.pendingRequests) : 0,
+        currentlyClockedIn: Number.isFinite(Number(source.currentlyClockedIn)) ? Number(source.currentlyClockedIn) : 0,
+        todayActivityLogs: Number.isFinite(Number(source.todayActivityLogs)) ? Number(source.todayActivityLogs) : 0,
     };
 });
 const clockStatusLabel = computed(() => (dashboardAttendance.value.isClockedIn ? 'Clocked In' : 'Clocked Out'));
@@ -155,12 +171,12 @@ onBeforeUnmount(() => {
 // ---------------------------------------------------------------------------
 interface StatItem { title: string; value: string; icon: Component; color: string }
 
-const stats: StatItem[] = [
-    { title: 'Active Employees', value: '214', icon: Users, color: 'text-blue-600 bg-blue-500/10 dark:text-blue-400 dark:bg-blue-400/10' },
-    { title: 'Pending Requests', value: '18', icon: ClipboardCheck, color: 'text-amber-600 bg-amber-500/10 dark:text-amber-400 dark:bg-amber-400/10' },
-    { title: 'Upcoming Leaves', value: '7', icon: CalendarRange, color: 'text-emerald-600 bg-emerald-500/10 dark:text-emerald-400 dark:bg-emerald-400/10' },
-    { title: 'Today Activity Logs', value: '63', icon: Activity, color: 'text-violet-600 bg-violet-500/10 dark:text-violet-400 dark:bg-violet-400/10' },
-];
+const stats = computed<StatItem[]>(() => [
+    { title: 'Active Employees', value: overviewStats.value.activeEmployees.toLocaleString(), icon: Users, color: 'text-blue-600 bg-blue-500/10 dark:text-blue-400 dark:bg-blue-400/10' },
+    { title: 'Pending Requests', value: overviewStats.value.pendingRequests.toLocaleString(), icon: ClipboardCheck, color: 'text-amber-600 bg-amber-500/10 dark:text-amber-400 dark:bg-amber-400/10' },
+    { title: 'Currently Clocked In', value: overviewStats.value.currentlyClockedIn.toLocaleString(), icon: CalendarRange, color: 'text-emerald-600 bg-emerald-500/10 dark:text-emerald-400 dark:bg-emerald-400/10' },
+    { title: 'Today Activity Logs', value: overviewStats.value.todayActivityLogs.toLocaleString(), icon: Activity, color: 'text-violet-600 bg-violet-500/10 dark:text-violet-400 dark:bg-violet-400/10' },
+]);
 
 // ---------------------------------------------------------------------------
 // Charts — Monthly Leave Trend (Bar)

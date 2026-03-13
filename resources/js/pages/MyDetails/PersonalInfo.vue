@@ -404,7 +404,7 @@ function openEdit(): void {
         zip_code1: valInput(c.zip_code1),
         phone_num: digitsOnly(c.phone_num).slice(0, 10),
         mobile_num: digitsOnly(c.mobile_num).slice(0, 11),
-        email: valInput(c.email),
+        email: valInput(props.profile?.personal_email ?? c.email),
     };
     errors.value = {};
     editModalOpen.value = true;
@@ -521,10 +521,10 @@ function submit(): void {
                             <dt>E-MAIL ADDRESS</dt>
                             <dd>
                                 <a
-                                    v-if="contactInfo?.email && String(contactInfo.email).trim() !== ''"
-                                    :href="`mailto:${contactInfo.email}`"
+                                    v-if="(props.profile?.personal_email ?? contactInfo?.email) && String(props.profile?.personal_email ?? contactInfo?.email).trim() !== ''"
+                                    :href="`mailto:${props.profile?.personal_email ?? contactInfo?.email}`"
                                     class="ehris-email-link"
-                                >{{ val(contactInfo.email) }}</a>
+                                >{{ val(props.profile?.personal_email ?? contactInfo?.email) }}</a>
                                 <span v-else>N/A</span>
                             </dd>
                         </div>

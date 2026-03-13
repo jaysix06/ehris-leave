@@ -102,6 +102,7 @@ function setActiveTab(index: number): void {
 type Profile = {
     hrId?: number | null;
     email?: string | null;
+    personal_email?: string | null;
     lastname?: string | null;
     firstname?: string | null;
     middlename?: string | null;
@@ -227,6 +228,11 @@ const currentHrid = computed<number | null>(() => {
 });
 
 const employeeEmail = computed(() => {
+    const personalEmail = props.profile?.personal_email != null ? String(props.profile.personal_email).trim() : '';
+    if (personalEmail !== '') {
+        return personalEmail;
+    }
+
     const c = props.contactInfo;
     const email = c?.email != null ? String(c.email).trim() : '';
     return email !== '' ? email : 'N/A';
@@ -271,6 +277,7 @@ function sectionProps(index: number): Record<string, unknown> {
     switch (index) {
         case 0:
             return {
+                profile: props.profile,
                 officialInfo: props.officialInfo,
                 officialUpdateUrl: props.officialUpdateUrl,
                 canEditOfficialRole: canEditOfficialRole.value,

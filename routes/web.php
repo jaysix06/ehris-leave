@@ -449,9 +449,6 @@ Route::put('utilities/job-title-monthly-salary/monthly-salaries/{id}', [JobTitle
 Route::delete('utilities/job-title-monthly-salary/monthly-salaries/{id}', [JobTitleMonthlySalaryController::class, 'destroyMonthlySalary'])
     ->middleware(['auth', 'verified'])
     ->name('api.utilities.monthly-salaries.destroy');
-Route::get('utilities/user-list', function () {
-    return Inertia::render('Utilities/UserList');
-})->middleware(['auth', 'verified'])->name('utilities.user-list');
 Route::get('utilities/business-department-list', [BusinessDepartmentController::class, 'index'])
     ->middleware(['auth', 'verified'])->name('utilities.business-department-list');
 Route::post('utilities/business-department-list/business-units', [BusinessDepartmentController::class, 'storeBusinessUnit'])

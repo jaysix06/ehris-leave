@@ -6,6 +6,7 @@ use App\Events\UserListUpdated;
 use App\Http\Controllers\Controller;
 use App\Mail\AccountActivatedMail;
 use App\Mail\PasswordResetMail;
+use App\Models\JobTitle;
 use App\Models\User;
 use App\Services\ActivityLogService;
 use Illuminate\Http\Request;
@@ -13,6 +14,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -27,7 +29,29 @@ class UserListController extends Controller
     {
         return Inertia::render('Utilities/UserList', [
             'roles' => \App\Models\Role::roleNames(),
+            'jobTitles' => $this->jobTitleOptions(),
         ]);
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function jobTitleOptions(): array
+    {
+        if (! Schema::hasTable('tbl_job_title') || ! Schema::hasColumn('tbl_job_title', 'job_title')) {
+            return [];
+        }
+
+        return JobTitle::query()
+            ->whereNotNull('job_title')
+            ->where('job_title', '!=', '')
+            ->orderBy('job_title')
+            ->pluck('job_title')
+            ->map(fn (string $jobTitle): string => trim($jobTitle))
+            ->filter(fn (string $jobTitle): bool => $jobTitle !== '')
+            ->unique()
+            ->values()
+            ->all();
     }
 
     /**
@@ -390,6 +414,7 @@ class UserListController extends Controller
                 'u.userId as id',
                 'u.hrid as hrid',
                 'u.email',
+                'u.personal_email',
                 'u.lastname',
                 'u.firstname',
                 'u.middlename',
@@ -492,6 +517,7 @@ class UserListController extends Controller
 
         $data = $request->validate([
             'hrId' => ['nullable', 'integer'],
+            'personal_email' => ['nullable', 'email', 'max:255', Rule::unique('tbl_user', 'personal_email')->ignore($user->getKey(), 'userId')],
             'lastname' => ['nullable', 'string', 'max:255'],
             'firstname' => ['nullable', 'string', 'max:255'],
             'middlename' => ['nullable', 'string', 'max:255'],
@@ -533,6 +559,7 @@ class UserListController extends Controller
             'id' => $user->getKey(),
             'hrid' => $user->hrId,
             'email' => $user->email,
+            'personal_email' => $user->personal_email,
             'lastname' => $user->lastname,
             'firstname' => $user->firstname,
             'middlename' => $user->middlename,
