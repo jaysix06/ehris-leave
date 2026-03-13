@@ -229,8 +229,8 @@ class IdCardController extends Controller
             'emergency_name' => ['nullable', 'string', 'max:255'],
             'emergency_contact' => ['nullable', 'string', 'max:64'],
             'emergency_email' => ['nullable', 'string', 'max:255'],
-            'id_photo' => ['nullable', 'file', 'image', 'max:5120'],
-            'signature' => ['nullable', 'file', 'image', 'max:5120'],
+            'id_photo' => ['nullable', 'file', 'image', 'max:10240'],
+            'signature' => ['nullable', 'file', 'image', 'max:10240'],
         ]);
 
         // If the user entered an HRID, persist it to tbl_user.hrId and migrate existing rows if needed.

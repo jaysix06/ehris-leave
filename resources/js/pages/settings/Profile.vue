@@ -183,7 +183,7 @@ const displayHrId = computed(() => user?.hrId != null ? String(user.hrId) : '—
                             </Button>
                         </div>
                         <p class="text-xs text-muted-foreground text-center">
-                            JPG, PNG, GIF or WebP. Max 2MB. Stored in tbl_user.avatar.
+                            JPG, PNG, GIF or WebP. Max 10MB.
                         </p>
                         <InputError :message="errors.avatar" />
                         <input type="hidden" name="name" :value="user.name" />
