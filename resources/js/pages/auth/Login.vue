@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Form, Head } from '@inertiajs/vue3';
+import { Form, Head, Link } from '@inertiajs/vue3';
 import { onBeforeUnmount, onMounted } from 'vue';
 import InputError from '@/components/InputError.vue';
 import TextLink from '@/components/TextLink.vue';
@@ -8,10 +8,10 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
-import { register } from '@/routes';
+import { useSessionTrap } from '@/composables/useSessionTrap';
+import { home, register } from '@/routes';
 import { store } from '@/routes/login';
 import { request } from '@/routes/password';
-import { useSessionTrap } from '@/composables/useSessionTrap';
 
 defineProps<{
     status?: string;
@@ -49,11 +49,13 @@ onBeforeUnmount(() => {
             class="w-full max-w-md rounded-2xl border bg-card p-6 shadow-sm sm:p-8"
         >
             <div class="mb-6 overflow-hidden rounded-xl">
-                <img
-                    src="/ehris.png"
-                    alt="DepEd Ozamiz Unit School Division"
-                    class="h-36 w-full object-cover object-center"
-                />
+                <Link :href="home()" class="block" aria-label="Go to home page">
+                    <img
+                        src="/ehris.png"
+                        alt="DepEd Ozamiz Unit School Division"
+                        class="h-36 w-full object-cover object-center"
+                    />
+                </Link>
             </div>
 
             <div class="mb-6 text-center">

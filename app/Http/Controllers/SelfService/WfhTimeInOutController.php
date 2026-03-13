@@ -463,11 +463,10 @@ th.col-station, td.col-station { text-align: left; width: 15%; }
 }
 .prepared-by {
     width: 2.55in;
-    margin: 1.9in 0.20in 0 auto;
+    margin: 0.28in 0.20in 0 auto;
     text-align: left;
     page-break-inside: avoid;
     break-inside: avoid;
-    page-break-before: avoid;
     font-family: "BookmanOldStyle";
     font-size: 12pt;
     line-height: 1.2;
@@ -544,11 +543,16 @@ HTML;
             return '';
         }
 
-        $fontUri = $this->toFileUri($fontPath);
+        $fontBinary = @file_get_contents($fontPath);
+        if ($fontBinary === false) {
+            return '';
+        }
+
+        $fontDataUri = 'data:font/ttf;base64,'.base64_encode($fontBinary);
 
         return '@font-face {'
             .' font-family: "BookmanOldStyle";'
-            .' src: url("'.$fontUri.'") format("truetype");'
+            .' src: url("'.$fontDataUri.'") format("truetype");'
             .' font-weight: normal;'
             .' font-style: normal;'
             .'}';
@@ -575,8 +579,6 @@ HTML;
             public_path('fonts/bookman old style.ttf'),
             public_path('fonts/Bookman Old Style.ttf'),
             public_path('fonts/BOOKMAN OLD STYLE.TTF'),
-            public_path('fonts/arial.ttf'),
-            public_path('fonts/ARIAL.TTF'),
         ];
 
         foreach ($fallbackCandidates as $fallbackPath) {
