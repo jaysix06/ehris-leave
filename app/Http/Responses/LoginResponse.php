@@ -17,6 +17,13 @@ class LoginResponse implements LoginResponseContract
 
         // Inactive accounts are not allowed to proceed; they must wait for admin activation.
         if ($user && ! $user->active) {
+            ActivityLogService::logAuthenticationFailure(
+                (string) ($user->email ?? ''),
+                'inactive_account_blocked',
+                $request,
+                $user->getKey(),
+            );
+
             Auth::logout();
             $request->session()->invalidate();
             $request->session()->regenerateToken();

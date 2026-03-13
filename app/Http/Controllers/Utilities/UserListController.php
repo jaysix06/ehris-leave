@@ -334,6 +334,11 @@ class UserListController extends Controller
             ->orderByDesc('u.userId')
             ->get();
 
+        ActivityLogService::logExportAction('Exported user list', [
+            'rows' => $rows->count(),
+            'format' => 'csv',
+        ]);
+
         $filename = 'users-'.now()->format('Y-m-d-His').'.csv';
 
         $headers = [
@@ -443,6 +448,7 @@ class UserListController extends Controller
         ]);
 
         $wasActive = (bool) $user->active;
+        $priorAccount = $user->email ?: $user->personal_email;
         $user->active = $data['active'];
 
         // When activating a user that has no HRID yet, default HRID to userId
@@ -494,10 +500,15 @@ class UserListController extends Controller
             $user->save();
         }
 
-        // Log the status update
-        ActivityLogService::logUpdate(
-            'User',
-            "Updated user: {$user->email}"
+        ActivityLogService::logSensitiveUserAccountChange(
+            $user->active ? 'User account activated' : 'User account deactivated',
+            $user,
+            [
+                'previous_status' => $wasActive ? 'active' : 'inactive',
+                'new_status' => $user->active ? 'active' : 'inactive',
+                'previous_account' => $priorAccount,
+                'current_account' => $user->email ?: $user->personal_email,
+            ],
         );
         UserListUpdated::dispatch($user->active ? 'activated' : 'deactivated', (int) $user->getKey());
 
@@ -534,6 +545,13 @@ class UserListController extends Controller
             $data['hrId'] = $request->input('hrid');
         }
 
+        $original = $user->only([
+            'email',
+            'personal_email',
+            'role',
+            'hrId',
+        ]);
+
         $user->fill($data);
 
         // Backward-compatible behavior: only auto-build an account email for active users
@@ -548,6 +566,30 @@ class UserListController extends Controller
 
         $user->save();
         UserListUpdated::dispatch('updated', (int) $user->getKey());
+
+        foreach ([
+            'email' => 'user_account',
+            'personal_email' => 'personal_email',
+            'role' => 'role',
+            'hrId' => 'hrid',
+        ] as $attribute => $label) {
+            $before = $original[$attribute] ?? null;
+            $after = $user->getAttribute($attribute);
+
+            if ((string) ($before ?? '') === (string) ($after ?? '')) {
+                continue;
+            }
+
+            ActivityLogService::logSensitiveUserAccountChange(
+                'Sensitive user account field updated',
+                $user,
+                [
+                    'field' => $label,
+                    'before' => $before ?? 'blank',
+                    'after' => $after ?? 'blank',
+                ],
+            );
+        }
 
         $office = null;
         if ($user->department_id) {
@@ -589,6 +631,10 @@ class UserListController extends Controller
         }
 
         $id = $user->getKey();
+        $account = $user->email ?: $user->personal_email;
+        ActivityLogService::logSensitiveUserAccountChange('User account deleted', $user, [
+            'deleted_account' => $account,
+        ]);
         $user->delete();
         UserListUpdated::dispatch('deleted', (int) $id);
 
@@ -627,9 +673,10 @@ class UserListController extends Controller
             }
         }
 
-        ActivityLogService::logUpdate(
-            'User',
-            "Password reset for user: {$user->email}"
+        ActivityLogService::logSensitiveUserAccountChange(
+            'Admin password reset issued',
+            $user,
+            ['target_email' => $user->email, 'recovery_email' => $user->personal_email],
         );
 
         return response()->json([

@@ -7,6 +7,7 @@ use App\Actions\Fortify\ResetUserPassword;
 use App\Models\BusinessUnit;
 use App\Models\Department;
 use App\Models\User;
+use App\Services\ActivityLogService;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -72,6 +73,12 @@ class FortifyServiceProvider extends ServiceProvider
                     'email' => $email,
                 ]);
 
+                ActivityLogService::logAuthenticationFailure(
+                    $email,
+                    'missing_credentials',
+                    $request,
+                );
+
                 return null;
             }
 
@@ -91,6 +98,13 @@ class FortifyServiceProvider extends ServiceProvider
                     'db_personal_email' => $user?->personal_email,
                 ]);
 
+                ActivityLogService::logAuthenticationFailure(
+                    $email,
+                    $user ? 'account_without_password' : 'user_not_found',
+                    $request,
+                    $user?->getKey(),
+                );
+
                 return null;
             }
 
@@ -102,6 +116,15 @@ class FortifyServiceProvider extends ServiceProvider
                 'ok' => $ok,
                 'hash_prefix' => substr($user->password, 0, 7),
             ]);
+
+            if (! $ok) {
+                ActivityLogService::logAuthenticationFailure(
+                    $email,
+                    'invalid_password',
+                    $request,
+                    $user->getKey(),
+                );
+            }
 
             return $ok ? $user : null;
         });

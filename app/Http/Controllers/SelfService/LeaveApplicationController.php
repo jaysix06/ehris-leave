@@ -9,8 +9,8 @@ use App\Models\EmpOfficialInfo;
 use App\Models\LeaveType;
 use App\Models\Office;
 use App\Models\User;
-use App\Services\LeaveWorkflowNotificationService;
 use App\Services\ActivityLogService;
+use App\Services\LeaveWorkflowNotificationService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -35,8 +35,7 @@ class LeaveApplicationController extends Controller
 
     public function __construct(
         private readonly LeaveWorkflowNotificationService $leaveWorkflowNotificationService,
-    ) {
-    }
+    ) {}
 
     public function show(Request $request)
     {
@@ -920,6 +919,7 @@ class LeaveApplicationController extends Controller
 
         $authRole = strtolower((string) ($request->user()?->role ?? ''));
         $authHrid = (int) ($request->user()?->hrId ?? 0);
+        $authUser = $request->user();
         $decision = $payload['decision'];
         $remarks = $payload['remarks'] ?? null;
         $now = now();
@@ -977,9 +977,8 @@ class LeaveApplicationController extends Controller
         $actorRole = str_contains($authRole, 'reporting manager')
             ? 'rm'
             : (str_contains($authRole, 'hr') ? 'hr' : (str_contains($authRole, 'sds') ? 'sds' : null));
-        // Add activity log for leave request decision
         $leaveType = $leave->leave_type ?? 'Unknown';
-        $decisionText = $decision === 'approve' ? 'Approved' : 'Disapproved';
+        $decisionText = $decision === 'approve' ? 'approved' : 'disapproved';
         $roleText = '';
 
         if (str_contains($authRole, 'reporting manager')) {
@@ -990,15 +989,26 @@ class LeaveApplicationController extends Controller
             $roleText = 'SDS';
         }
 
-        $activityDetails = "{$decisionText} Leave Request #{$id} ({$leaveType}) as {$roleText}";
-        if ($remarks) {
-            $activityDetails .= ' - '.substr($remarks, 0, 100);
-        }
-
-        ActivityLogService::logUpdate(
-            'Leave Request',
-            $activityDetails,
-            $authUser->userId ?? null,
+        ActivityLogService::logSecurityEvent(
+            'Leave request decision recorded',
+            'Leave Request Management',
+            $authUser?->getKey(),
+            array_filter([
+                'leave_id' => $id,
+                'leave_type' => $leaveType,
+                'decision' => $decisionText,
+                'actor_role' => $roleText !== '' ? $roleText : null,
+                'target_hrid' => $employeeHrid,
+                'workflow_status' => (string) ($updates['workflow_status'] ?? $leave->workflow_status ?? ''),
+                'remarks' => $remarks !== null ? mb_substr((string) $remarks, 0, 100) : null,
+            ], static fn (mixed $value): bool => $value !== null),
+            [
+                'severity' => $decision === 'approve' ? 'info' : 'warning',
+                'event_type' => 'leave_workflow_decision',
+                'target_user_id' => $employeeHrid !== null
+                    ? User::query()->where('hrId', $employeeHrid)->value('userId')
+                    : null,
+            ],
         );
 
         $this->leaveWorkflowNotificationService->notifyDecision(

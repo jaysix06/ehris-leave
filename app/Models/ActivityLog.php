@@ -14,9 +14,18 @@ class ActivityLog extends Model
     public $timestamps = false;
 
     protected $fillable = [
+        'log_id',
         'fk_user_id',
         'activity',
         'module',
+        'severity',
+        'event_type',
+        'target_user_id',
+        'ip_address',
+        'http_method',
+        'route_name',
+        'user_agent',
+        'context',
         'created_at',
     ];
 
@@ -25,6 +34,8 @@ class ActivityLog extends Model
         return [
             'log_id' => 'integer',
             'fk_user_id' => 'integer',
+            'target_user_id' => 'integer',
+            'context' => 'array',
             'created_at' => 'datetime',
         ];
     }
@@ -32,5 +43,10 @@ class ActivityLog extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class, 'fk_user_id', 'userId');
+    }
+
+    public function targetUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'target_user_id', 'userId');
     }
 }

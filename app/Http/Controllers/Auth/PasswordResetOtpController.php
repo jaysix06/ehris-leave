@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
-use App\Notifications\PasswordResetOtpNotification;
 use App\Services\ActivityLogService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -34,6 +33,14 @@ class PasswordResetOtpController extends Controller
         if (RateLimiter::tooManyAttempts($throttleKey, 3)) {
             $seconds = RateLimiter::availableIn($throttleKey);
 
+            ActivityLogService::logCredentialRecoveryEvent(
+                'OTP request throttled',
+                $email,
+                $request,
+                null,
+                ['reason' => 'too_many_requests', 'retry_after_seconds' => $seconds],
+            );
+
             return back()->withErrors([
                 'email' => "Please wait {$seconds} seconds before requesting another OTP.",
             ]);
@@ -49,6 +56,14 @@ class PasswordResetOtpController extends Controller
 
         // Inactive (not yet activated) accounts cannot use forgot password.
         if ($user && ! $user->active) {
+            ActivityLogService::logCredentialRecoveryEvent(
+                'OTP request denied',
+                $email,
+                $request,
+                $user->getKey(),
+                ['reason' => 'inactive_account'],
+            );
+
             return back()->withErrors([
                 'email' => 'Your account has not been activated by the system administrator. Please contact your administrator or wait for activation before using Forgot password.',
             ]);
@@ -104,12 +119,28 @@ class PasswordResetOtpController extends Controller
             $request->session()->put('otp_email', $email);
             $request->session()->forget('password_reset_verified_email');
 
+            ActivityLogService::logCredentialRecoveryEvent(
+                'OTP issued',
+                $email,
+                $request,
+                $user->getKey(),
+                ['recipient' => $recipient],
+            );
+
             return redirect()
                 ->route('password.otp.verify.form')
                 ->with('status', 'otp-sent');
         }
 
         // Email not found in database (no user with this email or personal_email).
+        ActivityLogService::logCredentialRecoveryEvent(
+            'OTP request denied',
+            $email,
+            $request,
+            null,
+            ['reason' => 'no_account_found'],
+        );
+
         return back()->withErrors([
             'email' => 'No account found with this email address. Please use the email registered in the system (DepEd email or personal email on file).',
         ]);
@@ -160,16 +191,40 @@ class PasswordResetOtpController extends Controller
             ->first();
 
         if (! $otpRecord || ! $user || $otpRecord->used_at !== null || now()->greaterThan($otpRecord->expires_at)) {
+            ActivityLogService::logCredentialRecoveryEvent(
+                'OTP verification failed',
+                $email,
+                $request,
+                $user?->getKey(),
+                ['reason' => 'invalid_or_expired'],
+            );
+
             return back()
                 ->withErrors(['otp' => 'The OTP is invalid or expired.']);
         }
 
         if (! $user->active) {
+            ActivityLogService::logCredentialRecoveryEvent(
+                'OTP verification denied',
+                $email,
+                $request,
+                $user->getKey(),
+                ['reason' => 'inactive_account'],
+            );
+
             return back()
                 ->withErrors(['otp' => 'Your account has not been activated by the system administrator. Please contact your administrator before resetting your password.']);
         }
 
         if ($otpRecord->attempts >= 5) {
+            ActivityLogService::logCredentialRecoveryEvent(
+                'OTP verification denied',
+                $email,
+                $request,
+                $user->getKey(),
+                ['reason' => 'attempt_limit_reached'],
+            );
+
             return back()
                 ->withErrors(['otp' => 'Too many invalid OTP attempts. Please request a new OTP.']);
         }
@@ -189,6 +244,14 @@ class PasswordResetOtpController extends Controller
                 ->where('email', $email)
                 ->increment('attempts');
 
+            ActivityLogService::logCredentialRecoveryEvent(
+                'OTP verification failed',
+                $email,
+                $request,
+                $user->getKey(),
+                ['reason' => 'invalid_code'],
+            );
+
             return back()
                 ->withErrors(['otp' => 'The OTP is invalid or expired.']);
         }
@@ -201,6 +264,13 @@ class PasswordResetOtpController extends Controller
             ]);
 
         $request->session()->put('password_reset_verified_email', $email);
+
+        ActivityLogService::logCredentialRecoveryEvent(
+            'OTP verified',
+            $email,
+            $request,
+            $user->getKey(),
+        );
 
         return redirect()->route('password.otp.reset.form');
     }
@@ -249,6 +319,7 @@ class PasswordResetOtpController extends Controller
 
         if (! $user->active) {
             $request->session()->forget(['otp_email', 'password_reset_verified_email']);
+
             return redirect()
                 ->route('password.request')
                 ->withErrors(['email' => 'Your account has not been activated by the system administrator. Please contact your administrator before resetting your password.']);
@@ -259,7 +330,14 @@ class PasswordResetOtpController extends Controller
             'remember_token' => Str::random(60),
         ])->save();
 
-        // Log password reset activity - user resetting their own password via OTP
+        ActivityLogService::logCredentialRecoveryEvent(
+            'Password reset completed',
+            Str::lower(trim($email)),
+            $request,
+            $user->getKey(),
+            ['login_account' => $user->email, 'personal_email' => $user->personal_email],
+        );
+
         ActivityLogService::logPasswordReset($user->email ?? $user->personal_email ?? '');
 
         DB::table('password_reset_otps')->where('email', Str::lower(trim($email)))->delete();
