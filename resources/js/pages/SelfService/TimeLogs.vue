@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
-import { ChevronDown, ChevronRight } from 'lucide-vue-next';
+import { ChevronDown, ChevronRight, FileDown } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import selfServiceRoutes from '@/routes/self-service';
@@ -76,6 +76,73 @@ watch(
     },
     { immediate: true },
 );
+
+const selectedExportMonth = ref<number>(new Date().getMonth() + 1);
+
+const currentYear = new Date().getFullYear();
+const exportYears = computed(() => {
+    const from = props.years.length > 0 ? Math.min(...props.years) : currentYear - 5;
+    const to = currentYear + 1;
+    const arr: number[] = [];
+    for (let y = to; y >= from; y--) arr.push(y);
+    return arr;
+});
+const selectedExportYear = ref<number>(
+    props.years.length > 0 ? props.years[0] : currentYear,
+);
+watch(
+    () => props.years,
+    (years) => {
+        if (years.length > 0 && !years.includes(selectedExportYear.value)) {
+            selectedExportYear.value = years[0];
+        }
+    },
+    { immediate: true },
+);
+
+const exportForm48Loading = ref(false);
+const MONTH_NAMES = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+function exportForm48(): void {
+    const month = selectedExportMonth.value;
+    const year = selectedExportYear.value;
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const url = `${origin}/self-service/time-logs/export/form-48?month=${month}&year=${year}`;
+    exportForm48Loading.value = true;
+    fetch(url, { method: 'GET', credentials: 'same-origin', headers: { Accept: 'application/pdf' } })
+        .then(async (res) => {
+            if (!res.ok) {
+                const text = await res.text();
+                throw new Error(text.length < 200 ? text : `Export failed (${res.status}).`);
+            }
+            const disposition = res.headers.get('Content-Disposition');
+            const blob = await res.blob();
+            return { blob, disposition };
+        })
+        .then((result) => {
+            let filename = `form-48_${selectedExportYear.value}-${String(selectedExportMonth.value).padStart(2, '0')}.pdf`;
+            if (result.disposition) {
+                const m = result.disposition.match(/filename="?([^";\n]+)"?/);
+                if (m) filename = m[1].trim();
+            }
+            const u = URL.createObjectURL(result.blob);
+            const a = document.createElement('a');
+            a.href = u;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(u);
+        })
+        .catch((err: Error) => {
+            console.error(err);
+            alert(err?.message ?? 'Export failed.');
+        })
+        .finally(() => {
+            exportForm48Loading.value = false;
+        });
+}
 </script>
 
 <template>
@@ -94,21 +161,61 @@ watch(
             </div>
 
             <div class="flex flex-col gap-4">
-                <div class="flex items-center gap-2">
-                    <label for="year-select" class="text-sm font-medium text-foreground">Year</label>
-                    <select
-                        id="year-select"
-                        v-model.number="selectedYear"
-                        class="rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                        <option
-                            v-for="y in years"
-                            :key="y"
-                            :value="y"
+                <div class="flex flex-wrap items-center gap-4">
+                    <div class="flex items-center gap-2">
+                        <label for="year-select" class="text-sm font-medium text-foreground">Year</label>
+                        <select
+                            id="year-select"
+                            v-model.number="selectedYear"
+                            class="rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
-                            {{ y }}
-                        </option>
-                    </select>
+                            <option
+                                v-for="y in years"
+                                :key="y"
+                                :value="y"
+                            >
+                                {{ y }}
+                            </option>
+                        </select>
+                    </div>
+                    <div class="border-l border-border pl-4 flex flex-wrap items-center gap-2">
+                        <span class="text-sm font-medium text-foreground">Export Form 48 (PDF)</span>
+                        <select
+                            v-model.number="selectedExportMonth"
+                            class="rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            aria-label="Month for Form 48 export"
+                        >
+                            <option
+                                v-for="(name, i) in MONTH_NAMES"
+                                :key="i"
+                                :value="i + 1"
+                            >
+                                {{ name }}
+                            </option>
+                        </select>
+                        <select
+                            v-model.number="selectedExportYear"
+                            class="rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            aria-label="Year for Form 48 export"
+                        >
+                            <option
+                                v-for="y in exportYears"
+                                :key="y"
+                                :value="y"
+                            >
+                                {{ y }}
+                            </option>
+                        </select>
+                        <button
+                            type="button"
+                            class="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                            :disabled="exportForm48Loading"
+                            @click="exportForm48"
+                        >
+                            <FileDown class="size-4" />
+                            {{ exportForm48Loading ? 'Exporting…' : 'Export PDF' }}
+                        </button>
+                    </div>
                 </div>
 
                 <template v-if="weeksForYear.length">
