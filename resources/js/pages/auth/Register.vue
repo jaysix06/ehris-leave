@@ -77,11 +77,13 @@ const handleDistrictChange = (event: Event) => {
 
         <div class="rounded-2xl border bg-card p-6 shadow-sm sm:p-8">
             <div class="mb-6 overflow-hidden rounded-xl">
-                <img
-                    src="/ehris.png"
-                    alt="DepEd Ozamiz Unit School Division"
-                    class="h-36 w-full object-cover object-center"
-                />
+                <Link :href="home()" class="block" aria-label="Go to home page">
+                    <img
+                        src="/ehris.png"
+                        alt="DepEd Ozamiz Unit School Division"
+                        class="h-36 w-full object-cover object-center"
+                    />
+                </Link>
             </div>
 
             <div class="mb-6 flex flex-col gap-2 text-center">
