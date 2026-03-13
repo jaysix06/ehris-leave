@@ -54,7 +54,7 @@ trait ProfileValidationRules
      */
     protected function avatarRules(): array
     {
-        return ['nullable', 'image', 'max:2048'];
+        return ['nullable', 'image', 'max:10240'];
     }
 
     /**
