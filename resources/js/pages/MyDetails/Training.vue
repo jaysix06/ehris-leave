@@ -141,48 +141,113 @@ function submit(): void {
 
         <p v-if="errors.message" class="ehris-form-error mb-3">{{ errors.message }}</p>
 
-        <div class="ehris-table-wrap" v-if="formRows.length">
-            <table class="ehris-table">
-                <thead>
-                    <tr>
-                        <th>Title</th>
-                        <th>Venue</th>
-                        <th>Start</th>
-                        <th>End</th>
-                        <th>Hours</th>
-                        <th v-if="canEdit" class="w-[68px] text-center">Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr v-for="(item, i) in formRows" :key="`training-row-${i}`">
-                        <td>
-                            <Input v-if="canEdit" v-model="item.training_title" />
-                            <span v-else>{{ displayVal(item.training_title) }}</span>
-                        </td>
-                        <td>
-                            <Input v-if="canEdit" v-model="item.training_venue" />
-                            <span v-else>{{ displayVal(item.training_venue) }}</span>
-                        </td>
-                        <td>
-                            <Input v-if="canEdit" v-model="item.start_date" type="date" />
-                            <span v-else>{{ displayVal(item.start_date) }}</span>
-                        </td>
-                        <td>
-                            <Input v-if="canEdit" v-model="item.end_date" type="date" />
-                            <span v-else>{{ displayVal(item.end_date) }}</span>
-                        </td>
-                        <td>
-                            <Input v-if="canEdit" v-model="item.number_hours" />
-                            <span v-else>{{ displayVal(item.number_hours) }}</span>
-                        </td>
-                        <td v-if="canEdit" class="text-center">
-                            <Button type="button" variant="ghost" size="icon" @click="removeRow(i)">
-                                <Trash2 class="size-4" />
-                            </Button>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
+        <div v-if="formRows.length">
+            <div class="hidden md:block">
+                <div class="ehris-table-wrap">
+                    <table class="ehris-table">
+                        <thead>
+                            <tr>
+                                <th>Title</th>
+                                <th>Venue</th>
+                                <th>Start</th>
+                                <th>End</th>
+                                <th>Hours</th>
+                                <th v-if="canEdit" class="w-[68px] text-center">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="(item, i) in formRows" :key="`training-row-${i}`">
+                                <td>
+                                    <Input v-if="canEdit" v-model="item.training_title" />
+                                    <span v-else>{{ displayVal(item.training_title) }}</span>
+                                </td>
+                                <td>
+                                    <Input v-if="canEdit" v-model="item.training_venue" />
+                                    <span v-else>{{ displayVal(item.training_venue) }}</span>
+                                </td>
+                                <td>
+                                    <Input v-if="canEdit" v-model="item.start_date" type="date" />
+                                    <span v-else>{{ displayVal(item.start_date) }}</span>
+                                </td>
+                                <td>
+                                    <Input v-if="canEdit" v-model="item.end_date" type="date" />
+                                    <span v-else>{{ displayVal(item.end_date) }}</span>
+                                </td>
+                                <td>
+                                    <Input v-if="canEdit" v-model="item.number_hours" />
+                                    <span v-else>{{ displayVal(item.number_hours) }}</span>
+                                </td>
+                                <td v-if="canEdit" class="text-center">
+                                    <Button type="button" variant="ghost" size="icon" @click="removeRow(i)">
+                                        <Trash2 class="size-4" />
+                                    </Button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="grid gap-3 md:hidden">
+                <article
+                    v-for="(item, i) in formRows"
+                    :key="`training-mobile-${i}`"
+                    class="rounded-xl border border-border bg-card p-3"
+                >
+                    <div class="mb-2 flex items-center justify-between">
+                        <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            Record {{ i + 1 }}
+                        </p>
+                        <Button
+                            v-if="canEdit"
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            class="size-7"
+                            @click="removeRow(i)"
+                        >
+                            <Trash2 class="size-4" />
+                        </Button>
+                    </div>
+                    <dl class="space-y-2">
+                        <div class="grid grid-cols-[108px_1fr] items-center gap-2">
+                            <dt class="text-[11px] font-semibold uppercase text-muted-foreground">Title</dt>
+                            <dd>
+                                <Input v-if="canEdit" v-model="item.training_title" />
+                                <span v-else class="wrap-break-word text-sm text-foreground">{{ displayVal(item.training_title) }}</span>
+                            </dd>
+                        </div>
+                        <div class="grid grid-cols-[108px_1fr] items-center gap-2">
+                            <dt class="text-[11px] font-semibold uppercase text-muted-foreground">Venue</dt>
+                            <dd>
+                                <Input v-if="canEdit" v-model="item.training_venue" />
+                                <span v-else class="wrap-break-word text-sm text-foreground">{{ displayVal(item.training_venue) }}</span>
+                            </dd>
+                        </div>
+                        <div class="grid grid-cols-[108px_1fr] items-center gap-2">
+                            <dt class="text-[11px] font-semibold uppercase text-muted-foreground">Start</dt>
+                            <dd>
+                                <Input v-if="canEdit" v-model="item.start_date" type="date" />
+                                <span v-else class="wrap-break-word text-sm text-foreground">{{ displayVal(item.start_date) }}</span>
+                            </dd>
+                        </div>
+                        <div class="grid grid-cols-[108px_1fr] items-center gap-2">
+                            <dt class="text-[11px] font-semibold uppercase text-muted-foreground">End</dt>
+                            <dd>
+                                <Input v-if="canEdit" v-model="item.end_date" type="date" />
+                                <span v-else class="wrap-break-word text-sm text-foreground">{{ displayVal(item.end_date) }}</span>
+                            </dd>
+                        </div>
+                        <div class="grid grid-cols-[108px_1fr] items-center gap-2">
+                            <dt class="text-[11px] font-semibold uppercase text-muted-foreground">Hours</dt>
+                            <dd>
+                                <Input v-if="canEdit" v-model="item.number_hours" />
+                                <span v-else class="wrap-break-word text-sm text-foreground">{{ displayVal(item.number_hours) }}</span>
+                            </dd>
+                        </div>
+                    </dl>
+                </article>
+            </div>
         </div>
         <p v-else class="ehris-muted">No training on file.</p>
     </section>
