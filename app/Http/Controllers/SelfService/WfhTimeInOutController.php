@@ -462,12 +462,8 @@ th.col-station, td.col-station { text-align: left; width: 15%; }
     padding-top: 1.08in;
 }
 .prepared-by {
-    position: fixed;
-    right: 0.25in;
-    bottom: 0.58in;
-    z-index: 2;
     width: 2.55in;
-    margin: 0;
+    margin: 0.28in 0.20in 0 auto;
     text-align: left;
     page-break-inside: avoid;
     break-inside: avoid;
@@ -502,13 +498,12 @@ th.col-station, td.col-station { text-align: left; width: 15%; }
 <p class="footer-text">© {$yearEscaped} DepEd</p>
 </div>
 
+<div class="page-content">
+{$tablesHtml}
 <div class="prepared-by">
 <p class="prepared-by-label">Prepared by:</p>
 <p class="prepared-by-name">{$employeeNameEscaped}</p>
 </div>
-
-<div class="page-content">
-{$tablesHtml}
 </div>
 </body>
 </html>
@@ -548,11 +543,16 @@ HTML;
             return '';
         }
 
-        $fontUri = $this->toFileUri($fontPath);
+        $fontBinary = @file_get_contents($fontPath);
+        if ($fontBinary === false) {
+            return '';
+        }
+
+        $fontDataUri = 'data:font/ttf;base64,'.base64_encode($fontBinary);
 
         return '@font-face {'
             .' font-family: "BookmanOldStyle";'
-            .' src: url("'.$fontUri.'") format("truetype");'
+            .' src: url("'.$fontDataUri.'") format("truetype");'
             .' font-weight: normal;'
             .' font-style: normal;'
             .'}';
@@ -579,8 +579,6 @@ HTML;
             public_path('fonts/bookman old style.ttf'),
             public_path('fonts/Bookman Old Style.ttf'),
             public_path('fonts/BOOKMAN OLD STYLE.TTF'),
-            public_path('fonts/arial.ttf'),
-            public_path('fonts/ARIAL.TTF'),
         ];
 
         foreach ($fallbackCandidates as $fallbackPath) {
