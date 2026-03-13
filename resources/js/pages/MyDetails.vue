@@ -4,8 +4,6 @@ import { echo } from '@laravel/echo-vue';
 import { Download, User } from 'lucide-vue-next';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { toast } from 'vue3-toastify';
-import { useSidebar } from '@/components/ui/sidebar/utils';
-import AppLayout from '@/layouts/AppLayout.vue';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -15,7 +13,8 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { formatPhilippineMobile } from '@/utils/phPhone';
+import { useSidebar } from '@/components/ui/sidebar/utils';
+import AppLayout from '@/layouts/AppLayout.vue';
 import EducationBackground from '@/pages/MyDetails/EducationBackground.vue';
 import Eligibility from '@/pages/MyDetails/Eligibility.vue';
 import FamilyBackground from '@/pages/MyDetails/FamilyBackground.vue';
@@ -26,6 +25,7 @@ import Training from '@/pages/MyDetails/Training.vue';
 import VoluntaryWork from '@/pages/MyDetails/VoluntaryWork.vue';
 import WorkExperience from '@/pages/MyDetails/WorkExperience.vue';
 import type { BreadcrumbItem } from '@/types';
+import { formatPhilippineMobile } from '@/utils/phPhone';
 
 const pageTitle = 'Employee';
 
@@ -91,6 +91,17 @@ const avatarImageError = ref(false);
 const exportModalOpen = ref(false);
 const exportIncludePhoto = ref(true);
 const exportIncludeSignature = ref(true);
+const tabsStickyTop = ref(0);
+
+const updateTabsStickyTop = () => {
+    const headerShell = document.querySelector('.ehris-header-shell');
+    if (!(headerShell instanceof HTMLElement)) {
+        tabsStickyTop.value = 0;
+        return;
+    }
+
+    tabsStickyTop.value = Math.ceil(headerShell.getBoundingClientRect().height + 8);
+};
 
 function setActiveTab(index: number): void {
     activeTab.value = index;
@@ -368,6 +379,9 @@ const onMyDetailsUpdated = (event: { hrid?: number | string } = {}) => {
 let isRealtimeBound = false;
 
 onMounted(() => {
+    updateTabsStickyTop();
+    window.addEventListener('resize', updateTabsStickyTop);
+
     // Close mobile sidebar if open to prevent overlay from blocking clicks.
     if (sidebarContext && sidebarContext.isMobile.value) {
         sidebarContext.setOpenMobile(false);
@@ -391,6 +405,8 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+    window.removeEventListener('resize', updateTabsStickyTop);
+
     if (!isRealtimeBound) {
         return;
     }
@@ -408,7 +424,11 @@ onBeforeUnmount(() => {
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="ehris-page">
-            <section class="ehris-tabs" aria-label="Employee detail sections">
+            <section
+                class="ehris-tabs ehris-mydetails-tabs-sticky"
+                :style="{ top: `${tabsStickyTop}px` }"
+                aria-label="Employee detail sections"
+            >
                 <button
                     v-for="(tab, index) in tabs"
                     :key="tab"
@@ -565,5 +585,10 @@ onBeforeUnmount(() => {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.ehris-mydetails-tabs-sticky {
+    position: sticky;
+    z-index: 15;
 }
 </style>
