@@ -198,7 +198,7 @@ const userColumns: DataTableColumn[] = [
         width: '14rem',
         data: 'personal_email',
     },
-    { key: 'email', label: 'Official email', width: '14rem', data: 'email' },
+    { key: 'email', label: 'User Account', width: '14rem', data: 'email' },
     { key: 'name', label: 'Name', width: '14rem', data: 'name' },
     { key: 'role', label: 'Role', width: '8rem', data: 'role' },
     { key: 'office', label: 'Office/School', width: '12rem', data: 'office' },
@@ -897,12 +897,11 @@ onBeforeUnmount(() => {
                     />
                 </div>
                 <div class="space-y-1">
-                    <label class="text-sm text-muted-foreground">Official email</label>
+                    <label class="text-sm text-muted-foreground">User Account</label>
                     <input
                         v-model="editState.form.email"
                         type="email"
-                        readonly
-                        class="w-full rounded-md border border-input bg-muted px-3 py-2 text-sm cursor-not-allowed text-muted-foreground"
+                        class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                         placeholder="name@example.com"
                     />
                 </div>

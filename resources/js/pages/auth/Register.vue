@@ -22,6 +22,7 @@ const step2ErrorKeys = ['role', 'district', 'station'];
 
 const currentStep = ref(1);
 const selectedDistrictId = ref<string>('');
+const isStationSelectable = computed(() => selectedDistrictId.value !== '');
 
 // When we land back with validation errors, stay on step 2 if errors are for step-2 fields
 watch(
@@ -112,11 +113,7 @@ const handleDistrictChange = (event: Event) => {
                         :class="currentStep === 2 ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'"
                         @click="currentStep = 2"
                     >
-<<<<<<< HEAD
-                        Employment details
-=======
                         Employment Details
->>>>>>> januard
                     </button>
                 </div>
 
@@ -257,11 +254,11 @@ const handleDistrictChange = (event: Event) => {
                             <select
                                 id="station"
                                 name="station"
-                                :disabled="currentStep !== 2"
+                                :disabled="currentStep !== 2 || !isStationSelectable"
                                 :tabindex="8"
                                 class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                             >
-                                <option value="">Select office/school</option>
+                                <option value="">{{ isStationSelectable ? 'Select office/school' : 'Select district first' }}</option>
                                 <option
                                     v-for="s in filteredStations"
                                     :key="String(s.id)"

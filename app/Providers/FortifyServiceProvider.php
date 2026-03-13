@@ -6,7 +6,6 @@ use App\Actions\Fortify\CreateNewUser;
 use App\Actions\Fortify\ResetUserPassword;
 use App\Models\BusinessUnit;
 use App\Models\Department;
-use App\Models\Role;
 use App\Models\User;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -21,6 +20,11 @@ use Laravel\Fortify\Fortify;
 
 class FortifyServiceProvider extends ServiceProvider
 {
+    /**
+     * @var array<int, string>
+     */
+    private const SELF_REGISTRATION_ROLES = ['Employee', 'Teacher'];
+
     /**
      * Register any application services.
      */
@@ -67,6 +71,7 @@ class FortifyServiceProvider extends ServiceProvider
                 Log::info('[Auth] Missing email/password', [
                     'email' => $email,
                 ]);
+
                 return null;
             }
 
@@ -85,6 +90,7 @@ class FortifyServiceProvider extends ServiceProvider
                     'db_email' => $user?->email,
                     'db_personal_email' => $user?->personal_email,
                 ]);
+
                 return null;
             }
 
@@ -133,7 +139,7 @@ class FortifyServiceProvider extends ServiceProvider
         ]));
 
         Fortify::registerView(fn () => Inertia::render('auth/Register', [
-            'roles' => Role::roleNames(),
+            'roles' => self::SELF_REGISTRATION_ROLES,
             'districts' => BusinessUnit::orderBy('id')->get()->map(fn ($row) => [
                 'id' => $row->BusinessUnitId,
                 'name' => $row->BusinessUnit,
@@ -145,7 +151,6 @@ class FortifyServiceProvider extends ServiceProvider
                 'district_id' => $row->business_id,
             ])->values()->all(),
         ]));
-
 
         Fortify::confirmPasswordView(fn () => Inertia::render('auth/ConfirmPassword'));
     }

@@ -156,3 +156,27 @@ it('updates the personal email when editing a user', function () {
         return $event->action === 'updated' && $event->userId === (int) $user->getKey();
     });
 });
+
+it('updates the user account email when editing a user', function () {
+    Event::fake([UserListUpdated::class]);
+
+    $admin = createAdminUser();
+    $user = User::factory()->create([
+        'active' => true,
+        'email' => 'before.account@deped.gov.ph',
+        'role' => 'Employee',
+    ]);
+
+    $this->actingAs($admin)
+        ->patchJson("/utilities/users/{$user->getKey()}", [
+            'email' => 'after.account@deped.gov.ph',
+        ])
+        ->assertOk()
+        ->assertJsonPath('email', 'after.account@deped.gov.ph');
+
+    expect($user->fresh()->email)->toBe('after.account@deped.gov.ph');
+
+    Event::assertDispatched(UserListUpdated::class, function (UserListUpdated $event) use ($user) {
+        return $event->action === 'updated' && $event->userId === (int) $user->getKey();
+    });
+});

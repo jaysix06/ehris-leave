@@ -7,7 +7,6 @@ use App\Concerns\ProfileValidationRules;
 use App\Mail\NewUserRegistrationAdminMail;
 use App\Models\BusinessUnit;
 use App\Models\Department;
-use App\Models\Role;
 use App\Models\User;
 use App\Services\ActivityLogService;
 use Illuminate\Support\Facades\DB;
@@ -21,6 +20,11 @@ use Laravel\Fortify\Contracts\CreatesNewUsers;
 class CreateNewUser implements CreatesNewUsers
 {
     use PasswordValidationRules, ProfileValidationRules;
+
+    /**
+     * @var array<int, string>
+     */
+    private const SELF_REGISTRATION_ROLES = ['Employee', 'Teacher'];
 
     /**
      * Validate and create a newly registered user.
@@ -38,8 +42,6 @@ class CreateNewUser implements CreatesNewUsers
 
         $validDistrictIds = BusinessUnit::pluck('BusinessUnitId')->map(fn ($id) => (string) $id)->all();
         $validStationIds = Department::pluck('department_id')->map(fn ($id) => (string) $id)->all();
-        $validRoles = Role::roleNames();
-
         Validator::make($input, [
             ...$profileRules,
             'email' => [
@@ -49,7 +51,7 @@ class CreateNewUser implements CreatesNewUsers
                 'max:255',
                 Rule::unique('tbl_user', 'personal_email'),
             ],
-            'role' => ['required', 'string', Rule::in($validRoles)],
+            'role' => ['required', 'string', Rule::in(self::SELF_REGISTRATION_ROLES)],
             'district' => ['required', Rule::in($validDistrictIds)],
             'station' => ['required', Rule::in($validStationIds)],
         ])->validate();

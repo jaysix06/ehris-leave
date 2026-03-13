@@ -1,11 +1,17 @@
 <script setup lang="ts">
 import { Head, Link, router } from '@inertiajs/vue3';
-import { ArrowRight, BookOpen, CheckCircle2, Download, Eye, FolderOpen, ListPlus, Pause, Pencil, Play, RotateCcw, Search, Trash2, X } from 'lucide-vue-next';
+import { ArrowRight, BookOpen, CheckCircle2, Download, Eye, FolderOpen, ListPlus, MoreHorizontal, Pause, Pencil, Play, RotateCcw, Search, Trash2, X } from 'lucide-vue-next';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Calendar as VCalendar, DatePicker } from 'v-calendar';
 import { toast } from 'vue3-toastify';
-import AppLayout from '@/layouts/AppLayout.vue';
 import AppModal from '@/components/AppModal.vue';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import AppLayout from '@/layouts/AppLayout.vue';
 import selfServiceRoutes from '@/routes/self-service';
 import type { BreadcrumbItem } from '@/types';
 
@@ -922,14 +928,74 @@ function toggleClock(): void {
                                     </p>
                                 </div>
                                 <div class="flex shrink-0 items-center gap-1.5">
-                                    <button
-                                        type="button"
-                                        class="inline-flex items-center gap-1 rounded border border-border/80 bg-background px-2 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
-                                        @click="openViewModal(t)"
-                                    >
-                                        <Eye class="size-3.5" />
-                                        View
-                                    </button>
+                                    <div class="sm:hidden">
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger as-child>
+                                                <button
+                                                    type="button"
+                                                    class="inline-flex size-8 items-center justify-center rounded border border-border/80 bg-background text-foreground hover:bg-muted"
+                                                    aria-label="Task actions"
+                                                >
+                                                    <MoreHorizontal class="size-4" />
+                                                </button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end" class="w-44">
+                                                <DropdownMenuItem @click="openViewModal(t)">
+                                                    <Eye class="mr-2 size-4" />
+                                                    View
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem
+                                                    v-if="normalizedStatus(t) === 'Not Started'"
+                                                    :disabled="taskActionLoading"
+                                                    @click="updateTaskStatus(t.id, 'In Progress', 'Not Started')"
+                                                >
+                                                    <Play class="mr-2 size-4" />
+                                                    Start Task
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem
+                                                    v-if="normalizedStatus(t) === 'In Progress'"
+                                                    :disabled="taskActionLoading"
+                                                    @click="updateTaskStatus(t.id, 'On Hold')"
+                                                >
+                                                    <Pause class="mr-2 size-4" />
+                                                    Hold Task
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem
+                                                    v-if="normalizedStatus(t) === 'In Progress'"
+                                                    :disabled="taskActionLoading"
+                                                    @click="requestCompleteTask(t.id)"
+                                                >
+                                                    <CheckCircle2 class="mr-2 size-4" />
+                                                    Complete Task
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem
+                                                    v-if="normalizedStatus(t) === 'On Hold'"
+                                                    :disabled="taskActionLoading"
+                                                    @click="updateTaskStatus(t.id, 'In Progress', 'On Hold')"
+                                                >
+                                                    <Play class="mr-2 size-4" />
+                                                    Resume Task
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem
+                                                    :disabled="taskActionLoading"
+                                                    class="text-red-700 focus:text-red-700"
+                                                    @click="requestDeleteTask(t.id)"
+                                                >
+                                                    <Trash2 class="mr-2 size-4" />
+                                                    Delete Task
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+                                    </div>
+                                    <div class="hidden shrink-0 items-center gap-1.5 sm:flex">
+                                        <button
+                                            type="button"
+                                            class="inline-flex items-center gap-1 rounded border border-border/80 bg-background px-2 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
+                                            @click="openViewModal(t)"
+                                        >
+                                            <Eye class="size-3.5" />
+                                            View
+                                        </button>
                                     <template v-if="normalizedStatus(t) === 'Not Started'">
                                         <button
                                             type="button"
@@ -978,9 +1044,10 @@ function toggleClock(): void {
                                         class="inline-flex items-center gap-1 rounded border border-red-300 bg-red-50 px-2 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-60"
                                         @click="requestDeleteTask(t.id)"
                                     >
-                                        <Trash2 class="size-3.5" />
-                                        Delete Task
-                                    </button>
+                                            <Trash2 class="size-3.5" />
+                                            Delete Task
+                                        </button>
+                                    </div>
                                 </div>
                             </li>
                         </ul>
@@ -1001,23 +1068,51 @@ function toggleClock(): void {
                                     <p class="mt-0.5 text-xs text-muted-foreground">Due {{ t.due_date }}{{ t.due_date_end && t.due_date_end !== t.due_date ? ` – ${t.due_date_end}` : '' }} · {{ t.priority }}</p>
                                 </div>
                                 <div class="flex shrink-0 items-center gap-1.5">
-                                    <button
-                                        type="button"
-                                        class="inline-flex items-center gap-1 rounded border border-border/80 bg-background px-2 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
-                                        @click="openViewModal(t)"
-                                    >
-                                        <Eye class="size-3.5" />
-                                        View
-                                    </button>
-                                    <button
-                                        type="button"
-                                        :disabled="taskActionLoading"
-                                        class="inline-flex items-center gap-1 rounded border border-primary bg-primary/10 px-2 py-1.5 text-xs font-medium text-primary hover:bg-primary/20 disabled:opacity-60"
-                                        @click="reEnterTask(t.id)"
-                                    >
-                                        <RotateCcw class="size-3.5" />
-                                        Re-enter
-                                    </button>
+                                    <div class="sm:hidden">
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger as-child>
+                                                <button
+                                                    type="button"
+                                                    class="inline-flex size-8 items-center justify-center rounded border border-border/80 bg-background text-foreground hover:bg-muted"
+                                                    aria-label="Task actions"
+                                                >
+                                                    <MoreHorizontal class="size-4" />
+                                                </button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end" class="w-40">
+                                                <DropdownMenuItem @click="openViewModal(t)">
+                                                    <Eye class="mr-2 size-4" />
+                                                    View
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem
+                                                    :disabled="taskActionLoading"
+                                                    @click="reEnterTask(t.id)"
+                                                >
+                                                    <RotateCcw class="mr-2 size-4" />
+                                                    Re-enter
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+                                    </div>
+                                    <div class="hidden shrink-0 items-center gap-1.5 sm:flex">
+                                        <button
+                                            type="button"
+                                            class="inline-flex items-center gap-1 rounded border border-border/80 bg-background px-2 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
+                                            @click="openViewModal(t)"
+                                        >
+                                            <Eye class="size-3.5" />
+                                            View
+                                        </button>
+                                        <button
+                                            type="button"
+                                            :disabled="taskActionLoading"
+                                            class="inline-flex items-center gap-1 rounded border border-primary bg-primary/10 px-2 py-1.5 text-xs font-medium text-primary hover:bg-primary/20 disabled:opacity-60"
+                                            @click="reEnterTask(t.id)"
+                                        >
+                                            <RotateCcw class="size-3.5" />
+                                            Re-enter
+                                        </button>
+                                    </div>
                                 </div>
                             </li>
                         </ul>
@@ -1345,16 +1440,16 @@ function toggleClock(): void {
         <Teleport to="body">
             <div
                 v-if="showUserManualModal"
-                class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+                class="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4"
                 @click.self="showUserManualModal = false"
             >
                 <div
-                    class="flex w-[90vw] max-w-6xl h-[85vh] min-h-[32rem] overflow-hidden rounded-xl border border-border bg-card shadow-lg"
+                    class="flex h-[100dvh] w-full flex-col overflow-hidden rounded-none border-0 bg-card shadow-lg sm:h-[85vh] sm:min-h-[32rem] sm:w-[90vw] sm:max-w-6xl sm:flex-row sm:rounded-xl sm:border sm:border-border"
                     role="dialog"
                     aria-modal="true"
                     aria-labelledby="user-manual-title"
                 >
-                    <div class="mb-6 flex flex-col border-b border-border p-4 sm:border-b-0 sm:mb-0 sm:min-w-[11rem] sm:border-r sm:border-border sm:bg-muted/30">
+                    <div class="flex w-full flex-col border-b border-border bg-muted/20 p-3 sm:mb-0 sm:min-w-[11rem] sm:max-w-[14rem] sm:border-b-0 sm:border-r sm:border-border sm:bg-muted/30 sm:p-4">
                         <div class="flex items-center justify-between border-b border-border pb-3 sm:border-b-0 sm:pb-0 sm:mb-4">
                             <h2 id="user-manual-title" class="flex items-center gap-2 text-lg font-semibold text-foreground">
                                 <BookOpen class="size-5 text-primary" />
@@ -1383,7 +1478,7 @@ function toggleClock(): void {
                         </nav>
                     </div>
                     <div class="flex flex-1 flex-col min-w-0">
-                        <div class="flex items-center justify-between border-b border-border p-4 pb-3">
+                        <div class="flex items-center justify-between border-b border-border px-3 py-3 sm:p-4 sm:pb-3">
                             <h3 class="text-lg font-semibold text-foreground">WFH Attendance</h3>
                             <button
                                 type="button"
@@ -1394,14 +1489,14 @@ function toggleClock(): void {
                                 <X class="size-5" />
                             </button>
                         </div>
-                        <div class="flex-1 overflow-y-auto p-4 pt-0 text-base text-foreground">
+                        <div class="wfh-manual-content flex-1 overflow-y-auto px-3 pb-4 pt-0 text-sm text-foreground sm:p-4 sm:pt-0 sm:text-base">
                             <!-- Page 0: How to use -->
-                            <div v-show="manualPageIndex === 0" class="flex min-h-[min(60vh,28rem)] flex-col items-center justify-center space-y-6 py-6 text-center">
-                                <h4 class="text-2xl font-semibold text-foreground">How to use the WFH Attendance page</h4>
-                                <p class="max-w-2xl text-lg leading-relaxed text-muted-foreground">
+                            <div v-show="manualPageIndex === 0" class="flex min-h-[min(50vh,24rem)] flex-col items-center justify-center space-y-4 py-5 text-center sm:min-h-[min(60vh,28rem)] sm:space-y-6 sm:py-6">
+                                <h4 class="text-xl font-semibold text-foreground sm:text-2xl">How to use the WFH Attendance page</h4>
+                                <p class="max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg">
                                     This page lets you record your work-from-home time and manage your tasks. Choose a topic from the menu on the left.
                                 </p>
-                                <p class="max-w-2xl rounded-md bg-primary/10 px-4 py-3 text-center text-lg font-semibold leading-relaxed text-foreground">
+                                <p class="max-w-2xl rounded-md bg-primary/10 px-4 py-3 text-center text-base font-semibold leading-relaxed text-foreground sm:text-lg">
                                     You can click any photo in this manual to zoom in and view it in full size.
                                 </p>
                             </div>
@@ -1797,6 +1892,31 @@ function toggleClock(): void {
 .task-calendar-box :deep(.vc-week > *:nth-child(1)),
 .task-calendar-box :deep(.vc-week > *:nth-child(7)) {
     display: none !important;
+}
+
+@media (max-width: 639px) {
+    .wfh-manual-content {
+        overscroll-behavior: contain;
+    }
+
+    .wfh-manual-content h4 {
+        line-height: 1.3;
+    }
+
+    .wfh-manual-content ul {
+        padding-left: 0;
+    }
+
+    .wfh-manual-content li {
+        overflow-wrap: anywhere;
+    }
+
+    .wfh-manual-content button.cursor-zoom-in {
+        width: 100%;
+        max-width: 100%;
+        min-height: 11rem;
+        height: min(48vw, 12rem);
+    }
 }
 
 /* Task view calendar (dashboard): compact height */

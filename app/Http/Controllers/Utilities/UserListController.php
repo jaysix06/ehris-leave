@@ -517,6 +517,7 @@ class UserListController extends Controller
 
         $data = $request->validate([
             'hrId' => ['nullable', 'integer'],
+            'email' => ['nullable', 'email', 'max:255', Rule::unique('tbl_user', 'email')->ignore($user->getKey(), 'userId')],
             'personal_email' => ['nullable', 'email', 'max:255', Rule::unique('tbl_user', 'personal_email')->ignore($user->getKey(), 'userId')],
             'lastname' => ['nullable', 'string', 'max:255'],
             'firstname' => ['nullable', 'string', 'max:255'],
@@ -535,9 +536,9 @@ class UserListController extends Controller
 
         $user->fill($data);
 
-        // When editing first/last name for an active user, recompute official DepEd email
-        // so it stays in sync (firstname.lastname@deped.gov.ph, no middle name).
-        if ($user->active) {
+        // Backward-compatible behavior: only auto-build an account email for active users
+        // when older clients omit the editable email field.
+        if ($user->active && ! array_key_exists('email', $data)) {
             $user->email = $this->buildOfficialDepedEmail(
                 (string) ($user->firstname ?? ''),
                 (string) ($user->lastname ?? ''),
