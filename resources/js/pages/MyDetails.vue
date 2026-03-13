@@ -140,6 +140,8 @@ const props = defineProps<{
     educationUpdateUrl?: string;
     officialUpdateUrl?: string;
     personalUpdateUrl?: string;
+    municipalitiesLookupUrl?: string;
+    barangaysLookupUrl?: string;
     eligibilityUpdateUrl?: string;
     workExperienceUpdateUrl?: string;
     voluntaryWorkUpdateUrl?: string;
@@ -313,6 +315,8 @@ function sectionProps(index: number): Record<string, unknown> {
                 contactOptions: props.contactOptions,
                 profile: props.profile,
                 personalUpdateUrl: props.personalUpdateUrl,
+                municipalitiesLookupUrl: props.municipalitiesLookupUrl,
+                barangaysLookupUrl: props.barangaysLookupUrl,
             };
         case 2:
             return { family: props.family, familyUpdateUrl: props.familyUpdateUrl };

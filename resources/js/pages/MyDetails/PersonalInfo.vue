@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { router } from '@inertiajs/vue3';
 import { Pencil } from 'lucide-vue-next';
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 import { toast } from 'vue3-toastify';
 import { Button } from '@/components/ui/button';
 import {
@@ -25,6 +25,12 @@ function val(v: unknown): string {
 function valInput(v: unknown): string {
     if (v == null) return '';
     return String(v);
+}
+
+function normalizeLookupFieldValue(v: unknown): string {
+    const value = valInput(v).trim();
+
+    return value === '0' ? '' : value;
 }
 
 function normalizeDateToIso(v: unknown): string {
@@ -74,9 +80,10 @@ const props = defineProps<{
     contactInfo?: Record<string, unknown> | null;
     profile?: Record<string, unknown> | null;
     personalUpdateUrl?: string;
+    municipalitiesLookupUrl?: string;
+    barangaysLookupUrl?: string;
     contactOptions?: {
         provinces?: { name: string; province_code: number | null }[];
-        barangays?: { name: string; municipal_code: number | null }[];
         municipalities?: { name: string; municipal_code: number | null; province_code: number | null }[];
     };
 }>();
@@ -84,6 +91,11 @@ const props = defineProps<{
 const editModalOpen = ref(false);
 const processing = ref(false);
 const errors = ref<Record<string, string>>({});
+const residentialMunicipalities = ref<{ name: string; municipal_code: number | null }[]>([]);
+const permanentMunicipalities = ref<{ name: string; municipal_code: number | null }[]>([]);
+const residentialBarangays = ref<string[]>([]);
+const permanentBarangays = ref<string[]>([]);
+const hydratingAddressSelections = ref(false);
 const form = ref({
     dob: '',
     pob: '',
@@ -333,42 +345,23 @@ function optionsWithCurrent(options: string[], current: string): string[] {
 }
 
 function residentialBarangayOptions(): string[] {
-    const all = props.contactOptions?.barangays ?? [];
-    const code = Number(form.value.city_municipality || 0);
-    if (!code) {
-        return all.map((b) => b.name);
-    }
-    return all
-        .filter((b) => b.municipal_code === code)
-        .map((b) => b.name);
+    return residentialBarangays.value;
 }
 
 function permanentBarangayOptions(): string[] {
-    const all = props.contactOptions?.barangays ?? [];
-    const code = Number(form.value.city_municipality1 || 0);
-    if (!code) {
-        return all.map((b) => b.name);
-    }
-    return all
-        .filter((b) => b.municipal_code === code)
-        .map((b) => b.name);
+    return permanentBarangays.value;
 }
 
 function residentialMunicipalityOptions(): { name: string; municipal_code: number | null }[] {
-    const all = props.contactOptions?.municipalities ?? [];
-    const provinceCode = Number(form.value.province || 0);
-    if (!provinceCode) return all;
-    return all.filter((m) => m.province_code === provinceCode);
+    return residentialMunicipalities.value;
 }
 
 function permanentMunicipalityOptions(): { name: string; municipal_code: number | null }[] {
-    const all = props.contactOptions?.municipalities ?? [];
-    const provinceCode = Number(form.value.province1 || 0);
-    if (!provinceCode) return all;
-    return all.filter((m) => m.province_code === provinceCode);
+    return permanentMunicipalities.value;
 }
 
 function copyResidentialToPermanent(): void {
+    hydratingAddressSelections.value = true;
     form.value = {
         ...form.value,
         house_block_lotnum1: form.value.house_block_lotnum,
@@ -379,6 +372,121 @@ function copyResidentialToPermanent(): void {
         province1: form.value.province,
         zip_code1: form.value.zip_code,
     };
+
+    void loadBarangays('permanent', form.value.city_municipality1, form.value.barangay1).finally(() => {
+        hydratingAddressSelections.value = false;
+    });
+}
+
+async function loadBarangays(
+    type: 'residential' | 'permanent',
+    municipalCode: string,
+    currentBarangay = '',
+): Promise<void> {
+    const target = type === 'residential' ? residentialBarangays : permanentBarangays;
+    const normalizedMunicipalCode = municipalCode.trim();
+    const normalizedCurrentBarangay = normalizeLookupFieldValue(currentBarangay);
+
+    if (normalizedMunicipalCode === '' || !props.barangaysLookupUrl) {
+        target.value = normalizedCurrentBarangay !== '' ? [normalizedCurrentBarangay] : [];
+        return;
+    }
+
+    try {
+        const url = new URL(props.barangaysLookupUrl, window.location.origin);
+        url.searchParams.set('municipal_code', normalizedMunicipalCode);
+
+        const response = await fetch(url.toString(), {
+            method: 'GET',
+            credentials: 'same-origin',
+            headers: {
+                Accept: 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to load barangays: ${response.status}`);
+        }
+
+        const payload = await response.json() as { barangays?: Array<{ name?: string | null }> };
+        const fetchedBarangays = (payload.barangays ?? [])
+            .map((barangay) => typeof barangay?.name === 'string' ? barangay.name.trim() : '')
+            .filter((barangay): barangay is string => barangay !== '');
+
+        target.value = fetchedBarangays;
+
+        if (normalizedCurrentBarangay !== '' && !fetchedBarangays.includes(normalizedCurrentBarangay)) {
+            target.value = [normalizedCurrentBarangay, ...fetchedBarangays];
+        }
+    } catch (error) {
+        console.warn('[PersonalInfo] Failed to load barangays.', error);
+        target.value = normalizedCurrentBarangay !== '' ? [normalizedCurrentBarangay] : [];
+    }
+}
+
+async function loadMunicipalities(
+    type: 'residential' | 'permanent',
+    provinceCode: string,
+    currentMunicipality = '',
+): Promise<void> {
+    const target = type === 'residential' ? residentialMunicipalities : permanentMunicipalities;
+    const normalizedProvinceCode = provinceCode.trim();
+    const normalizedCurrentMunicipality = normalizeLookupFieldValue(currentMunicipality);
+
+    if (normalizedProvinceCode === '' || !props.municipalitiesLookupUrl) {
+        target.value = normalizedCurrentMunicipality !== ''
+            ? [{ name: normalizedCurrentMunicipality, municipal_code: ctypeNumber(normalizedCurrentMunicipality) }]
+            : [];
+        return;
+    }
+
+    try {
+        const url = new URL(props.municipalitiesLookupUrl, window.location.origin);
+        url.searchParams.set('province_code', normalizedProvinceCode);
+
+        const response = await fetch(url.toString(), {
+            method: 'GET',
+            credentials: 'same-origin',
+            headers: {
+                Accept: 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to load municipalities: ${response.status}`);
+        }
+
+        const payload = await response.json() as { municipalities?: Array<{ name?: string | null; municipal_code?: number | null }> };
+        const fetchedMunicipalities = (payload.municipalities ?? [])
+            .map((municipality) => ({
+                name: typeof municipality?.name === 'string' ? municipality.name.trim() : '',
+                municipal_code: typeof municipality?.municipal_code === 'number' ? municipality.municipal_code : null,
+            }))
+            .filter((municipality): municipality is { name: string; municipal_code: number | null } => municipality.name !== '');
+
+        target.value = fetchedMunicipalities;
+
+        if (
+            normalizedCurrentMunicipality !== ''
+            && !fetchedMunicipalities.some((municipality) => String(municipality.municipal_code ?? '') === normalizedCurrentMunicipality)
+        ) {
+            target.value = [
+                { name: normalizedCurrentMunicipality, municipal_code: ctypeNumber(normalizedCurrentMunicipality) },
+                ...fetchedMunicipalities,
+            ];
+        }
+    } catch (error) {
+        console.warn('[PersonalInfo] Failed to load municipalities.', error);
+        target.value = normalizedCurrentMunicipality !== ''
+            ? [{ name: normalizedCurrentMunicipality, municipal_code: ctypeNumber(normalizedCurrentMunicipality) }]
+            : [];
+    }
+}
+
+function ctypeNumber(value: string): number | null {
+    return /^\d+$/.test(value) ? Number(value) : null;
 }
 
 function onTelephoneKeydown(e: KeyboardEvent): void {
@@ -408,6 +516,7 @@ function onMobilePaste(e: ClipboardEvent): void {
 function openEdit(): void {
     const p = props.personalInfo ?? {};
     const c = props.contactInfo ?? {};
+    hydratingAddressSelections.value = true;
     form.value = {
         dob: normalizeDateToIso(p.dob),
         pob: valInput(p.pob),
@@ -432,21 +541,29 @@ function openEdit(): void {
         house_block_lotnum: valInput(c.house_block_lotnum),
         street_add: valInput(c.street_add),
         subdivision_village: valInput(c.subdivision_village),
-        barangay: valInput(c.residential_barangay_name ?? c.barangay),
-        city_municipality: c.city_municipality != null ? String(c.city_municipality) : '',
-        province: c.province != null ? String(c.province) : '',
+        barangay: normalizeLookupFieldValue(c.residential_barangay_name ?? c.barangay),
+        city_municipality: normalizeLookupFieldValue(c.city_municipality),
+        province: normalizeLookupFieldValue(c.province),
         zip_code: valInput(c.zip_code),
         house_block_lotnum1: valInput(c.house_block_lotnum1),
         street_add1: valInput(c.street_add1),
         subdivision_village1: valInput(c.subdivision_village1),
-        barangay1: valInput(c.permanent_barangay_name ?? c.barangay1),
-        city_municipality1: c.city_municipality1 != null ? String(c.city_municipality1) : '',
-        province1: c.province1 != null ? String(c.province1) : '',
+        barangay1: normalizeLookupFieldValue(c.permanent_barangay_name ?? c.barangay1),
+        city_municipality1: normalizeLookupFieldValue(c.city_municipality1),
+        province1: normalizeLookupFieldValue(c.province1),
         zip_code1: valInput(c.zip_code1),
         phone_num: digitsOnly(c.phone_num).slice(0, 10),
         mobile_num: digitsOnly(c.mobile_num).slice(0, 11),
         email: valInput(props.profile?.personal_email ?? c.email),
     };
+    void Promise.all([
+        loadMunicipalities('residential', form.value.province, form.value.city_municipality),
+        loadMunicipalities('permanent', form.value.province1, form.value.city_municipality1),
+        loadBarangays('residential', form.value.city_municipality, form.value.barangay),
+        loadBarangays('permanent', form.value.city_municipality1, form.value.barangay1),
+    ]).finally(() => {
+        hydratingAddressSelections.value = false;
+    });
     errors.value = {};
     editModalOpen.value = true;
 }
@@ -470,6 +587,58 @@ function submit(): void {
         },
     });
 }
+
+watch(
+    () => form.value.province,
+    (provinceCode, previousProvinceCode) => {
+        const provinceChanged = provinceCode !== previousProvinceCode;
+        if (provinceChanged && !hydratingAddressSelections.value) {
+            form.value.city_municipality = '';
+            form.value.barangay = '';
+            residentialBarangays.value = [];
+        }
+
+        void loadMunicipalities('residential', provinceCode, hydratingAddressSelections.value ? form.value.city_municipality : '');
+    },
+);
+
+watch(
+    () => form.value.province1,
+    (provinceCode, previousProvinceCode) => {
+        const provinceChanged = provinceCode !== previousProvinceCode;
+        if (provinceChanged && !hydratingAddressSelections.value) {
+            form.value.city_municipality1 = '';
+            form.value.barangay1 = '';
+            permanentBarangays.value = [];
+        }
+
+        void loadMunicipalities('permanent', provinceCode, hydratingAddressSelections.value ? form.value.city_municipality1 : '');
+    },
+);
+
+watch(
+    () => form.value.city_municipality,
+    (municipalCode, previousMunicipalCode) => {
+        const municipalityChanged = municipalCode !== previousMunicipalCode;
+        if (municipalityChanged && !hydratingAddressSelections.value) {
+            form.value.barangay = '';
+        }
+
+        void loadBarangays('residential', municipalCode, hydratingAddressSelections.value ? form.value.barangay : '');
+    },
+);
+
+watch(
+    () => form.value.city_municipality1,
+    (municipalCode, previousMunicipalCode) => {
+        const municipalityChanged = municipalCode !== previousMunicipalCode;
+        if (municipalityChanged && !hydratingAddressSelections.value) {
+            form.value.barangay1 = '';
+        }
+
+        void loadBarangays('permanent', municipalCode, hydratingAddressSelections.value ? form.value.barangay1 : '');
+    },
+);
 </script>
 
 <template>
@@ -670,8 +839,8 @@ function submit(): void {
                             </label>
                             <label class="ehris-modal-field">
                                 <span>City/Municipality</span>
-                                <select v-model="form.city_municipality" class="ehris-select">
-                                    <option value="" disabled>Select city/municipality</option>
+                                <select v-model="form.city_municipality" class="ehris-select" :disabled="!form.province">
+                                    <option value="" disabled>{{ form.province ? 'Select city/municipality' : 'Select province first' }}</option>
                                     <option
                                         v-for="m in residentialMunicipalityOptions()"
                                         :key="String(m.municipal_code ?? m.name)"
@@ -683,8 +852,8 @@ function submit(): void {
                             </label>
                             <label class="ehris-modal-field">
                                 <span>Barangay</span>
-                                <select v-model="form.barangay" class="ehris-select">
-                                    <option value="" disabled>Select barangay</option>
+                                <select v-model="form.barangay" class="ehris-select" :disabled="!form.city_municipality">
+                                    <option value="" disabled>{{ form.city_municipality ? 'Select barangay' : 'Select city/municipality first' }}</option>
                                     <option
                                         v-for="option in optionsWithCurrent(residentialBarangayOptions(), form.barangay)"
                                         :key="option"
@@ -728,8 +897,8 @@ function submit(): void {
                             </label>
                             <label class="ehris-modal-field">
                                 <span>City/Municipality</span>
-                                <select v-model="form.city_municipality1" class="ehris-select">
-                                    <option value="" disabled>Select city/municipality</option>
+                                <select v-model="form.city_municipality1" class="ehris-select" :disabled="!form.province1">
+                                    <option value="" disabled>{{ form.province1 ? 'Select city/municipality' : 'Select province first' }}</option>
                                     <option
                                         v-for="m in permanentMunicipalityOptions()"
                                         :key="String(m.municipal_code ?? m.name)"
@@ -741,8 +910,8 @@ function submit(): void {
                             </label>
                             <label class="ehris-modal-field">
                                 <span>Barangay</span>
-                                <select v-model="form.barangay1" class="ehris-select">
-                                    <option value="" disabled>Select barangay</option>
+                                <select v-model="form.barangay1" class="ehris-select" :disabled="!form.city_municipality1">
+                                    <option value="" disabled>{{ form.city_municipality1 ? 'Select barangay' : 'Select city/municipality first' }}</option>
                                     <option
                                         v-for="option in optionsWithCurrent(permanentBarangayOptions(), form.barangay1)"
                                         :key="option"
@@ -765,7 +934,7 @@ function submit(): void {
                                     :model-value="formatPhilippineLandline(form.phone_num)"
                                     type="tel"
                                     inputmode="numeric"
-                                    pattern="[0-9-]*"
+                                    pattern="[-0-9]*"
                                     maxlength="12"
                                     @update:modelValue="(v) => { form.phone_num = digitsOnly(v).slice(0, 10); }"
                                     @keydown="onTelephoneKeydown"
@@ -778,7 +947,7 @@ function submit(): void {
                                     :model-value="formatPhilippineMobile(form.mobile_num)"
                                     type="tel"
                                     inputmode="numeric"
-                                    pattern="[0-9-]*"
+                                    pattern="[-0-9]*"
                                     maxlength="13"
                                     @update:modelValue="(v) => { form.mobile_num = digitsOnly(v).slice(0, 11); }"
                                     @keydown="onMobileKeydown"

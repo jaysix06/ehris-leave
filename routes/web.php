@@ -246,6 +246,12 @@ Route::patch('notifications/{id}/read', [NotificationController::class, 'markAsR
 Route::get('my-details', [MyDetailsController::class, 'show'])
     ->middleware(['auth', 'verified'])
     ->name('my-details');
+Route::get('my-details/municipalities', [MyDetailsController::class, 'municipalities'])
+    ->middleware(['auth', 'verified'])
+    ->name('my-details.municipalities');
+Route::get('my-details/barangays', [MyDetailsController::class, 'barangays'])
+    ->middleware(['auth', 'verified'])
+    ->name('my-details.barangays');
 Route::get('my-profile', function () {
     return redirect()->route('profile.edit');
 })->middleware(['auth', 'verified'])->name('my-profile');

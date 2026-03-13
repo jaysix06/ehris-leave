@@ -7,7 +7,6 @@ use App\Models\Affiliation;
 use App\Models\Awards;
 use App\Models\Document;
 use App\Models\EmpCivilServiceInfo;
-use App\Models\EmpContactInfo;
 use App\Models\EmpEducationInfo;
 use App\Models\EmpOfficialInfo;
 use App\Models\EmpPersonalInfo;
@@ -20,6 +19,7 @@ use App\Models\LeaveHistory;
 use App\Models\Performance;
 use App\Models\Researches;
 use App\Models\User;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -94,24 +94,7 @@ class MyDetailsController extends Controller
                 'tbl_emp_contact_info' => [
                     'key' => 'contactInfo',
                     'type' => 'single',
-                    'query' => fn () => DB::table('tbl_emp_contact_info as c')
-                        ->leftJoin('tbl_barangay as rb', 'rb.barangay_id', '=', 'c.barangay')
-                        ->leftJoin('tbl_province as rp', 'rp.province_code', '=', 'c.province')
-                        ->leftJoin('tbl_barangay as pb', 'pb.barangay_id', '=', 'c.barangay1')
-                        ->leftJoin('tbl_province as pp', 'pp.province_code', '=', 'c.province1')
-                        ->leftJoin('tbl_municipality as rm', 'rm.municipal_code', '=', 'c.city_municipality')
-                        ->leftJoin('tbl_municipality as pm', 'pm.municipal_code', '=', 'c.city_municipality1')
-                        ->where('c.hrid', $hrid)
-                        ->select([
-                            'c.*',
-                            'rb.barangay_name as residential_barangay_name',
-                            'rp.province_name  as residential_province_name',
-                            'pb.barangay_name as permanent_barangay_name',
-                            'pp.province_name  as permanent_province_name',
-                            'rm.municipal_name as residential_city_name',
-                            'pm.municipal_name as permanent_city_name',
-                        ])
-                        ->first(),
+                    'query' => fn () => DB::table('tbl_emp_contact_info')->where('hrid', $hrid)->first(),
                 ],
                 'tbl_emp_education_info' => [
                     'key' => 'education',
@@ -203,44 +186,58 @@ class MyDetailsController extends Controller
                 $data['voluntaryWork'] = $data['affiliation'];
             }
 
-            // Enrich contact info with resolved barangay/province names so the
-            // UI (and exports) can show names instead of raw IDs.
-            if (isset($data['contactInfo']) && $data['contactInfo'] instanceof EmpContactInfo) {
+            // Resolve stored lookup codes/ids to display names for existing users.
+            if (isset($data['contactInfo']) && is_object($data['contactInfo'])) {
                 $contact = $data['contactInfo'];
+                $contact->residential_barangay_name = $this->resolveLookupNameByValue(
+                    'tbl_barangay',
+                    $contact->barangay ?? null,
+                    ['barangay_name'],
+                    ['barangay_code', 'barangay_id'],
+                );
+                $contact->residential_city_name = $this->resolveLookupNameByValue(
+                    'tbl_municipality',
+                    $contact->city_municipality ?? null,
+                    ['municipal_name'],
+                    ['municipal_code', 'municipal_id'],
+                );
+                $contact->residential_province_name = $this->resolveLookupNameByValue(
+                    'tbl_province',
+                    $contact->province ?? null,
+                    ['province_name'],
+                    ['province_code', 'province_id'],
+                );
+                $contact->residential_region_name = $this->resolveLookupNameByValue(
+                    'tbl_region',
+                    $contact->region ?? null,
+                    ['region_name', 'name'],
+                    ['region_code', 'region_id'],
+                );
 
-                $residentialBarangayName = null;
-                $residentialProvinceName = null;
-                $permanentBarangayName = null;
-                $permanentProvinceName = null;
-
-                if (! empty($contact->barangay) && Schema::hasTable('tbl_barangay')) {
-                    $residentialBarangayName = DB::table('tbl_barangay')
-                        ->where('barangay_id', $contact->barangay)
-                        ->value('barangay_name');
-                }
-
-                if (! empty($contact->province) && Schema::hasTable('tbl_province')) {
-                    $residentialProvinceName = DB::table('tbl_province')
-                        ->where('province_id', $contact->province)
-                        ->value('province_name');
-                }
-
-                if (! empty($contact->barangay1) && Schema::hasTable('tbl_barangay')) {
-                    $permanentBarangayName = DB::table('tbl_barangay')
-                        ->where('barangay_id', $contact->barangay1)
-                        ->value('barangay_name');
-                }
-
-                if (! empty($contact->province1) && Schema::hasTable('tbl_province')) {
-                    $permanentProvinceName = DB::table('tbl_province')
-                        ->where('province_id', $contact->province1)
-                        ->value('province_name');
-                }
-
-                $contact->residential_barangay_name = $residentialBarangayName;
-                $contact->residential_province_name = $residentialProvinceName;
-                $contact->permanent_barangay_name = $permanentBarangayName;
-                $contact->permanent_province_name = $permanentProvinceName;
+                $contact->permanent_barangay_name = $this->resolveLookupNameByValue(
+                    'tbl_barangay',
+                    $contact->barangay1 ?? null,
+                    ['barangay_name'],
+                    ['barangay_code', 'barangay_id'],
+                );
+                $contact->permanent_city_name = $this->resolveLookupNameByValue(
+                    'tbl_municipality',
+                    $contact->city_municipality1 ?? null,
+                    ['municipal_name'],
+                    ['municipal_code', 'municipal_id'],
+                );
+                $contact->permanent_province_name = $this->resolveLookupNameByValue(
+                    'tbl_province',
+                    $contact->province1 ?? null,
+                    ['province_name'],
+                    ['province_code', 'province_id'],
+                );
+                $contact->permanent_region_name = $this->resolveLookupNameByValue(
+                    'tbl_region',
+                    $contact->region1 ?? null,
+                    ['region_name', 'name'],
+                    ['region_code', 'region_id'],
+                );
             }
 
             if (isset($data['officialInfo']) && $data['officialInfo'] instanceof EmpOfficialInfo) {
@@ -444,47 +441,6 @@ class MyDetailsController extends Controller
                 ->all();
         }
 
-        if (Schema::hasTable('tbl_barangay') && Schema::hasColumn('tbl_barangay', 'barangay_name')) {
-            $contactOptions['barangays'] = DB::table('tbl_barangay')
-                ->whereNotNull('barangay_name')
-                ->select(['barangay_name', 'municipal_code'])
-                ->get()
-                ->map(function ($row) {
-                    $name = trim((string) $row->barangay_name);
-
-                    return [
-                        'name' => $name,
-                        'municipal_code' => $row->municipal_code !== null ? (int) $row->municipal_code : null,
-                    ];
-                })
-                ->filter(fn (array $row) => $row['name'] !== '')
-                ->unique(fn (array $row) => $row['municipal_code'].'|'.$row['name'])
-                ->sortBy('name')
-                ->values()
-                ->all();
-        }
-
-        if (Schema::hasTable('tbl_municipality') && Schema::hasColumn('tbl_municipality', 'municipal_name')) {
-            $contactOptions['municipalities'] = DB::table('tbl_municipality')
-                ->whereNotNull('municipal_name')
-                ->select(['municipal_name', 'municipal_code', 'province_code'])
-                ->get()
-                ->map(function ($row) {
-                    $name = trim((string) $row->municipal_name);
-
-                    return [
-                        'name' => $name,
-                        'municipal_code' => $row->municipal_code !== null ? (int) $row->municipal_code : null,
-                        'province_code' => $row->province_code !== null ? (int) $row->province_code : null,
-                    ];
-                })
-                ->filter(fn (array $row) => $row['name'] !== '' && $row['municipal_code'] !== null && $row['province_code'] !== null)
-                ->unique(fn (array $row) => $row['municipal_code'])
-                ->sortBy('name')
-                ->values()
-                ->all();
-        }
-
         return Inertia::render('MyDetails', array_merge(
             [
                 'profile' => $dbProfile,
@@ -492,6 +448,8 @@ class MyDetailsController extends Controller
                 'familyUpdateUrl' => route('my-details.family.store'),
                 'officialUpdateUrl' => route('my-details.official.store'),
                 'personalUpdateUrl' => route('my-details.personal.store'),
+                'municipalitiesLookupUrl' => route('my-details.municipalities'),
+                'barangaysLookupUrl' => route('my-details.barangays'),
                 'eligibilityUpdateUrl' => route('my-details.eligibility.store'),
                 'workExperienceUpdateUrl' => route('my-details.work-experience.store'),
                 'voluntaryWorkUpdateUrl' => route('my-details.voluntary-work.store'),
@@ -503,6 +461,86 @@ class MyDetailsController extends Controller
             ],
             $data,
         ));
+    }
+
+    public function municipalities(Request $request): JsonResponse
+    {
+        $provinceCode = $request->query('province_code');
+        $normalizedProvinceCode = is_scalar($provinceCode) ? trim((string) $provinceCode) : '';
+
+        if (
+            $normalizedProvinceCode === ''
+            || ! ctype_digit($normalizedProvinceCode)
+            || ! Schema::hasTable('tbl_municipality')
+            || ! Schema::hasColumn('tbl_municipality', 'municipal_name')
+            || ! Schema::hasColumn('tbl_municipality', 'municipal_code')
+            || ! Schema::hasColumn('tbl_municipality', 'province_code')
+        ) {
+            return response()->json([
+                'municipalities' => [],
+            ]);
+        }
+
+        $municipalities = DB::table('tbl_municipality')
+            ->where('province_code', (int) $normalizedProvinceCode)
+            ->whereNotNull('municipal_name')
+            ->select(['municipal_id', 'municipal_code', 'municipal_name'])
+            ->get()
+            ->map(function ($row): array {
+                return [
+                    'id' => $row->municipal_id !== null ? (int) $row->municipal_id : null,
+                    'municipal_code' => $row->municipal_code !== null ? (int) $row->municipal_code : null,
+                    'name' => trim((string) $row->municipal_name),
+                ];
+            })
+            ->filter(fn (array $row): bool => $row['name'] !== '' && $row['municipal_code'] !== null)
+            ->unique(fn (array $row): int => $row['municipal_code'])
+            ->sortBy('name')
+            ->values()
+            ->all();
+
+        return response()->json([
+            'municipalities' => $municipalities,
+        ]);
+    }
+
+    public function barangays(Request $request): JsonResponse
+    {
+        $municipalCode = $request->query('municipal_code');
+        $normalizedMunicipalCode = is_scalar($municipalCode) ? trim((string) $municipalCode) : '';
+
+        if (
+            $normalizedMunicipalCode === ''
+            || ! ctype_digit($normalizedMunicipalCode)
+            || ! Schema::hasTable('tbl_barangay')
+            || ! Schema::hasColumn('tbl_barangay', 'barangay_name')
+            || ! Schema::hasColumn('tbl_barangay', 'municipal_code')
+        ) {
+            return response()->json([
+                'barangays' => [],
+            ]);
+        }
+
+        $barangays = DB::table('tbl_barangay')
+            ->where('municipal_code', (int) $normalizedMunicipalCode)
+            ->whereNotNull('barangay_name')
+            ->select(['barangay_id', 'barangay_name'])
+            ->get()
+            ->map(function ($row): array {
+                return [
+                    'id' => $row->barangay_id !== null ? (int) $row->barangay_id : null,
+                    'name' => trim((string) $row->barangay_name),
+                ];
+            })
+            ->filter(fn (array $row): bool => $row['name'] !== '')
+            ->unique(fn (array $row): string => strtolower($row['name']))
+            ->sortBy('name')
+            ->values()
+            ->all();
+
+        return response()->json([
+            'barangays' => $barangays,
+        ]);
     }
 
     public function exportPdsExcel(Request $request): StreamedResponse
@@ -1339,6 +1377,11 @@ class MyDetailsController extends Controller
             'barangay', 'barangay1' => [
                 [
                     'table' => 'tbl_barangay',
+                    'id_column' => 'barangay_code',
+                    'name_column' => 'barangay_name',
+                ],
+                [
+                    'table' => 'tbl_barangay',
                     'id_column' => 'barangay_id',
                     'name_column' => 'barangay_name',
                 ],
@@ -1366,6 +1409,11 @@ class MyDetailsController extends Controller
                 ],
             ],
             'province', 'province1' => [
+                [
+                    'table' => 'tbl_province',
+                    'id_column' => 'province_code',
+                    'name_column' => 'province_name',
+                ],
                 [
                     'table' => 'tbl_province',
                     'id_column' => 'province_id',
@@ -1423,6 +1471,39 @@ class MyDetailsController extends Controller
         }
 
         return ['value' => $normalized, 'valid' => true];
+    }
+
+    private function resolveLookupNameByValue(string $table, mixed $value, array $nameColumns, array $lookupColumns): ?string
+    {
+        $normalizedValue = is_scalar($value) ? trim((string) $value) : '';
+        if ($normalizedValue === '' || ! Schema::hasTable($table)) {
+            return null;
+        }
+
+        $nameColumn = collect($nameColumns)
+            ->first(fn (string $column): bool => Schema::hasColumn($table, $column));
+
+        if (! is_string($nameColumn)) {
+            return null;
+        }
+
+        $resolvedValue = ctype_digit($normalizedValue) ? (int) $normalizedValue : $normalizedValue;
+
+        foreach ($lookupColumns as $lookupColumn) {
+            if (! Schema::hasColumn($table, $lookupColumn)) {
+                continue;
+            }
+
+            $name = DB::table($table)
+                ->where($lookupColumn, $resolvedValue)
+                ->value($nameColumn);
+
+            if (is_string($name) && trim($name) !== '') {
+                return trim($name);
+            }
+        }
+
+        return null;
     }
 
     private function canEditOfficialInfo(?User $authUser, ?User $profile): bool
