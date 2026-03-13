@@ -129,6 +129,11 @@ const props = defineProps<{
     officialInfo?: Record<string, unknown> | null;
     personalInfo?: Record<string, unknown> | null;
     contactInfo?: Record<string, unknown> | null;
+    contactOptions?: {
+        provinces?: { name: string; province_code: number | null }[];
+        barangays?: { name: string; municipal_code: number | null }[];
+        municipalities?: { name: string; municipal_code: number | null; province_code: number | null }[];
+    };
     family?: Record<string, unknown>[];
     familyUpdateUrl?: string;
     education?: Record<string, unknown>[];
@@ -305,6 +310,7 @@ function sectionProps(index: number): Record<string, unknown> {
                 personalInfo: props.personalInfo,
                 officialInfo: props.officialInfo,
                 contactInfo: props.contactInfo,
+                contactOptions: props.contactOptions,
                 profile: props.profile,
                 personalUpdateUrl: props.personalUpdateUrl,
             };

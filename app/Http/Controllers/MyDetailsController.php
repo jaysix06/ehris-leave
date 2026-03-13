@@ -96,9 +96,11 @@ class MyDetailsController extends Controller
                     'type' => 'single',
                     'query' => fn () => DB::table('tbl_emp_contact_info as c')
                         ->leftJoin('tbl_barangay as rb', 'rb.barangay_id', '=', 'c.barangay')
-                        ->leftJoin('tbl_province as rp', 'rp.province_id', '=', 'c.province')
+                        ->leftJoin('tbl_province as rp', 'rp.province_code', '=', 'c.province')
                         ->leftJoin('tbl_barangay as pb', 'pb.barangay_id', '=', 'c.barangay1')
-                        ->leftJoin('tbl_province as pp', 'pp.province_id', '=', 'c.province1')
+                        ->leftJoin('tbl_province as pp', 'pp.province_code', '=', 'c.province1')
+                        ->leftJoin('tbl_municipality as rm', 'rm.municipal_code', '=', 'c.city_municipality')
+                        ->leftJoin('tbl_municipality as pm', 'pm.municipal_code', '=', 'c.city_municipality1')
                         ->where('c.hrid', $hrid)
                         ->select([
                             'c.*',
@@ -106,6 +108,8 @@ class MyDetailsController extends Controller
                             'rp.province_name  as residential_province_name',
                             'pb.barangay_name as permanent_barangay_name',
                             'pp.province_name  as permanent_province_name',
+                            'rm.municipal_name as residential_city_name',
+                            'pm.municipal_name as permanent_city_name',
                         ])
                         ->first(),
                 ],
@@ -318,6 +322,12 @@ class MyDetailsController extends Controller
             'employmentStatuses' => [],
         ];
 
+        $contactOptions = [
+            'provinces' => [],
+            'barangays' => [],
+            'municipalities' => [],
+        ];
+
         if (Schema::hasTable('tbl_salary_grade') && Schema::hasColumn('tbl_salary_grade', 'salary_grade')) {
             $officialOptions['salaryGrades'] = DB::table('tbl_salary_grade')
                 ->whereNotNull('salary_grade')
@@ -414,6 +424,67 @@ class MyDetailsController extends Controller
                 ->all();
         }
 
+        if (Schema::hasTable('tbl_province') && Schema::hasColumn('tbl_province', 'province_name')) {
+            $contactOptions['provinces'] = DB::table('tbl_province')
+                ->whereNotNull('province_name')
+                ->select(['province_name', 'province_code'])
+                ->get()
+                ->map(function ($row) {
+                    $name = trim((string) $row->province_name);
+
+                    return [
+                        'name' => $name,
+                        'province_code' => $row->province_code !== null ? (int) $row->province_code : null,
+                    ];
+                })
+                ->filter(fn (array $row) => $row['name'] !== '' && $row['province_code'] !== null)
+                ->unique(fn (array $row) => $row['province_code'])
+                ->sortBy('name')
+                ->values()
+                ->all();
+        }
+
+        if (Schema::hasTable('tbl_barangay') && Schema::hasColumn('tbl_barangay', 'barangay_name')) {
+            $contactOptions['barangays'] = DB::table('tbl_barangay')
+                ->whereNotNull('barangay_name')
+                ->select(['barangay_name', 'municipal_code'])
+                ->get()
+                ->map(function ($row) {
+                    $name = trim((string) $row->barangay_name);
+
+                    return [
+                        'name' => $name,
+                        'municipal_code' => $row->municipal_code !== null ? (int) $row->municipal_code : null,
+                    ];
+                })
+                ->filter(fn (array $row) => $row['name'] !== '')
+                ->unique(fn (array $row) => $row['municipal_code'].'|'.$row['name'])
+                ->sortBy('name')
+                ->values()
+                ->all();
+        }
+
+        if (Schema::hasTable('tbl_municipality') && Schema::hasColumn('tbl_municipality', 'municipal_name')) {
+            $contactOptions['municipalities'] = DB::table('tbl_municipality')
+                ->whereNotNull('municipal_name')
+                ->select(['municipal_name', 'municipal_code', 'province_code'])
+                ->get()
+                ->map(function ($row) {
+                    $name = trim((string) $row->municipal_name);
+
+                    return [
+                        'name' => $name,
+                        'municipal_code' => $row->municipal_code !== null ? (int) $row->municipal_code : null,
+                        'province_code' => $row->province_code !== null ? (int) $row->province_code : null,
+                    ];
+                })
+                ->filter(fn (array $row) => $row['name'] !== '' && $row['municipal_code'] !== null && $row['province_code'] !== null)
+                ->unique(fn (array $row) => $row['municipal_code'])
+                ->sortBy('name')
+                ->values()
+                ->all();
+        }
+
         return Inertia::render('MyDetails', array_merge(
             [
                 'profile' => $dbProfile,
@@ -428,6 +499,7 @@ class MyDetailsController extends Controller
                 'awardsUpdateUrl' => route('my-details.awards.store'),
                 'canEditOfficialInfo' => $this->canEditOfficialInfo($authUser, $dbProfile),
                 'officialOptions' => $officialOptions,
+                'contactOptions' => $contactOptions,
             ],
             $data,
         ));
