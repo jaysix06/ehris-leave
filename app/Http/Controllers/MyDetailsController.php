@@ -318,6 +318,12 @@ class MyDetailsController extends Controller
             'employmentStatuses' => [],
         ];
 
+        $contactOptions = [
+            'provinces' => [],
+            'barangays' => [],
+            'municipalities' => [],
+        ];
+
         if (Schema::hasTable('tbl_salary_grade') && Schema::hasColumn('tbl_salary_grade', 'salary_grade')) {
             $officialOptions['salaryGrades'] = DB::table('tbl_salary_grade')
                 ->whereNotNull('salary_grade')
@@ -414,6 +420,67 @@ class MyDetailsController extends Controller
                 ->all();
         }
 
+        if (Schema::hasTable('tbl_province') && Schema::hasColumn('tbl_province', 'province_name')) {
+            $contactOptions['provinces'] = DB::table('tbl_province')
+                ->whereNotNull('province_name')
+                ->select(['province_name', 'province_code'])
+                ->get()
+                ->map(function ($row) {
+                    $name = trim((string) $row->province_name);
+
+                    return [
+                        'name' => $name,
+                        'province_code' => $row->province_code !== null ? (int) $row->province_code : null,
+                    ];
+                })
+                ->filter(fn (array $row) => $row['name'] !== '' && $row['province_code'] !== null)
+                ->unique(fn (array $row) => $row['province_code'])
+                ->sortBy('name')
+                ->values()
+                ->all();
+        }
+
+        if (Schema::hasTable('tbl_barangay') && Schema::hasColumn('tbl_barangay', 'barangay_name')) {
+            $contactOptions['barangays'] = DB::table('tbl_barangay')
+                ->whereNotNull('barangay_name')
+                ->select(['barangay_name', 'municipal_code'])
+                ->get()
+                ->map(function ($row) {
+                    $name = trim((string) $row->barangay_name);
+
+                    return [
+                        'name' => $name,
+                        'municipal_code' => $row->municipal_code !== null ? (int) $row->municipal_code : null,
+                    ];
+                })
+                ->filter(fn (array $row) => $row['name'] !== '')
+                ->unique(fn (array $row) => $row['municipal_code'].'|'.$row['name'])
+                ->sortBy('name')
+                ->values()
+                ->all();
+        }
+
+        if (Schema::hasTable('tbl_municipality') && Schema::hasColumn('tbl_municipality', 'municipal_name')) {
+            $contactOptions['municipalities'] = DB::table('tbl_municipality')
+                ->whereNotNull('municipal_name')
+                ->select(['municipal_name', 'municipal_code', 'province_code'])
+                ->get()
+                ->map(function ($row) {
+                    $name = trim((string) $row->municipal_name);
+
+                    return [
+                        'name' => $name,
+                        'municipal_code' => $row->municipal_code !== null ? (int) $row->municipal_code : null,
+                        'province_code' => $row->province_code !== null ? (int) $row->province_code : null,
+                    ];
+                })
+                ->filter(fn (array $row) => $row['name'] !== '' && $row['municipal_code'] !== null && $row['province_code'] !== null)
+                ->unique(fn (array $row) => $row['municipal_code'])
+                ->sortBy('name')
+                ->values()
+                ->all();
+        }
+
         return Inertia::render('MyDetails', array_merge(
             [
                 'profile' => $dbProfile,
@@ -423,6 +490,7 @@ class MyDetailsController extends Controller
                 'personalUpdateUrl' => route('my-details.personal.store'),
                 'canEditOfficialInfo' => $this->canEditOfficialInfo($authUser, $dbProfile),
                 'officialOptions' => $officialOptions,
+                'contactOptions' => $contactOptions,
             ],
             $data,
         ));

@@ -74,6 +74,11 @@ const props = defineProps<{
     contactInfo?: Record<string, unknown> | null;
     profile?: Record<string, unknown> | null;
     personalUpdateUrl?: string;
+    contactOptions?: {
+        provinces?: { name: string; province_code: number | null }[];
+        barangays?: { name: string; municipal_code: number | null }[];
+        municipalities?: { name: string; municipal_code: number | null; province_code: number | null }[];
+    };
 }>();
 
 const editModalOpen = ref(false);
@@ -327,6 +332,42 @@ function optionsWithCurrent(options: string[], current: string): string[] {
     return [trimmed, ...options];
 }
 
+function residentialBarangayOptions(): string[] {
+    const all = props.contactOptions?.barangays ?? [];
+    const code = Number(form.value.city_municipality || 0);
+    if (!code) {
+        return all.map((b) => b.name);
+    }
+    return all
+        .filter((b) => b.municipal_code === code)
+        .map((b) => b.name);
+}
+
+function permanentBarangayOptions(): string[] {
+    const all = props.contactOptions?.barangays ?? [];
+    const code = Number(form.value.city_municipality1 || 0);
+    if (!code) {
+        return all.map((b) => b.name);
+    }
+    return all
+        .filter((b) => b.municipal_code === code)
+        .map((b) => b.name);
+}
+
+function residentialMunicipalityOptions(): { name: string; municipal_code: number | null }[] {
+    const all = props.contactOptions?.municipalities ?? [];
+    const provinceCode = Number(form.value.province || 0);
+    if (!provinceCode) return all;
+    return all.filter((m) => m.province_code === provinceCode);
+}
+
+function permanentMunicipalityOptions(): { name: string; municipal_code: number | null }[] {
+    const all = props.contactOptions?.municipalities ?? [];
+    const provinceCode = Number(form.value.province1 || 0);
+    if (!provinceCode) return all;
+    return all.filter((m) => m.province_code === provinceCode);
+}
+
 function copyResidentialToPermanent(): void {
     form.value = {
         ...form.value,
@@ -391,16 +432,16 @@ function openEdit(): void {
         house_block_lotnum: valInput(c.house_block_lotnum),
         street_add: valInput(c.street_add),
         subdivision_village: valInput(c.subdivision_village),
-        barangay: valInput(c.barangay),
-        city_municipality: valInput(c.city_municipality),
-        province: valInput(c.province),
+        barangay: valInput(c.residential_barangay_name ?? c.barangay),
+        city_municipality: c.city_municipality != null ? String(c.city_municipality) : '',
+        province: c.province != null ? String(c.province) : '',
         zip_code: valInput(c.zip_code),
         house_block_lotnum1: valInput(c.house_block_lotnum1),
         street_add1: valInput(c.street_add1),
         subdivision_village1: valInput(c.subdivision_village1),
-        barangay1: valInput(c.barangay1),
-        city_municipality1: valInput(c.city_municipality1),
-        province1: valInput(c.province1),
+        barangay1: valInput(c.permanent_barangay_name ?? c.barangay1),
+        city_municipality1: c.city_municipality1 != null ? String(c.city_municipality1) : '',
+        province1: c.province1 != null ? String(c.province1) : '',
         zip_code1: valInput(c.zip_code1),
         phone_num: digitsOnly(c.phone_num).slice(0, 10),
         mobile_num: digitsOnly(c.mobile_num).slice(0, 11),
@@ -614,9 +655,46 @@ function submit(): void {
                             <label class="ehris-modal-field"><span>House/Block/Lot</span><Input v-model="form.house_block_lotnum" /></label>
                             <label class="ehris-modal-field"><span>Street</span><Input v-model="form.street_add" /></label>
                             <label class="ehris-modal-field"><span>Subdivision/Village</span><Input v-model="form.subdivision_village" /></label>
-                            <label class="ehris-modal-field"><span>Barangay</span><Input v-model="form.barangay" /></label>
-                            <label class="ehris-modal-field"><span>City/Municipality</span><Input v-model="form.city_municipality" /></label>
-                            <label class="ehris-modal-field"><span>Province</span><Input v-model="form.province" /></label>
+                            <label class="ehris-modal-field">
+                                <span>Province</span>
+                                <select v-model="form.province" class="ehris-select">
+                                    <option value="" disabled>Select province</option>
+                                    <option
+                                        v-for="p in props.contactOptions?.provinces ?? []"
+                                        :key="String(p.province_code ?? p.name)"
+                                        :value="String(p.province_code)"
+                                    >
+                                        {{ p.name }}
+                                    </option>
+                                </select>
+                                <small class="ehris-modal-hint">Select province first, then city/municipality, then barangay.</small>
+                            </label>
+                            <label class="ehris-modal-field">
+                                <span>City/Municipality</span>
+                                <select v-model="form.city_municipality" class="ehris-select">
+                                    <option value="" disabled>Select city/municipality</option>
+                                    <option
+                                        v-for="m in residentialMunicipalityOptions()"
+                                        :key="String(m.municipal_code ?? m.name)"
+                                        :value="String(m.municipal_code)"
+                                    >
+                                        {{ m.name }}
+                                    </option>
+                                </select>
+                            </label>
+                            <label class="ehris-modal-field">
+                                <span>Barangay</span>
+                                <select v-model="form.barangay" class="ehris-select">
+                                    <option value="" disabled>Select barangay</option>
+                                    <option
+                                        v-for="option in optionsWithCurrent(residentialBarangayOptions(), form.barangay)"
+                                        :key="option"
+                                        :value="option"
+                                    >
+                                        {{ option }}
+                                    </option>
+                                </select>
+                            </label>
                             <label class="ehris-modal-field"><span>Zip Code</span><Input v-model="form.zip_code" /></label>
                         </div>
                     </div>
@@ -635,9 +713,46 @@ function submit(): void {
                             <label class="ehris-modal-field"><span>House/Block/Lot</span><Input v-model="form.house_block_lotnum1" /></label>
                             <label class="ehris-modal-field"><span>Street</span><Input v-model="form.street_add1" /></label>
                             <label class="ehris-modal-field"><span>Subdivision/Village</span><Input v-model="form.subdivision_village1" /></label>
-                            <label class="ehris-modal-field"><span>Barangay</span><Input v-model="form.barangay1" /></label>
-                            <label class="ehris-modal-field"><span>City/Municipality</span><Input v-model="form.city_municipality1" /></label>
-                            <label class="ehris-modal-field"><span>Province</span><Input v-model="form.province1" /></label>
+                            <label class="ehris-modal-field">
+                                <span>Province</span>
+                                <select v-model="form.province1" class="ehris-select">
+                                    <option value="" disabled>Select province</option>
+                                    <option
+                                        v-for="p in props.contactOptions?.provinces ?? []"
+                                        :key="String(p.province_code ?? p.name)"
+                                        :value="String(p.province_code)"
+                                    >
+                                        {{ p.name }}
+                                    </option>
+                                </select>
+                                <small class="ehris-modal-hint">Select province first, then city/municipality, then barangay.</small>
+                            </label>
+                            <label class="ehris-modal-field">
+                                <span>City/Municipality</span>
+                                <select v-model="form.city_municipality1" class="ehris-select">
+                                    <option value="" disabled>Select city/municipality</option>
+                                    <option
+                                        v-for="m in permanentMunicipalityOptions()"
+                                        :key="String(m.municipal_code ?? m.name)"
+                                        :value="String(m.municipal_code)"
+                                    >
+                                        {{ m.name }}
+                                    </option>
+                                </select>
+                            </label>
+                            <label class="ehris-modal-field">
+                                <span>Barangay</span>
+                                <select v-model="form.barangay1" class="ehris-select">
+                                    <option value="" disabled>Select barangay</option>
+                                    <option
+                                        v-for="option in optionsWithCurrent(permanentBarangayOptions(), form.barangay1)"
+                                        :key="option"
+                                        :value="option"
+                                    >
+                                        {{ option }}
+                                    </option>
+                                </select>
+                            </label>
                             <label class="ehris-modal-field"><span>Zip Code</span><Input v-model="form.zip_code1" /></label>
                         </div>
                     </div>
