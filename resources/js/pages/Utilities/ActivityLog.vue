@@ -73,7 +73,7 @@ const getAjaxParams = computed(() => () => ({}));
                 <div class="rounded-md border overflow-x-auto w-full">
                     <DataTable
                         :columns="activityLogColumns"
-                        ajax-url="/api/utilities/activity-log/datatables"
+                        ajax-url="/utilities/activity-log/datatables"
                         :get-ajax-params="getAjaxParams"
                         row-key="log_id"
                         :loading="isLoading"
@@ -87,3 +87,4 @@ const getAjaxParams = computed(() => () => ({}));
         </div>
     </AppLayout>
 </template>
+

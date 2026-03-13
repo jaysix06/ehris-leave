@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { Form, Head } from '@inertiajs/vue3';
+import { Form, Head, router } from '@inertiajs/vue3';
+import { defineComponent, watch } from 'vue';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
@@ -10,6 +11,22 @@ import SettingsLayout from '@/layouts/settings/Layout.vue';
 import { type BreadcrumbItem } from '@/types';
 import PasswordController from '@/actions/App/Http/Controllers/Settings/PasswordController';
 import { edit } from '@/routes/user-password';
+
+// After password change the server regenerates the CSRF token; reload the page so
+// the new token is in the document and logout (and other requests) don't get 419.
+const ReloadAfterPasswordSuccess = defineComponent({
+    name: 'ReloadAfterPasswordSuccess',
+    props: { recentlySuccessful: { type: Boolean, default: false } },
+    setup(props) {
+        watch(
+            () => props.recentlySuccessful,
+            (success) => {
+                if (success) router.reload();
+            },
+        );
+    },
+    template: '<span class="hidden" aria-hidden="true"></span>',
+});
 
 const breadcrumbItems: BreadcrumbItem[] = [
     {
@@ -47,6 +64,7 @@ const breadcrumbItems: BreadcrumbItem[] = [
                     class="space-y-6"
                     v-slot="{ errors, processing, recentlySuccessful }"
                 >
+                    <ReloadAfterPasswordSuccess :recently-successful="recentlySuccessful" />
                     <div class="grid gap-2">
                         <Label for="current_password">Current password</Label>
                         <Input

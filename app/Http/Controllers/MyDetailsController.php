@@ -702,8 +702,8 @@ class MyDetailsController extends Controller
             'pob' => ['nullable', 'string', 'max:255'],
             'gender' => ['nullable', 'string', 'max:32'],
             'civil_stat' => ['nullable', 'string', 'max:64'],
-            'height' => ['nullable', 'string', 'max:32'],
-            'weight' => ['nullable', 'string', 'max:32'],
+            'height' => ['nullable', 'numeric', 'min:0'],
+            'weight' => ['nullable', 'numeric', 'min:0'],
             'blood_type' => ['nullable', 'string', 'max:16'],
             'citizenship' => ['nullable', 'string', 'max:64'],
             'dual_citizenship' => ['nullable', 'string', 'max:64'],
@@ -789,6 +789,7 @@ class MyDetailsController extends Controller
 
         if (Schema::hasTable('tbl_emp_contact_info')) {
             $contactPayload = [];
+            $invalidLookupFields = [];
             foreach ([
                 'house_block_lotnum',
                 'street_add',
@@ -809,8 +810,37 @@ class MyDetailsController extends Controller
                 'email',
             ] as $key) {
                 if (array_key_exists($key, $data) && Schema::hasColumn('tbl_emp_contact_info', $key)) {
-                    $contactPayload[$key] = $data[$key] === '' ? null : $data[$key];
+                    $value = $data[$key] === '' ? null : $data[$key];
+                    if (in_array($key, ['barangay', 'barangay1', 'city_municipality', 'city_municipality1', 'province', 'province1'], true)) {
+                        $lookupResult = $this->normalizeLocationLookupValueForContactInfo($key, $value);
+                        if (! $lookupResult['valid']) {
+                            $invalidLookupFields[] = $key;
+                        }
+                        $value = $lookupResult['value'];
+                    }
+
+                    $contactPayload[$key] = $value;
                 }
+            }
+
+            if ($invalidLookupFields !== []) {
+                $fieldNames = collect($invalidLookupFields)
+                    ->map(function (string $field): string {
+                        return match ($field) {
+                            'barangay', 'barangay1' => 'barangay',
+                            'city_municipality', 'city_municipality1' => 'city/municipality',
+                            'province', 'province1' => 'province',
+                            default => $field,
+                        };
+                    })
+                    ->unique()
+                    ->values()
+                    ->all();
+
+                return redirect()->route('my-details')
+                    ->withErrors([
+                        'message' => 'Invalid '.implode(' and ', $fieldNames).' value. Please choose a valid one.',
+                    ]);
             }
 
             if ($contactPayload !== []) {
@@ -912,6 +942,110 @@ class MyDetailsController extends Controller
     private function canEditOfficialRole(?User $authUser, ?User $profile): bool
     {
         return $this->canEditOfficialInfo($authUser, $profile);
+    }
+
+    /**
+     * @return array{value: mixed, valid: bool}
+     */
+    private function normalizeLocationLookupValueForContactInfo(string $field, mixed $value): array
+    {
+        if ($value === null) {
+            return ['value' => null, 'valid' => true];
+        }
+
+        $normalized = trim((string) $value);
+        if ($normalized === '') {
+            return ['value' => null, 'valid' => true];
+        }
+
+        $lookupConfig = match ($field) {
+            'barangay', 'barangay1' => [
+                [
+                    'table' => 'tbl_barangay',
+                    'id_column' => 'barangay_id',
+                    'name_column' => 'barangay_name',
+                ],
+            ],
+            'city_municipality', 'city_municipality1' => [
+                [
+                    'table' => 'tbl_municipality',
+                    'id_column' => 'municipal_code',
+                    'name_column' => 'municipal_name',
+                ],
+                [
+                    'table' => 'tbl_municipality',
+                    'id_column' => 'municipal_id',
+                    'name_column' => 'municipal_name',
+                ],
+                [
+                    'table' => 'tbl_municipality1',
+                    'id_column' => 'municipal_code1',
+                    'name_column' => 'municipal_name1',
+                ],
+                [
+                    'table' => 'tbl_municipality1',
+                    'id_column' => 'municipal_id',
+                    'name_column' => 'municipal_name1',
+                ],
+            ],
+            'province', 'province1' => [
+                [
+                    'table' => 'tbl_province',
+                    'id_column' => 'province_id',
+                    'name_column' => 'province_name',
+                ],
+            ],
+            default => null,
+        };
+
+        if ($lookupConfig === null) {
+            return ['value' => $normalized, 'valid' => true];
+        }
+
+        $columnType = Schema::getColumnType('tbl_emp_contact_info', $field);
+        $expectsInteger = in_array($columnType, ['tinyint', 'smallint', 'mediumint', 'integer', 'bigint'], true);
+
+        if (ctype_digit($normalized)) {
+            return ['value' => (int) $normalized, 'valid' => true];
+        }
+
+        foreach ($lookupConfig as $candidate) {
+            if (
+                Schema::hasTable($candidate['table'])
+                && Schema::hasColumn($candidate['table'], $candidate['id_column'])
+                && Schema::hasColumn($candidate['table'], $candidate['name_column'])
+            ) {
+                $normalizedLower = strtolower($normalized);
+                $alternates = [$normalizedLower];
+                if (str_ends_with($normalizedLower, ' city')) {
+                    $alternates[] = 'city of '.trim(substr($normalizedLower, 0, -5));
+                } elseif (str_starts_with($normalizedLower, 'city of ')) {
+                    $alternates[] = trim(substr($normalizedLower, 8)).' city';
+                }
+
+                $resolvedId = DB::table($candidate['table'])
+                    ->where(function ($query) use ($candidate, $alternates): void {
+                        foreach ($alternates as $index => $alternate) {
+                            if ($index === 0) {
+                                $query->whereRaw('LOWER('.$candidate['name_column'].') = ?', [$alternate]);
+                            } else {
+                                $query->orWhereRaw('LOWER('.$candidate['name_column'].') = ?', [$alternate]);
+                            }
+                        }
+                    })
+                    ->value($candidate['id_column']);
+
+                if ($resolvedId !== null) {
+                    return ['value' => (int) $resolvedId, 'valid' => true];
+                }
+            }
+        }
+
+        if ($expectsInteger) {
+            return ['value' => null, 'valid' => false];
+        }
+
+        return ['value' => $normalized, 'valid' => true];
     }
 
     private function canEditOfficialInfo(?User $authUser, ?User $profile): bool

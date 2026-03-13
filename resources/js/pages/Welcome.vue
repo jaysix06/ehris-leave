@@ -122,7 +122,7 @@ useSessionTrap({
                                         </p>
                                         <ul v-if="item.links && item.links.length > 0" class="mt-2 space-y-1 text-xs">
                                             <li v-for="(link, index) in item.links" :key="`${item.id}-${index}`">
-                                                <a :href="link.url" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline">
+                                                <a :href="link.url" class="text-primary hover:underline">
                                                     {{ link.label || link.url }}
                                                 </a>
                                             </li>

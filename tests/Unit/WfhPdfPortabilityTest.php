@@ -116,7 +116,19 @@ it('uses tightened target and priority columns with wider station column in WFH 
         ]
     );
 
-    expect($html)->toContain('th.col-task, td.col-task { text-align: left; width: 30%; }')
-        ->and($html)->toContain('th.col-priority, td.col-priority { text-align: center; width: 9%; }')
+    expect($html)->toContain('th.col-task, td.col-task { text-align: left; width: 25%; }')
+        ->and($html)->toContain('th.col-priority, td.col-priority { text-align: center; width: 6%; }')
         ->and($html)->toContain('th.col-station, td.col-station { text-align: left; width: 15%; }');
+});
+
+it('ensures dompdf font directories exist before rendering', function () {
+    $controller = new WfhTimeInOutController;
+    $method = new ReflectionMethod(WfhTimeInOutController::class, 'ensureDompdfFontDirectoriesExist');
+    $method->setAccessible(true);
+
+    $paths = $method->invoke($controller);
+
+    expect($paths)->toHaveKeys(['font_dir', 'font_cache'])
+        ->and(is_dir($paths['font_dir']))->toBeTrue()
+        ->and(is_dir($paths['font_cache']))->toBeTrue();
 });

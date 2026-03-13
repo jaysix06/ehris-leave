@@ -6,14 +6,13 @@ use App\Actions\Fortify\CreateNewUser;
 use App\Actions\Fortify\ResetUserPassword;
 use App\Models\BusinessUnit;
 use App\Models\Department;
-use App\Models\EmploymentStatus;
+use App\Models\Role;
 use App\Models\User;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
@@ -53,9 +52,8 @@ class FortifyServiceProvider extends ServiceProvider
     /**
      * Configure authentication to support the activation flow.
      *
-     * - Users should log in using their official DepEd email after activation.
-     * - During transition/debugging, allow matching either `email` (official)
-     *   or `personal_email` (registration email), but still require password match.
+     * - Login accepts only the official DepEd email (email / @deped.gov.ph).
+     * - Personal email is for registration and for sending/receiving only, not for login.
      * - Inactive users are handled by the custom LoginResponse (shows pending message).
      */
     private function configureAuthentication(): void
@@ -72,15 +70,10 @@ class FortifyServiceProvider extends ServiceProvider
                 return null;
             }
 
-            $userQuery = User::query()
-                ->whereRaw('LOWER(TRIM(email)) = ?', [$email]);
-
-            $usersTable = (new User)->getTable();
-            if (Schema::hasColumn($usersTable, 'personal_email')) {
-                $userQuery->orWhereRaw('LOWER(TRIM(personal_email)) = ?', [$email]);
-            }
-
-            $user = $userQuery->first();
+            // Only match on official DepEd email; personal_email is not accepted for login.
+            $user = User::query()
+                ->whereRaw('LOWER(TRIM(email)) = ?', [$email])
+                ->first();
 
             if (! $user || ! is_string($user->password) || $user->password === '') {
                 Log::info('[Auth] User not found or no password', [
@@ -140,7 +133,7 @@ class FortifyServiceProvider extends ServiceProvider
         ]));
 
         Fortify::registerView(fn () => Inertia::render('auth/Register', [
-            'employmentStatuses' => EmploymentStatus::orderBy('id')->pluck('emp_status')->values()->all(),
+            'roles' => Role::roleNames(),
             'districts' => BusinessUnit::orderBy('id')->get()->map(fn ($row) => [
                 'id' => $row->BusinessUnitId,
                 'name' => $row->BusinessUnit,
@@ -153,7 +146,6 @@ class FortifyServiceProvider extends ServiceProvider
             ])->values()->all(),
         ]));
 
-        Fortify::twoFactorChallengeView(fn () => Inertia::render('auth/TwoFactorChallenge'));
 
         Fortify::confirmPasswordView(fn () => Inertia::render('auth/ConfirmPassword'));
     }

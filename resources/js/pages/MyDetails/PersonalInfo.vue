@@ -2,6 +2,7 @@
 import { router } from '@inertiajs/vue3';
 import { Pencil } from 'lucide-vue-next';
 import { ref } from 'vue';
+import { toast } from 'vue3-toastify';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -423,6 +424,8 @@ function submit(): void {
         },
         onError: (e) => {
             errors.value = e as Record<string, string>;
+            const firstError = Object.values(errors.value).find((message) => typeof message === 'string' && message.trim() !== '');
+            toast.error(firstError ?? 'Unable to update personal information.');
         },
     });
 }

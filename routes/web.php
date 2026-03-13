@@ -54,6 +54,10 @@ Route::get('/', function () {
     ]);
 })->middleware('guest')->name('home');
 
+Route::get('manual/wfh-attendance', fn () => view('manual.wfh-attendance'))
+    ->middleware('guest')
+    ->name('manual.wfh-attendance');
+
 Route::get('auth/status', function (Request $request) {
     return response()
         ->json([
@@ -241,7 +245,7 @@ Route::get('my-details', [MyDetailsController::class, 'show'])
     ->middleware(['auth', 'verified'])
     ->name('my-details');
 Route::get('my-profile', function () {
-    return Inertia::render('MyProfile');
+    return redirect()->route('profile.edit');
 })->middleware(['auth', 'verified'])->name('my-profile');
 
 Route::get('utilities', function () {
@@ -253,43 +257,46 @@ Route::get('utilities/employee-list', function () {
 Route::get('utilities/user-list', [UserListController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('utilities.user-list');
-Route::get('api/utilities/users', [UserListController::class, 'api'])
+Route::get('utilities/users', [UserListController::class, 'api'])
     ->middleware(['auth'])
     ->name('utilities.user-list.api');
-Route::post('api/utilities/users', [UserListController::class, 'store'])
+Route::post('utilities/users', [UserListController::class, 'store'])
     ->middleware(['auth'])
     ->withoutMiddleware([ValidateCsrfToken::class])
     ->name('utilities.user-list.store');
-Route::get('api/utilities/users/datatables', [UserListController::class, 'datatables'])
+Route::get('utilities/users/datatables', [UserListController::class, 'datatables'])
     ->middleware(['auth'])
     ->name('utilities.user-list.datatables');
-Route::get('api/utilities/users/export/excel', [UserListController::class, 'exportExcel'])
+Route::get('utilities/user-list/summary-stats', [UserListController::class, 'summaryStats'])
+    ->middleware(['auth'])
+    ->name('utilities.user-list.summary-stats');
+Route::get('utilities/users/export/excel', [UserListController::class, 'exportExcel'])
     ->middleware(['auth'])
     ->name('utilities.user-list.export-excel');
-Route::get('api/utilities/users/{user}', [UserListController::class, 'show'])
+Route::get('utilities/users/{user}', [UserListController::class, 'show'])
     ->middleware(['auth'])
     ->name('utilities.user-list.show');
-Route::get('api/utilities/departments', [UserListController::class, 'departments'])
+Route::get('utilities/departments', [UserListController::class, 'departments'])
     ->middleware(['auth'])
     ->name('utilities.departments');
-Route::get('api/utilities/users/export/excel', [UserListController::class, 'exportExcel'])
+Route::get('utilities/users/export/excel', [UserListController::class, 'exportExcel'])
     ->middleware(['auth'])
     ->name('utilities.user-list.export-excel');
-Route::patch('api/utilities/users/{user}/status', [UserListController::class, 'updateStatus'])
+Route::patch('utilities/users/{user}/status', [UserListController::class, 'updateStatus'])
     ->middleware(['auth'])
     // Use token-based auth (session "auth" only) for this JSON endpoint to
     // avoid CSRF 419 errors when called via fetch/DataTables.
     ->withoutMiddleware([ValidateCsrfToken::class])
     ->name('utilities.user-list.update-status');
-Route::patch('api/utilities/users/{user}/reset-password', [UserListController::class, 'resetPassword'])
+Route::patch('utilities/users/{user}/reset-password', [UserListController::class, 'resetPassword'])
     ->middleware(['auth'])
     ->withoutMiddleware([ValidateCsrfToken::class])
     ->name('utilities.user-list.reset-password');
-Route::patch('api/utilities/users/{user}', [UserListController::class, 'update'])
+Route::patch('utilities/users/{user}', [UserListController::class, 'update'])
     ->middleware(['auth'])
     ->withoutMiddleware([ValidateCsrfToken::class])
     ->name('utilities.user-list.update');
-Route::delete('api/utilities/users/{user}', [UserListController::class, 'destroy'])
+Route::delete('utilities/users/{user}', [UserListController::class, 'destroy'])
     ->middleware(['auth'])
     ->withoutMiddleware([ValidateCsrfToken::class])
     ->name('utilities.user-list.destroy');
@@ -323,42 +330,42 @@ Route::get('utilities', function () {
 Route::get('utilities/employee-list', [App\Http\Controllers\Utilities\EmployeeListController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('utilities.employee-list');
-Route::get('api/utilities/employee-list/datatables', [App\Http\Controllers\Utilities\EmployeeListController::class, 'datatables'])
+Route::get('utilities/employee-list/datatables', [App\Http\Controllers\Utilities\EmployeeListController::class, 'datatables'])
     ->middleware(['auth', 'verified'])
     ->name('api.utilities.employee-list.datatables');
-Route::post('api/utilities/employee-list', [App\Http\Controllers\Utilities\EmployeeListController::class, 'store'])
+Route::post('utilities/employee-list', [App\Http\Controllers\Utilities\EmployeeListController::class, 'store'])
     ->middleware(['auth', 'verified'])
     ->name('api.utilities.employee-list.store');
-Route::delete('api/utilities/employee-list/{employee}', [App\Http\Controllers\Utilities\EmployeeListController::class, 'destroy'])
+Route::delete('utilities/employee-list/{employee}', [App\Http\Controllers\Utilities\EmployeeListController::class, 'destroy'])
     ->middleware(['auth', 'verified'])
     ->name('api.utilities.employee-list.destroy')
     ->where('employee', '[0-9]+');
 Route::get('utilities/user-list', [UserListController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('utilities.user-list');
-Route::get('api/utilities/users', [UserListController::class, 'api'])
+Route::get('utilities/users', [UserListController::class, 'api'])
     ->middleware(['auth'])
     ->name('utilities.user-list.api');
-Route::post('api/utilities/users', [UserListController::class, 'store'])
+Route::post('utilities/users', [UserListController::class, 'store'])
     ->middleware(['auth'])
     ->withoutMiddleware([ValidateCsrfToken::class])
     ->name('utilities.user-list.store');
-Route::get('api/utilities/departments', [UserListController::class, 'departments'])
+Route::get('utilities/departments', [UserListController::class, 'departments'])
     ->middleware(['auth'])
     ->name('utilities.departments');
-Route::patch('api/utilities/users/{user}/status', [UserListController::class, 'updateStatus'])
+Route::patch('utilities/users/{user}/status', [UserListController::class, 'updateStatus'])
     ->middleware(['auth'])
     ->withoutMiddleware([ValidateCsrfToken::class])
     ->name('utilities.user-list.update-status');
-Route::patch('api/utilities/users/{user}/reset-password', [UserListController::class, 'resetPassword'])
+Route::patch('utilities/users/{user}/reset-password', [UserListController::class, 'resetPassword'])
     ->middleware(['auth'])
     ->withoutMiddleware([ValidateCsrfToken::class])
     ->name('utilities.user-list.reset-password');
-Route::patch('api/utilities/users/{user}', [UserListController::class, 'update'])
+Route::patch('utilities/users/{user}', [UserListController::class, 'update'])
     ->middleware(['auth'])
     ->withoutMiddleware([ValidateCsrfToken::class])
     ->name('utilities.user-list.update');
-Route::delete('api/utilities/users/{user}', [UserListController::class, 'destroy'])
+Route::delete('utilities/users/{user}', [UserListController::class, 'destroy'])
     ->middleware(['auth'])
     ->withoutMiddleware([ValidateCsrfToken::class])
     ->name('utilities.user-list.destroy');
@@ -369,23 +376,23 @@ Route::get('utilities/job-title-monthly-salary', [JobTitleMonthlySalaryControlle
     ->middleware(['auth', 'verified'])
     ->name('utilities.job-title-monthly-salary');
 
-Route::get('api/utilities/job-title-monthly-salary/job-titles/datatables', [JobTitleMonthlySalaryController::class, 'jobTitlesDatatables'])
+Route::get('utilities/job-title-monthly-salary/job-titles/datatables', [JobTitleMonthlySalaryController::class, 'jobTitlesDatatables'])
     ->middleware(['auth', 'verified'])
     ->name('api.utilities.job-titles.datatables');
 
-Route::get('api/utilities/job-title-monthly-salary/monthly-salaries/datatables', [JobTitleMonthlySalaryController::class, 'monthlySalariesDatatables'])
+Route::get('utilities/job-title-monthly-salary/monthly-salaries/datatables', [JobTitleMonthlySalaryController::class, 'monthlySalariesDatatables'])
     ->middleware(['auth', 'verified'])
     ->name('api.utilities.monthly-salaries.datatables');
 
-Route::post('api/utilities/job-title-monthly-salary/job-titles', [JobTitleMonthlySalaryController::class, 'storeJobTitle'])
+Route::post('utilities/job-title-monthly-salary/job-titles', [JobTitleMonthlySalaryController::class, 'storeJobTitle'])
     ->middleware(['auth', 'verified'])
     ->name('api.utilities.job-titles.store');
 
-Route::put('api/utilities/job-title-monthly-salary/job-titles/{id}', [JobTitleMonthlySalaryController::class, 'updateJobTitle'])
+Route::put('utilities/job-title-monthly-salary/job-titles/{id}', [JobTitleMonthlySalaryController::class, 'updateJobTitle'])
     ->middleware(['auth', 'verified'])
     ->name('api.utilities.job-titles.update');
 
-Route::delete('api/utilities/job-title-monthly-salary/monthly-salaries/{id}', [JobTitleMonthlySalaryController::class, 'destroyMonthlySalary'])
+Route::delete('utilities/job-title-monthly-salary/monthly-salaries/{id}', [JobTitleMonthlySalaryController::class, 'destroyMonthlySalary'])
     ->middleware(['auth', 'verified'])
     ->name('api.utilities.monthly-salaries.destroy');
 Route::get('utilities/business-department-list', [BusinessDepartmentController::class, 'index'])
@@ -402,9 +409,9 @@ Route::delete('utilities/business-department-list/business-units/{id}', [Busines
     ->middleware(['auth', 'verified'])->name('utilities.business-department-list.business-units.destroy');
 Route::delete('utilities/business-department-list/departments/{id}', [BusinessDepartmentController::class, 'destroyDepartment'])
     ->middleware(['auth', 'verified'])->name('utilities.business-department-list.departments.destroy');
-Route::get('api/utilities/business-department-list/business-units/datatables', [BusinessDepartmentController::class, 'datatablesBusinessUnit'])
+Route::get('utilities/business-department-list/business-units/datatables', [BusinessDepartmentController::class, 'datatablesBusinessUnit'])
     ->middleware(['auth', 'verified'])->name('api.utilities.business-department-list.business-units.datatables');
-Route::get('api/utilities/business-department-list/departments/datatables', [BusinessDepartmentController::class, 'datatablesDepartment'])
+Route::get('utilities/business-department-list/departments/datatables', [BusinessDepartmentController::class, 'datatablesDepartment'])
     ->middleware(['auth', 'verified'])->name('api.utilities.business-department-list.departments.datatables');
 Route::get('utilities/job-title-monthly-salary', function () {
     return Inertia::render('Utilities/JobTitleMonthlySalary');
@@ -412,34 +419,34 @@ Route::get('utilities/job-title-monthly-salary', function () {
 Route::get('utilities/reporting-manager', [ReportingManagerController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('utilities.reporting-manager');
-Route::get('api/utilities/reporting-manager', [ReportingManagerController::class, 'api'])
+Route::get('utilities/reporting-manager/data', [ReportingManagerController::class, 'api'])
     ->middleware(['auth'])
     ->name('utilities.reporting-manager.api');
-Route::get('api/utilities/reporting-manager/datatables', [ReportingManagerController::class, 'datatables'])
+Route::get('utilities/reporting-manager/datatables', [ReportingManagerController::class, 'datatables'])
     ->middleware(['auth'])
     ->name('utilities.reporting-manager.datatables');
-Route::get('api/utilities/reporting-manager/managers', [ReportingManagerController::class, 'managers'])
+Route::get('utilities/reporting-manager/managers', [ReportingManagerController::class, 'managers'])
     ->middleware(['auth'])
     ->name('utilities.reporting-manager.managers');
-Route::post('api/utilities/reporting-manager/assign', [ReportingManagerController::class, 'assign'])
+Route::post('utilities/reporting-manager/assign', [ReportingManagerController::class, 'assign'])
     ->middleware(['auth'])
     ->name('utilities.reporting-manager.assign');
-Route::post('api/utilities/reporting-manager/auto-assign', [ReportingManagerController::class, 'autoAssignBySchoolOrDepartment'])
+Route::post('utilities/reporting-manager/auto-assign', [ReportingManagerController::class, 'autoAssignBySchoolOrDepartment'])
     ->middleware(['auth'])
     ->name('utilities.reporting-manager.auto-assign');
-Route::delete('api/utilities/reporting-manager/{hrid}', [ReportingManagerController::class, 'remove'])
+Route::delete('utilities/reporting-manager/{hrid}', [ReportingManagerController::class, 'remove'])
     ->middleware(['auth'])
     ->name('utilities.reporting-manager.remove');
 
-Route::post('api/utilities/job-title-monthly-salary/monthly-salaries', [JobTitleMonthlySalaryController::class, 'storeMonthlySalary'])
+Route::post('utilities/job-title-monthly-salary/monthly-salaries', [JobTitleMonthlySalaryController::class, 'storeMonthlySalary'])
     ->middleware(['auth', 'verified'])
     ->name('api.utilities.monthly-salaries.store');
 
-Route::put('api/utilities/job-title-monthly-salary/monthly-salaries/{id}', [JobTitleMonthlySalaryController::class, 'updateMonthlySalary'])
+Route::put('utilities/job-title-monthly-salary/monthly-salaries/{id}', [JobTitleMonthlySalaryController::class, 'updateMonthlySalary'])
     ->middleware(['auth', 'verified'])
     ->name('api.utilities.monthly-salaries.update');
 
-Route::delete('api/utilities/job-title-monthly-salary/monthly-salaries/{id}', [JobTitleMonthlySalaryController::class, 'destroyMonthlySalary'])
+Route::delete('utilities/job-title-monthly-salary/monthly-salaries/{id}', [JobTitleMonthlySalaryController::class, 'destroyMonthlySalary'])
     ->middleware(['auth', 'verified'])
     ->name('api.utilities.monthly-salaries.destroy');
 Route::get('utilities/user-list', function () {
@@ -461,9 +468,9 @@ Route::delete('utilities/business-department-list/business-units/{id}', [Busines
     ->middleware(['auth', 'verified'])->name('utilities.business-department-list.business-units.destroy');
 Route::delete('utilities/business-department-list/departments/{id}', [BusinessDepartmentController::class, 'destroyDepartment'])
     ->middleware(['auth', 'verified'])->name('utilities.business-department-list.departments.destroy');
-Route::get('api/utilities/business-department-list/business-units/datatables', [BusinessDepartmentController::class, 'datatablesBusinessUnit'])
+Route::get('utilities/business-department-list/business-units/datatables', [BusinessDepartmentController::class, 'datatablesBusinessUnit'])
     ->middleware(['auth', 'verified'])->name('api.utilities.business-department-list.business-units.datatables');
-Route::get('api/utilities/business-department-list/departments/datatables', [BusinessDepartmentController::class, 'datatablesDepartment'])
+Route::get('utilities/business-department-list/departments/datatables', [BusinessDepartmentController::class, 'datatablesDepartment'])
     ->middleware(['auth', 'verified'])->name('api.utilities.business-department-list.departments.datatables');
 Route::get('utilities/job-title-monthly-salary', function () {
     return Inertia::render('Utilities/JobTitleMonthlySalary');
@@ -471,22 +478,22 @@ Route::get('utilities/job-title-monthly-salary', function () {
 Route::get('utilities/reporting-manager', [ReportingManagerController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('utilities.reporting-manager');
-Route::get('api/utilities/reporting-manager', [ReportingManagerController::class, 'api'])
+Route::get('utilities/reporting-manager/data', [ReportingManagerController::class, 'api'])
     ->middleware(['auth'])
     ->name('utilities.reporting-manager.api');
-Route::get('api/utilities/reporting-manager/datatables', [ReportingManagerController::class, 'datatables'])
+Route::get('utilities/reporting-manager/datatables', [ReportingManagerController::class, 'datatables'])
     ->middleware(['auth'])
     ->name('utilities.reporting-manager.datatables');
-Route::get('api/utilities/reporting-manager/managers', [ReportingManagerController::class, 'managers'])
+Route::get('utilities/reporting-manager/managers', [ReportingManagerController::class, 'managers'])
     ->middleware(['auth'])
     ->name('utilities.reporting-manager.managers');
-Route::post('api/utilities/reporting-manager/assign', [ReportingManagerController::class, 'assign'])
+Route::post('utilities/reporting-manager/assign', [ReportingManagerController::class, 'assign'])
     ->middleware(['auth'])
     ->name('utilities.reporting-manager.assign');
-Route::post('api/utilities/reporting-manager/auto-assign', [ReportingManagerController::class, 'autoAssignBySchoolOrDepartment'])
+Route::post('utilities/reporting-manager/auto-assign', [ReportingManagerController::class, 'autoAssignBySchoolOrDepartment'])
     ->middleware(['auth'])
     ->name('utilities.reporting-manager.auto-assign');
-Route::delete('api/utilities/reporting-manager/{hrid}', [ReportingManagerController::class, 'remove'])
+Route::delete('utilities/reporting-manager/{hrid}', [ReportingManagerController::class, 'remove'])
     ->middleware(['auth'])
     ->name('utilities.reporting-manager.remove');
 
@@ -495,16 +502,16 @@ Route::get('utilities/activity-log', [ActivityLogController::class, 'index'])
     ->name('utilities.activity-log');
 
 // API route for Activity Log DataTables
-Route::get('api/utilities/activity-log/datatables', [ActivityLogController::class, 'datatables'])
+Route::get('utilities/activity-log/datatables', [ActivityLogController::class, 'datatables'])
     ->middleware(['auth', 'verified'])
     ->name('api.utilities.activity-log.datatables');
 Route::get('utilities/survey-management', [SurveyManagementController::class, 'index'])
     ->middleware(['auth', 'verified'])->name('utilities.survey-management');
 Route::post('utilities/survey-management', [SurveyManagementController::class, 'store'])
     ->middleware(['auth', 'verified'])->name('utilities.survey-management.store');
-Route::get('api/utilities/survey-management/datatables', [SurveyManagementController::class, 'datatables'])
+Route::get('utilities/survey-management/datatables', [SurveyManagementController::class, 'datatables'])
     ->middleware(['auth', 'verified'])->name('api.utilities.survey-management.datatables');
-Route::get('api/utilities/survey-management/{id}', [SurveyManagementController::class, 'show'])
+Route::get('utilities/survey-management/{id}', [SurveyManagementController::class, 'show'])
     ->middleware(['auth', 'verified'])->name('api.utilities.survey-management.show');
 Route::put('utilities/survey-management/{id}', [SurveyManagementController::class, 'update'])
     ->middleware(['auth', 'verified'])->name('utilities.survey-management.update');
@@ -534,6 +541,9 @@ Route::put('utilities/announcement-management/{announcement}', [AnnouncementMana
 Route::delete('utilities/announcement-management/{announcement}', [AnnouncementManagementController::class, 'destroy'])
     ->middleware(['auth', 'verified'])
     ->name('utilities.announcement-management.destroy');
+Route::post('utilities/announcement-management/{announcement}/send-email', [AnnouncementManagementController::class, 'sendEmail'])
+    ->middleware(['auth', 'verified'])
+    ->name('utilities.announcement-management.send-email');
 Route::get('utilities/leave-types', [LeaveTypeController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('utilities.leave-types.index');

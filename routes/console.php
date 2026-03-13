@@ -5,6 +5,12 @@ use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schedule;
+
+Schedule::command('attendance:auto-clock-out')
+    ->dailyAt('18:00')
+    ->timezone('Asia/Manila')
+    ->withoutOverlapping();
 
 Artisan::command('user:fix-default-password {email}', function (string $email) {
     $user = User::query()

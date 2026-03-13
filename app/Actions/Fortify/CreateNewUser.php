@@ -7,7 +7,7 @@ use App\Concerns\ProfileValidationRules;
 use App\Mail\NewUserRegistrationAdminMail;
 use App\Models\BusinessUnit;
 use App\Models\Department;
-use App\Models\EmploymentStatus;
+use App\Models\Role;
 use App\Models\User;
 use App\Services\ActivityLogService;
 use Illuminate\Support\Facades\DB;
@@ -36,9 +36,9 @@ class CreateNewUser implements CreatesNewUsers
         $profileRules['middlename'] = ['nullable', 'string', 'max:255'];
         $profileRules['extname'] = ['nullable', 'string', 'max:50'];
 
-        $validStatuses = EmploymentStatus::pluck('emp_status')->all();
         $validDistrictIds = BusinessUnit::pluck('BusinessUnitId')->map(fn ($id) => (string) $id)->all();
         $validStationIds = Department::pluck('department_id')->map(fn ($id) => (string) $id)->all();
+        $validRoles = Role::roleNames();
 
         Validator::make($input, [
             ...$profileRules,
@@ -49,7 +49,7 @@ class CreateNewUser implements CreatesNewUsers
                 'max:255',
                 Rule::unique('tbl_user', 'personal_email'),
             ],
-            'employment_status' => ['required', 'string', Rule::in($validStatuses)],
+            'role' => ['required', 'string', Rule::in($validRoles)],
             'district' => ['required', Rule::in($validDistrictIds)],
             'station' => ['required', Rule::in($validStationIds)],
         ])->validate();
@@ -75,7 +75,7 @@ class CreateNewUser implements CreatesNewUsers
             'password' => null,
             'date_created' => now()->toDateString(),
             'active' => false,
-            'role' => 'Employee',
+            'role' => trim((string) ($input['role'] ?? 'Employee')),
             'department_id' => (int) $input['station'],
         ]);
 
@@ -90,6 +90,7 @@ class CreateNewUser implements CreatesNewUsers
         $nickname = trim((string) ($input['firstname'] ?? '')) ?: '—';
 
         // Sync to tbl_emp_official_info if the table exists (no Employee model in this project)
+        $defaultEmployStatus = \App\Models\EmploymentStatus::query()->orderBy('id')->value('emp_status') ?? 'Permanent';
         if (Schema::hasTable('tbl_emp_official_info')) {
             DB::table('tbl_emp_official_info')->updateOrInsert(
                 ['hrid' => $hrid],
@@ -101,7 +102,7 @@ class CreateNewUser implements CreatesNewUsers
                     'lastname' => $input['lastname'],
                     'extension' => $input['extname'] ?? '',
                     'nickname' => $nickname,
-                    'employ_status' => $input['employment_status'],
+                    'employ_status' => $defaultEmployStatus,
                     'business_id' => (string) $input['district'],
                     'department_id' => (string) $input['station'],
                 ]

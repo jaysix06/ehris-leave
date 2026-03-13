@@ -357,7 +357,7 @@ function onDepartmentTableClick(e: MouseEvent) {
                         <DataTable
                             :key="businessTableKey"
                             :columns="businessUnitColumns"
-                            ajax-url="/api/utilities/business-department-list/business-units/datatables"
+                            ajax-url="/utilities/business-department-list/business-units/datatables"
                             :get-ajax-params="getBusinessUnitAjaxParams"
                             row-key="id"
                             :per-page-options="[10, 25, 50]"
@@ -381,7 +381,7 @@ function onDepartmentTableClick(e: MouseEvent) {
                             :key="departmentTableKey"
                             class="ehris-department-table"
                             :columns="departmentColumns"
-                            ajax-url="/api/utilities/business-department-list/departments/datatables"
+                            ajax-url="/utilities/business-department-list/departments/datatables"
                             :get-ajax-params="getDepartmentAjaxParams"
                             row-key="id"
                             :per-page-options="[10, 25, 50]"
@@ -699,3 +699,4 @@ section:has(.ehris-department-table) :deep(.dataTables_length select) {
     background-color: #b91c1c !important;
 }
 </style>
+

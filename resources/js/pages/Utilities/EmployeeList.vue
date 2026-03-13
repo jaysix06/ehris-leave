@@ -340,7 +340,7 @@ const createEmployee = async () => {
     isCreating.value = true;
 
     try {
-        const response = await fetch('/api/utilities/employee-list', {
+        const response = await fetch('/utilities/employee-list', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -394,7 +394,7 @@ const deleteEmployee = async (employee: any) => {
     }
 
     try {
-        const response = await fetch(`/api/utilities/employee-list/${hrid}`, {
+        const response = await fetch(`/utilities/employee-list/${hrid}`, {
             method: 'DELETE',
             headers: {
                 'Accept': 'application/json',
@@ -742,7 +742,7 @@ onMounted(() => {
                     <DataTable
                         :key="tableKey"
                         :columns="employeeColumns"
-                        ajax-url="/api/utilities/employee-list/datatables"
+                        ajax-url="/utilities/employee-list/datatables"
                         :get-ajax-params="getAjaxParams"
                         row-key="hrid"
                         :loading="isLoading"
@@ -1057,3 +1057,4 @@ onMounted(() => {
         </DialogContent>
     </Dialog>
 </template>
+

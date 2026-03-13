@@ -5,12 +5,15 @@ namespace App\Http\Controllers\Settings;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Settings\ProfileDeleteRequest;
 use App\Http\Requests\Settings\ProfileUpdateRequest;
+use App\Models\Role;
 use App\Services\ActivityLogService;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -21,9 +24,23 @@ class ProfileController extends Controller
      */
     public function edit(Request $request): Response
     {
+        $user = $request->user();
+        $departments = [];
+        if (Schema::hasTable('tbl_department')) {
+            $departments = DB::table('tbl_department')
+                ->select('department_id as id', 'department_name as name')
+                ->orderBy('department_name')
+                ->get()
+                ->map(fn ($r) => ['id' => (int) $r->id, 'name' => (string) $r->name])
+                ->values()
+                ->all();
+        }
+
         return Inertia::render('settings/Profile', [
-            'mustVerifyEmail' => $request->user() instanceof MustVerifyEmail,
+            'mustVerifyEmail' => $user instanceof MustVerifyEmail,
             'status' => $request->session()->get('status'),
+            'departments' => $departments,
+            'roles' => Role::roleNames(),
         ]);
     }
 
@@ -36,15 +53,36 @@ class ProfileController extends Controller
         $changes = [];
 
         $validated = $request->validated();
-        unset($validated['avatar']);
+        $avatarFile = $request->file('avatar');
+        unset($validated['avatar'], $validated['name']);
         $request->user()->fill($validated);
+
+        // Recompute fullname from parts when name parts are present
+        if (array_key_exists('firstname', $validated) || array_key_exists('lastname', $validated)
+            || array_key_exists('middlename', $validated) || array_key_exists('extname', $validated)) {
+            $full = trim(implode(' ', array_filter([
+                $request->user()->firstname ?? '',
+                $request->user()->middlename ?? '',
+                $request->user()->lastname ?? '',
+                $request->user()->extname ?? '',
+            ])));
+            $request->user()->fullname = $full !== '' ? $full : $request->user()->fullname;
+        }
+
+        // When firstname/lastname change for active user, keep DepEd email in sync
+        if ($user->active && ($request->user()->isDirty('firstname') || $request->user()->isDirty('lastname'))) {
+            $request->user()->email = $this->buildOfficialDepedEmail(
+                (string) ($request->user()->firstname ?? ''),
+                (string) ($request->user()->lastname ?? ''),
+                $user->userId
+            );
+            $changes[] = 'email';
+        }
 
         if ($request->user()->isDirty('email')) {
             $request->user()->email_verified_at = null;
             $changes[] = 'email';
         }
-
-        // Track other changes
         if ($request->user()->isDirty('firstname')) {
             $changes[] = 'firstname';
         }
@@ -63,9 +101,18 @@ class ProfileController extends Controller
         if ($request->user()->isDirty('personal_email')) {
             $changes[] = 'personal_email';
         }
+        if ($request->user()->isDirty('role')) {
+            $changes[] = 'role';
+        }
+        if ($request->user()->isDirty('job_title')) {
+            $changes[] = 'job_title';
+        }
+        if ($request->user()->isDirty('department_id')) {
+            $changes[] = 'department_id';
+        }
 
-        if ($request->hasFile('avatar')) {
-            $file = $request->file('avatar');
+        if ($avatarFile && $avatarFile->isValid()) {
+            $file = $avatarFile;
             $ext = strtolower($file->getClientOriginalExtension() ?: 'jpg');
             if (! in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp'], true)) {
                 $ext = 'jpg';
@@ -80,7 +127,6 @@ class ProfileController extends Controller
 
         $request->user()->save();
 
-        // Log the profile update
         if (! empty($changes)) {
             ActivityLogService::logUpdate(
                 'User',
@@ -89,6 +135,18 @@ class ProfileController extends Controller
         }
 
         return to_route('profile.edit');
+    }
+
+    private function buildOfficialDepedEmail(string $firstname, string $lastname, int $userId): string
+    {
+        $first = preg_replace('/[^a-z0-9]/i', '', Str::lower(trim($firstname)));
+        $last = preg_replace('/[^a-z0-9]/i', '', Str::lower(trim($lastname)));
+        if ($first === '' && $last === '') {
+            return 'user'.$userId.'@deped.gov.ph';
+        }
+        $base = $first !== '' && $last !== '' ? $first.'.'.$last : ($first ?: $last);
+
+        return $base.'@deped.gov.ph';
     }
 
     /**
