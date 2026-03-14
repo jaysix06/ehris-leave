@@ -6,7 +6,9 @@ import {
     ChevronDown,
     Clock3,
     Download,
+    Eye,
     ShieldAlert,
+    X,
 } from 'lucide-vue-next';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { DatePicker } from 'v-calendar';
@@ -198,6 +200,17 @@ function applyDateFilter(): void {
 }
 
 const exportPdfLoading = ref<Record<number, boolean>>({});
+
+// View task modal
+const viewTask = ref<EmployeeTask | null>(null);
+
+function openViewModal(task: EmployeeTask): void {
+    viewTask.value = task;
+}
+
+function closeViewModal(): void {
+    viewTask.value = null;
+}
 
 function exportEmployeeTasks(employee: EmployeeCard): void {
     if (!props.selectedDate) {
@@ -593,7 +606,15 @@ function resolveAvatarSrc(avatar: string | null): string | null {
                                         </p>
                                     </div>
 
-                                    <div class="flex flex-wrap gap-2">
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <button
+                                            type="button"
+                                            class="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
+                                            @click="openViewModal(task)"
+                                        >
+                                            <Eye class="h-3.5 w-3.5" />
+                                            View
+                                        </button>
                                         <span
                                             class="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-600"
                                             >{{ task.status }}</span
@@ -627,6 +648,70 @@ function resolveAvatarSrc(avatar: string | null): string | null {
                 </article>
             </section>
         </div>
+
+        <!-- View Task Modal -->
+        <Teleport to="body">
+            <div
+                v-if="viewTask"
+                class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+                @click.self="closeViewModal"
+            >
+                <div
+                    class="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl border border-slate-200 bg-white p-6 shadow-lg"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="view-task-title"
+                >
+                    <div class="mb-4 flex items-center justify-between">
+                        <h2 id="view-task-title" class="text-lg font-semibold text-slate-900">
+                            Task details
+                        </h2>
+                        <button
+                            type="button"
+                            class="rounded p-1 text-slate-500 hover:bg-slate-100"
+                            aria-label="Close"
+                            @click="closeViewModal"
+                        >
+                            <X class="h-5 w-5" />
+                        </button>
+                    </div>
+
+                    <dl class="space-y-3 text-sm">
+                        <div>
+                            <dt class="font-medium text-slate-500">Title</dt>
+                            <dd class="mt-0.5 font-medium text-slate-900">{{ viewTask.title }}</dd>
+                        </div>
+                        <div>
+                            <dt class="font-medium text-slate-500">Description</dt>
+                            <dd class="mt-0.5 text-slate-900">{{ viewTask.description || '—' }}</dd>
+                        </div>
+                        <div>
+                            <dt class="font-medium text-slate-500">Priority</dt>
+                            <dd class="mt-0.5 text-slate-900">{{ viewTask.priority }}</dd>
+                        </div>
+                        <div>
+                            <dt class="font-medium text-slate-500">Due date</dt>
+                            <dd class="mt-0.5 text-slate-900">
+                                {{
+                                    viewTask.due_date_end &&
+                                    viewTask.due_date_end !== viewTask.due_date
+                                        ? `${viewTask.due_date} – ${viewTask.due_date_end}`
+                                        : viewTask.due_date
+                                }}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt class="font-medium text-slate-500">Status</dt>
+                            <dd class="mt-0.5 text-slate-900">{{ viewTask.status }}</dd>
+                        </div>
+                        <div v-if="viewTask.accomplishment_report">
+                            <dt class="font-medium text-slate-500">Accomplishment Report</dt>
+                            <dd class="mt-0.5 whitespace-pre-wrap text-slate-900">{{ viewTask.accomplishment_report }}</dd>
+                        </div>
+                    </dl>
+                </div>
+            </div>
+        </Teleport>
     </AppLayout>
 </template>
 
