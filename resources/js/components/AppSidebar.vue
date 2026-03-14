@@ -41,7 +41,7 @@ type RoleAccessRule = {
 const NAV_ACCESS_BY_ROLE: Record<string, RoleAccessRule> = {
     hidden: {
         allow: [],
-        hidden: ['cot-rpms-summary', 'sat-summary', 'self-service.service-record', 'self-service.leave-application','self-service.deped-email-requests', 'request-status', 'survey', 'employee-management.employee-profile', 'employee-management.psipop-update', 'employee-management.deped-email-requests', 'employee-management.leave-requests'],
+        hidden: ['cot-rpms-summary', 'sat-summary', 'self-service.service-record', 'self-service.leave-application','self-service.deped-email-requests', 'request-status.my-leave', 'survey', 'employee-management.employee-profile', 'employee-management.psipop-update', 'employee-management.deped-email-requests', 'employee-management.leave-requests'],
     },
     admin: {
         allow: ['*'],
