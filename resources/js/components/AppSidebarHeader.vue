@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { type HeaderNotification, type NotificationKind, useHeaderNotifications } from '@/composables/useHeaderNotifications';
+import { useAuthUser } from '@/composables/useAuthUser';
 import { useAvatarSrc } from '@/composables/useAvatarSrc';
 import { useInitials } from '@/composables/useInitials';
 import { logout } from '@/routes';
@@ -28,9 +29,12 @@ const props = withDefaults(
 );
 
 const page = usePage();
-const user = computed(() => page.props.auth.user);
+const user = useAuthUser();
 const { getInitials } = useInitials();
-const avatarSrc = useAvatarSrc(() => user.value?.avatar);
+const avatarSrc = useAvatarSrc(() => {
+    const u = user.value as Record<string, unknown> | null;
+    return (u?.avatar_url ?? u?.avatar) as string | null;
+});
 
 const currentTitle = computed(() => {
     if (!props.breadcrumbs.length) {
@@ -178,7 +182,7 @@ const notificationIconByKind = (kind: NotificationKind) => {
                             </p>
                         </div>
                         <div class="space-y-3 bg-card px-6 py-4">
-                            <Link href="/settings/password">
+                            <Link href="/settings/password" class="block">
                                 <button
                                     type="button"
                                     class="flex w-full items-center justify-center rounded-md border border-input bg-background px-3 py-2 text-sm font-medium hover:bg-muted"
@@ -186,8 +190,8 @@ const notificationIconByKind = (kind: NotificationKind) => {
                                     Change password
                                 </button>
                             </Link>
-                            <div class="flex gap-3">
-                                <Link href="/settings/profile" class="flex-1">
+                            <div class="grid grid-cols-2 gap-3">
+                                <Link href="/my-details?section=official-info" class="min-w-0">
                                     <button
                                         type="button"
                                         class="flex w-full items-center justify-center rounded-md border border-input bg-background px-3 py-2 text-sm font-medium hover:bg-muted"
@@ -198,7 +202,7 @@ const notificationIconByKind = (kind: NotificationKind) => {
                                 <Link
                                     :href="logout()"
                                     as="button"
-                                    class="flex-1 rounded-md border border-destructive/40 bg-destructive px-3 py-2 text-sm font-medium text-destructive-foreground hover:bg-destructive/90"
+                                    class="flex min-w-0 items-center justify-center rounded-md border border-destructive/40 bg-destructive px-3 py-2 text-sm font-medium text-destructive-foreground hover:bg-destructive/90"
                                     @click="router.flushAll()"
                                 >
                                     Sign out

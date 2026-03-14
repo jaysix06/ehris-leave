@@ -31,6 +31,7 @@ use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
 
@@ -97,6 +98,36 @@ Route::get('email/verified-success', function (Request $request) {
 
     return Inertia::render('auth/EmailVerifiedSuccess');
 })->name('verification.success');
+
+// Serve profile avatars from storage. If file is missing (e.g. old DB value), return a tiny transparent image so no 404.
+Route::get('avatars/{filename}', function (string $filename) {
+    $filename = basename($filename);
+    if ($filename === '' || preg_match('/[^a-zA-Z0-9_.-]/', $filename)) {
+        return response(base64_decode('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'), 200, [
+            'Content-Type' => 'image/gif',
+            'Cache-Control' => 'no-store',
+        ]);
+    }
+    $path = 'avatars/'.$filename;
+    if (! Storage::disk('public')->exists($path)) {
+        return response(base64_decode('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'), 200, [
+            'Content-Type' => 'image/gif',
+            'Cache-Control' => 'no-store',
+        ]);
+    }
+
+    $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+    $mime = match ($ext) {
+        'png' => 'image/png',
+        'gif' => 'image/gif',
+        'webp' => 'image/webp',
+        default => 'image/jpeg',
+    };
+
+    return response()->file(Storage::disk('public')->path($path), [
+        'Content-Type' => $mime,
+    ]);
+})->where('filename', '[a-zA-Z0-9_.-]+')->name('avatars.show');
 
 Route::get('dashboard', DashboardController::class)->middleware(['auth', 'verified'])->name('dashboard');
 
@@ -264,7 +295,7 @@ Route::get('my-details/barangays', [MyDetailsController::class, 'barangays'])
     ->middleware(['auth', 'verified'])
     ->name('my-details.barangays');
 Route::get('my-profile', function () {
-    return redirect()->route('profile.edit');
+    return redirect()->route('my-details', ['section' => 'official-info']);
 })->middleware(['auth', 'verified'])->name('my-profile');
 
 Route::get('utilities', function () {

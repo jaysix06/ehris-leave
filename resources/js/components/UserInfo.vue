@@ -15,7 +15,7 @@ const props = withDefaults(defineProps<Props>(), {
 });
 
 const { getInitials } = useInitials();
-const avatarSrc = useAvatarSrc(() => props.user.avatar);
+const avatarSrc = useAvatarSrc(() => (props.user as Record<string, unknown>)?.avatar_url ?? props.user.avatar);
 const showAvatar = computed(() => avatarSrc.value !== null);
 </script>
 

@@ -11,6 +11,17 @@ class ProfileUpdateRequest extends FormRequest
     use ProfileValidationRules;
 
     /**
+     * Prepare the data for validation (allow clearing personal email).
+     */
+    protected function prepareForValidation(): void
+    {
+        $email = $this->input('personal_email');
+        if (is_string($email) && trim($email) === '') {
+            $this->merge(['personal_email' => null]);
+        }
+    }
+
+    /**
      * Get the validation rules that apply to the request.
      *
      * @return array<string, ValidationRule|array<mixed>|string>

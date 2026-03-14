@@ -387,11 +387,6 @@ class IdCardController extends Controller
                     8 / 10
                 );
 
-                if ($uploadedPhotoPath !== null && $profile instanceof User && Schema::hasColumn('tbl_user', 'avatar')) {
-                    $profile->avatar = $uploadedPhotoPath;
-                    $profile->save();
-                }
-
                 // Keep legacy print_id image path in sync for tables still using old flow.
                 $legacyImagePath = $this->storePublicUpload(
                     $request->file('id_photo'),

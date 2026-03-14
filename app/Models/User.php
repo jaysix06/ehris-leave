@@ -59,6 +59,7 @@ class User extends Authenticatable implements MustVerifyEmail
     protected $appends = [
         'id',
         'name',
+        'avatar_url',
     ];
 
     /**
@@ -184,6 +185,37 @@ class User extends Authenticatable implements MustVerifyEmail
                 $this->attributes['firstname'] = $firstName ?: $this->attributes['firstname'] ?? null;
                 $this->attributes['lastname'] = $lastName ?: $this->attributes['lastname'] ?? null;
                 $this->attributes['middlename'] = $middleName ?: $this->attributes['middlename'] ?? null;
+            },
+        );
+    }
+
+    /**
+     * URL path for the user's profile avatar (served by GET /avatars/{filename}).
+     * Returns null when no avatar is set.
+     */
+    protected function avatarUrl(): Attribute
+    {
+        return Attribute::make(
+            get: function () {
+                $avatar = $this->attributes['avatar'] ?? null;
+                if (! is_string($avatar) || trim($avatar) === '') {
+                    return null;
+                }
+                $base = trim($avatar);
+
+                // If a relative public path is stored (e.g. "uploads/avatars/1_123.jpg"),
+                // serve it directly from /public.
+                if (str_contains($base, '/')) {
+                    $clean = ltrim($base, '/');
+                    return '/'.$clean;
+                }
+
+                // Otherwise treat it as a filename served by GET /avatars/{filename}.
+                if (preg_match('/[^a-zA-Z0-9_.-]/', $base)) {
+                    return null;
+                }
+
+                return '/avatars/'.$base;
             },
         );
     }

@@ -2,10 +2,11 @@ import type { MaybeRefOrGetter } from 'vue';
 import { computed, toValue } from 'vue';
 
 /**
- * Resolve avatar URL for header/sidebar/profile so that:
- * - IdCard upload (selfservice/idcard): path like "uploads/20856/20856.jpg" → "/uploads/20856/20856.jpg"
- * - Settings profile upload: filename like "72_123.jpg" (stored in storage/avatars) → "/storage/avatars/72_123.jpg"
- * - Full URLs, /, data:, blob: passed through
+ * Resolve avatar URL for header/sidebar/profile.
+ * Prefer avatar_url from the User model (e.g. "/avatars/72_123.jpg"); otherwise build from avatar filename.
+ * - User.avatar_url (from model): path like "/avatars/72_123.jpg" → used as-is (route serves or redirects to default)
+ * - IdCard: path like "uploads/20856/20856.jpg" → "/uploads/20856/20856.jpg"
+ * - Plain filename (legacy): "72_123.jpg" → "/avatars/72_123.jpg"
  */
 export function useAvatarSrc(avatar: MaybeRefOrGetter<string | null | undefined>) {
     return computed(() => {
@@ -18,7 +19,7 @@ export function useAvatarSrc(avatar: MaybeRefOrGetter<string | null | undefined>
         const normalizedName = cleaned.split('/').pop()?.toLowerCase() ?? '';
 
         if (normalizedName === 'avatar-default.jpg' || cleaned.toLowerCase().endsWith('/avatar-default.jpg')) {
-            return '/storage/avatars/avatar-default.jpg';
+            return '/avatar-default.jpg';
         }
 
         if (/^(https?:)?\/\//i.test(cleaned) || cleaned.startsWith('data:') || cleaned.startsWith('blob:')) {
@@ -28,12 +29,10 @@ export function useAvatarSrc(avatar: MaybeRefOrGetter<string | null | undefined>
             return cleaned;
         }
 
-        // Path under public (e.g. IdCard: "uploads/20856/20856.jpg")
         if (cleaned.includes('/')) {
             return `/${cleaned}`;
         }
 
-        // Plain filename (Settings profile: stored in storage/avatars)
-        return `/storage/avatars/${cleaned}`;
+        return `/avatars/${cleaned}`;
     });
 }

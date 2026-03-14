@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers\Settings;
 
+use App\Events\AuthUserProfileUpdated;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Settings\ProfileDeleteRequest;
 use App\Http\Requests\Settings\ProfileUpdateRequest;
 use App\Models\Role;
 use App\Services\ActivityLogService;
+use Illuminate\Support\Facades\File;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -55,6 +57,10 @@ class ProfileController extends Controller
         $validated = $request->validated();
         $avatarFile = $request->file('avatar');
         unset($validated['avatar'], $validated['name']);
+        // Normalize empty personal_email to null so it can be cleared
+        if (array_key_exists('personal_email', $validated) && trim((string) $validated['personal_email']) === '') {
+            $validated['personal_email'] = null;
+        }
         $request->user()->fill($validated);
 
         // Recompute fullname from parts when name parts are present
@@ -117,12 +123,16 @@ class ProfileController extends Controller
             if (! in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp'], true)) {
                 $ext = 'jpg';
             }
-            $filename = (string) $user->userId.'_'.time().'.'.$ext;
-            $path = $file->storeAs('avatars', $filename, 'public');
-            if ($path !== false) {
-                $request->user()->avatar = $filename;
-                $changes[] = 'avatar';
+            // Store avatar under /public so it can be served reliably on Windows.
+            // We persist the relative path into tbl_user.avatar (e.g. "uploads/avatars/1_123.jpg").
+            $dir = public_path('uploads/avatars');
+            if (! File::exists($dir)) {
+                File::makeDirectory($dir, 0755, true, true);
             }
+            $filename = (string) $user->userId.'_'.time().'.'.$ext;
+            $file->move($dir, $filename);
+            $request->user()->avatar = 'uploads/avatars/'.$filename;
+            $changes[] = 'avatar';
         }
 
         $request->user()->save();
@@ -132,6 +142,8 @@ class ProfileController extends Controller
                 'User',
                 "Updated user: {$user->email}"
             );
+            $request->user()->refresh();
+            broadcast(new AuthUserProfileUpdated($request->user()));
         }
 
         return to_route('profile.edit');

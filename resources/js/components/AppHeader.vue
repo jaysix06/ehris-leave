@@ -53,7 +53,10 @@ const props = withDefaults(defineProps<Props>(), {
 const page = usePage();
 const auth = computed(() => page.props.auth);
 const { isCurrentUrl, whenCurrentUrl } = useCurrentUrl();
-const headerAvatarSrc = useAvatarSrc(() => auth.value?.user?.avatar);
+const headerAvatarSrc = useAvatarSrc(() => {
+    const u = auth.value?.user as Record<string, unknown> | undefined;
+    return (u?.avatar_url ?? u?.avatar) as string | null | undefined;
+});
 
 const activeItemStyles =
     'text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100';

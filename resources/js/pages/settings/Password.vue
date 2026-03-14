@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Form, Head, router } from '@inertiajs/vue3';
 import { defineComponent, watch } from 'vue';
+import { toast } from 'vue3-toastify';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
@@ -21,7 +22,10 @@ const ReloadAfterPasswordSuccess = defineComponent({
         watch(
             () => props.recentlySuccessful,
             (success) => {
-                if (success) router.reload();
+                if (success) {
+                    toast.success('Password saved successfully.');
+                    setTimeout(() => router.reload(), 1500);
+                }
             },
         );
     },
