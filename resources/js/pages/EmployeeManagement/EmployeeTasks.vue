@@ -606,15 +606,7 @@ function resolveAvatarSrc(avatar: string | null): string | null {
                                         </p>
                                     </div>
 
-                                    <div class="flex flex-wrap items-center gap-2">
-                                        <button
-                                            type="button"
-                                            class="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
-                                            @click="openViewModal(task)"
-                                        >
-                                            <Eye class="h-3.5 w-3.5" />
-                                            View
-                                        </button>
+                                    <div class="flex flex-wrap gap-2">
                                         <span
                                             class="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-600"
                                             >{{ task.status }}</span
@@ -627,20 +619,30 @@ function resolveAvatarSrc(avatar: string | null): string | null {
                                 </div>
 
                                 <div
-                                    class="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs text-slate-500"
+                                    class="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-xs text-slate-500"
                                 >
-                                    <span
-                                        >Due:
-                                        {{
-                                            task.due_date_end &&
-                                            task.due_date_end !== task.due_date
-                                                ? `${task.due_date} to ${task.due_date_end}`
-                                                : task.due_date
-                                        }}</span
+                                    <div class="flex flex-wrap gap-x-4 gap-y-2">
+                                        <span
+                                            >Due:
+                                            {{
+                                                task.due_date_end &&
+                                                task.due_date_end !== task.due_date
+                                                    ? `${task.due_date} to ${task.due_date_end}`
+                                                    : task.due_date
+                                            }}</span
+                                        >
+                                        <span v-if="task.accomplishment_report"
+                                            >Accomplishment logged</span
+                                        >
+                                    </div>
+                                    <button
+                                        type="button"
+                                        class="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
+                                        @click="openViewModal(task)"
                                     >
-                                    <span v-if="task.accomplishment_report"
-                                        >Accomplishment logged</span
-                                    >
+                                        <Eye class="h-3.5 w-3.5" />
+                                        View
+                                    </button>
                                 </div>
                             </div>
                         </div>
