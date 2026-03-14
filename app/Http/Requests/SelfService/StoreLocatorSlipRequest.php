@@ -17,9 +17,12 @@ class StoreLocatorSlipRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'purpose' => ['required', 'string', 'max:100'],
-            'reason' => ['required', 'string', 'max:100'],
-            'attachment' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
+            'purpose_of_travel' => ['required', 'string', 'max:255'],
+            'travel_type' => ['required', 'in:official_business,official_time'],
+            'travel_date' => ['required', 'date'],
+            'time_out' => ['nullable', 'date_format:H:i'],
+            'time_in' => ['nullable', 'date_format:H:i'],
+            'destination' => ['required', 'string', 'max:255'],
         ];
     }
 
@@ -29,12 +32,15 @@ class StoreLocatorSlipRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'purpose.required' => 'Please enter the purpose of your locator slip request.',
-            'purpose.max' => 'The purpose may not be greater than 100 characters.',
-            'reason.required' => 'Please enter the reason for your locator slip request.',
-            'reason.max' => 'The reason may not be greater than 100 characters.',
-            'attachment.mimes' => 'The attachment must be a PDF, JPG, JPEG, or PNG file.',
-            'attachment.max' => 'The attachment may not be greater than 10 MB.',
+            'purpose_of_travel.required' => 'Please enter the purpose of travel.',
+            'travel_type.required' => 'Please select if this is official business or official time.',
+            'travel_type.in' => 'The selected travel type is invalid.',
+            'travel_date.required' => 'Please enter the travel date.',
+            'travel_date.date' => 'The travel date must be a valid date.',
+            'time_out.date_format' => 'Time out must use a valid time.',
+            'time_in.date_format' => 'Time in must use a valid time.',
+            'destination.required' => 'Please enter the destination.',
+            'destination.max' => 'The destination may not be greater than 255 characters.',
         ];
     }
 }

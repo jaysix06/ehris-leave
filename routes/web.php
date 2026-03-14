@@ -5,6 +5,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EmployeeManagement\EmployeeTasksController;
 use App\Http\Controllers\EmployeeManagement\IdCardPrintingController;
 use App\Http\Controllers\EmployeeManagement\LeaveRequestsController;
+use App\Http\Controllers\EmployeeManagement\LocatorSlipApprovalController;
 use App\Http\Controllers\MessageController;
 use App\Http\Controllers\MyDetailsController;
 use App\Http\Controllers\NotificationController;
@@ -165,9 +166,18 @@ Route::get('employee-management/leave-requests', [LeaveRequestsController::class
 Route::get('employee-management/employee-tasks', [EmployeeTasksController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('employee-management.employee-tasks');
+Route::get('employee-management/locator-slip-approvals', [LocatorSlipApprovalController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('employee-management.locator-slip-approvals');
 Route::get('api/employee-management/leave-requests/datatables', [LeaveRequestsController::class, 'datatables'])
     ->middleware(['auth', 'verified'])
     ->name('api.employee-management.leave-requests.datatables');
+Route::get('api/employee-management/locator-slip-approvals/datatables', [LocatorSlipApprovalController::class, 'datatables'])
+    ->middleware(['auth', 'verified'])
+    ->name('api.employee-management.locator-slip-approvals.datatables');
+Route::patch('employee-management/locator-slip-approvals/{id}/decision', [LocatorSlipApprovalController::class, 'decide'])
+    ->middleware(['auth', 'verified'])
+    ->name('employee-management.locator-slip-approvals.decision');
 
 Route::get('self-service', function () {
     return Inertia::render('SelfService');

@@ -7,7 +7,9 @@ import { computed, toValue } from 'vue';
  * - Settings profile upload: filename like "72_123.jpg" (stored in storage/avatars) → "/storage/avatars/72_123.jpg"
  * - Full URLs, /, data:, blob: passed through
  */
-export function useAvatarSrc(avatar: MaybeRefOrGetter<string | null | undefined>) {
+export function useAvatarSrc(
+    avatar: MaybeRefOrGetter<string | null | undefined>,
+) {
     return computed(() => {
         const raw = toValue(avatar);
         if (typeof raw !== 'string') return null;
@@ -17,11 +19,18 @@ export function useAvatarSrc(avatar: MaybeRefOrGetter<string | null | undefined>
         const cleaned = s.split('?')[0]?.split('#')[0] ?? '';
         const normalizedName = cleaned.split('/').pop()?.toLowerCase() ?? '';
 
-        if (normalizedName === 'avatar-default.jpg' || cleaned.toLowerCase().endsWith('/avatar-default.jpg')) {
-            return '/storage/avatars/avatar-default.jpg';
+        if (
+            normalizedName === 'avatar-default.jpg' ||
+            cleaned.toLowerCase().endsWith('/avatar-default.jpg')
+        ) {
+            return '/avatar-default.jpg';
         }
 
-        if (/^(https?:)?\/\//i.test(cleaned) || cleaned.startsWith('data:') || cleaned.startsWith('blob:')) {
+        if (
+            /^(https?:)?\/\//i.test(cleaned) ||
+            cleaned.startsWith('data:') ||
+            cleaned.startsWith('blob:')
+        ) {
             return cleaned;
         }
         if (cleaned.startsWith('/')) {

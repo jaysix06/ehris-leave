@@ -135,7 +135,7 @@ function resolveAvatarSrc(avatar: string | null): string | null {
         normalizedName === 'avatar-default.jpg' ||
         cleaned.toLowerCase().endsWith('/avatar-default.jpg')
     ) {
-        return '/storage/avatars/avatar-default.jpg';
+        return '/avatar-default.jpg';
     }
 
     if (

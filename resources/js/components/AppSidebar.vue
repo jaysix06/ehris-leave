@@ -420,6 +420,11 @@ const mainNavItems = computed<NavItem[]>(() => {
                     title: 'Employee Tasks',
                     href: employeeManagementRoutes.employeeTasks(),
                 },
+                {
+                    key: 'employee-management.locator-slip-approvals',
+                    title: 'Locator Slip Approvals',
+                    href: employeeManagementRoutes.locatorSlipApprovals(),
+                },
             ],
         },
         {
@@ -608,6 +613,10 @@ const mainNavItems = computed<NavItem[]>(() => {
         ...(NAV_ACCESS_BY_ROLE.hidden.hidden ?? []).map(normalizeNavKey),
         ...(currentRoleAccess.value.hidden ?? []).map(normalizeNavKey),
         ...Array.from(parsedPermissionAccess.value.hidden).map(normalizeNavKey),
+        ...(currentRoleKey.value === 'sds'
+            ? ['employee-management.locator-slip-approvals']
+            : []
+        ).map(normalizeNavKey),
     ]);
 
     return buildVisibleNavItems(items, hiddenKeys);
