@@ -1,9 +1,26 @@
 <script setup lang="ts">
 import { usePage } from '@inertiajs/vue3';
-import { onClickOutside } from '@vueuse/core';
 import { echo } from '@laravel/echo-vue';
-import { ChevronDown, ChevronLeft, ChevronRight, MessageCircle, Search, Send, Users, X } from 'lucide-vue-next';
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { onClickOutside } from '@vueuse/core';
+import {
+    ChevronDown,
+    ChevronLeft,
+    ChevronRight,
+    MessageCircle,
+    Search,
+    Send,
+    Users,
+    X,
+} from 'lucide-vue-next';
+import {
+    computed,
+    nextTick,
+    onBeforeUnmount,
+    onMounted,
+    ref,
+    watch,
+} from 'vue';
+import { useAvatarSrc } from '@/composables/useAvatarSrc';
 
 type ApiUser = {
     id: number | string;
@@ -55,7 +72,9 @@ type ConversationListResponse = {
 const page = usePage();
 const reverbEnabled = import.meta.env.VITE_REVERB_ENABLED !== 'false';
 const authUserId = computed(() => {
-    const auth = (page.props as Record<string, unknown>).auth as Record<string, unknown> | undefined;
+    const auth = (page.props as Record<string, unknown>).auth as
+        | Record<string, unknown>
+        | undefined;
     const user = auth?.user as Record<string, unknown> | undefined;
     return Number(user?.id ?? user?.userId ?? 0);
 });
@@ -100,11 +119,15 @@ const filteredContacts = computed(() => {
     const q = searchQuery.value.trim().toLowerCase();
     if (q === '') return contacts.value;
     return contacts.value.filter(
-        (c) => c.name.toLowerCase().includes(q) || c.role.toLowerCase().includes(q),
+        (c) =>
+            c.name.toLowerCase().includes(q) ||
+            c.role.toLowerCase().includes(q),
     );
 });
 
-const sortedContacts = computed(() => [...filteredContacts.value].sort((a, b) => a.name.localeCompare(b.name)));
+const sortedContacts = computed(() =>
+    [...filteredContacts.value].sort((a, b) => a.name.localeCompare(b.name)),
+);
 
 const contactsById = computed(() => {
     const byId = new Map<string, Contact>();
@@ -129,7 +152,10 @@ const conversationContacts = computed(() => {
         .filter((contact): contact is Contact => {
             if (!contact) return false;
             if (q === '') return true;
-            return contact.name.toLowerCase().includes(q) || contact.role.toLowerCase().includes(q);
+            return (
+                contact.name.toLowerCase().includes(q) ||
+                contact.role.toLowerCase().includes(q)
+            );
         })
         .sort((a, b) => {
             const aUnread = unreadByContact.value[String(a.id)] ?? 0;
@@ -138,29 +164,51 @@ const conversationContacts = computed(() => {
             const bHasUnread = bUnread > 0 ? 1 : 0;
             if (aHasUnread !== bHasUnread) return bHasUnread - aHasUnread;
 
-            const aActivity = Date.parse(conversationActivityAt.value[String(a.id)] ?? '1970-01-01T00:00:00.000Z');
-            const bActivity = Date.parse(conversationActivityAt.value[String(b.id)] ?? '1970-01-01T00:00:00.000Z');
+            const aActivity = Date.parse(
+                conversationActivityAt.value[String(a.id)] ??
+                    '1970-01-01T00:00:00.000Z',
+            );
+            const bActivity = Date.parse(
+                conversationActivityAt.value[String(b.id)] ??
+                    '1970-01-01T00:00:00.000Z',
+            );
             if (aActivity !== bActivity) return bActivity - aActivity;
             return a.name.localeCompare(b.name);
         });
 });
 
 const onlineEmployees = computed(() =>
-    sortedContacts.value.filter((contact) => contact.online && !chattedContactIds.value.has(String(contact.id))),
+    sortedContacts.value.filter(
+        (contact) =>
+            contact.online && !chattedContactIds.value.has(String(contact.id)),
+    ),
 );
 
 const offlineEmployees = computed(() =>
-    sortedContacts.value.filter((contact) => !contact.online && !chattedContactIds.value.has(String(contact.id))),
+    sortedContacts.value.filter(
+        (contact) =>
+            !contact.online && !chattedContactIds.value.has(String(contact.id)),
+    ),
 );
 
 const unreadButtonCount = computed(() =>
-    Object.values(unreadByContact.value).reduce((sum, count) => sum + (count > 0 ? count : 0), 0),
+    Object.values(unreadByContact.value).reduce(
+        (sum, count) => sum + (count > 0 ? count : 0),
+        0,
+    ),
 );
 
 const hasMoreContacts = computed(() => Boolean(nextContactsUrl.value));
-const hasMoreConversations = computed(() => Boolean(nextConversationsCursor.value));
+const hasMoreConversations = computed(() =>
+    Boolean(nextConversationsCursor.value),
+);
 
-const selectedContact = computed(() => contacts.value.find((contact) => contact.id === activeConversationId.value) ?? null);
+const selectedContact = computed(
+    () =>
+        contacts.value.find(
+            (contact) => contact.id === activeConversationId.value,
+        ) ?? null,
+);
 
 const selectedMessages = computed(() => {
     if (!activeConversationId.value) return [];
@@ -181,7 +229,10 @@ const formatTime = (value: string | null): string => {
     const now = new Date();
     const sameDay = date.toDateString() === now.toDateString();
     if (sameDay) {
-        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        return date.toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit',
+        });
     }
     return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
 };
@@ -191,7 +242,10 @@ const getName = (user: ApiUser): string => {
         return user.name.trim();
     }
     const parts = [user.firstname, user.middlename, user.lastname, user.extname]
-        .filter((part): part is string => typeof part === 'string' && part.trim() !== '')
+        .filter(
+            (part): part is string =>
+                typeof part === 'string' && part.trim() !== '',
+        )
         .map((part) => part.trim());
     if (parts.length > 0) {
         return parts.join(' ');
@@ -206,6 +260,9 @@ const toContact = (user: ApiUser): Contact => ({
     avatar: user.avatar ?? null,
     online: Boolean(user.online),
 });
+
+const resolvedAvatar = (avatar: string | null): string | null =>
+    useAvatarSrc(() => avatar).value;
 
 const upsertContacts = (users: ApiUser[]) => {
     const byId = new Map<string, Contact>();
@@ -228,10 +285,14 @@ const scrollMessagesToBottom = async () => {
     container.scrollTop = container.scrollHeight;
 };
 
-const updateConversationActivity = (contactId: number | string, createdAt?: string | null) => {
+const updateConversationActivity = (
+    contactId: number | string,
+    createdAt?: string | null,
+) => {
     const parsed = createdAt ? new Date(createdAt) : new Date();
     const activityDate = Number.isNaN(parsed.getTime()) ? new Date() : parsed;
-    conversationActivityAt.value[String(contactId)] = activityDate.toISOString();
+    conversationActivityAt.value[String(contactId)] =
+        activityDate.toISOString();
 };
 
 const markConversationRead = async (contactId: number | string) => {
@@ -280,7 +341,10 @@ const fetchContactsPage = async (
         upsertContacts(payload.data ?? []);
         nextContactsUrl.value = payload.next_page_url ?? null;
     } catch (fetchError) {
-        error.value = fetchError instanceof Error ? fetchError.message : 'Failed to load contacts.';
+        error.value =
+            fetchError instanceof Error
+                ? fetchError.message
+                : 'Failed to load contacts.';
     } finally {
         if (options?.append) {
             loadingMoreContacts.value = false;
@@ -298,7 +362,10 @@ const loadInitialContacts = async () => {
         params.set('search', q);
     }
     nextContactsUrl.value = `/utilities/users?${params.toString()}`;
-    await fetchContactsPage(nextContactsUrl.value, { showLoader: true, append: false });
+    await fetchContactsPage(nextContactsUrl.value, {
+        showLoader: true,
+        append: false,
+    });
 };
 
 const loadNextContacts = async () => {
@@ -322,9 +389,14 @@ const conversationListUrl = (cursor?: string | null): string => {
     return `/api/messages/conversations?${params.toString()}`;
 };
 
-const loadConversationsList = async (options?: { reset?: boolean; append?: boolean; showLoader?: boolean }) => {
+const loadConversationsList = async (options?: {
+    reset?: boolean;
+    append?: boolean;
+    showLoader?: boolean;
+}) => {
     if (options?.append) {
-        if (!nextConversationsCursor.value || loadingMoreConversations.value) return;
+        if (!nextConversationsCursor.value || loadingMoreConversations.value)
+            return;
         loadingMoreConversations.value = true;
     } else if (options?.showLoader) {
         loadingConversations.value = true;
@@ -354,8 +426,14 @@ const loadConversationsList = async (options?: { reset?: boolean; append?: boole
             }
             unreadByContact.value[key] = Math.max(0, conv.unread_count ?? 0);
             if (conv.last_message) {
-                updateConversationActivity(conv.contact_id, conv.last_message.created_at);
-                if (!conversations.value[key] || conversations.value[key].length === 0) {
+                updateConversationActivity(
+                    conv.contact_id,
+                    conv.last_message.created_at,
+                );
+                if (
+                    !conversations.value[key] ||
+                    conversations.value[key].length === 0
+                ) {
                     conversations.value[key] = [
                         {
                             id: `preview-${key}`,
@@ -447,7 +525,9 @@ const sendMessage = async () => {
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => null);
-            throw new Error(errorData?.message ?? `Failed to send (${response.status})`);
+            throw new Error(
+                errorData?.message ?? `Failed to send (${response.status})`,
+            );
         }
 
         const sent = (await response.json()) as LocalMessage;
@@ -463,10 +543,20 @@ const sendMessage = async () => {
     }
 };
 
-const pushIncomingMessage = async (senderId: number | string, body: string, id: number | string, createdAt: string) => {
+const pushIncomingMessage = async (
+    senderId: number | string,
+    body: string,
+    id: number | string,
+    createdAt: string,
+) => {
     ensureConversation(senderId);
     const key = String(senderId);
-    const incoming: LocalMessage = { id, body, mine: false, created_at: createdAt };
+    const incoming: LocalMessage = {
+        id,
+        body,
+        mine: false,
+        created_at: createdAt,
+    };
 
     const exists = conversations.value[key].some((m) => m.id === id);
     if (exists) return;
@@ -486,7 +576,8 @@ const pushIncomingMessage = async (senderId: number | string, body: string, id: 
 const onContactsListScroll = () => {
     const container = contactsListContainer.value;
     if (!container) return;
-    const remaining = container.scrollHeight - container.scrollTop - container.clientHeight;
+    const remaining =
+        container.scrollHeight - container.scrollTop - container.clientHeight;
     if (remaining < 80) {
         void loadNextConversations();
         void loadNextContacts();
@@ -498,7 +589,8 @@ const getLastMessagePreview = (contactId: string): string => {
     if (!msgs || msgs.length === 0) return '';
     const last = msgs[msgs.length - 1];
     const prefix = last.mine ? 'You: ' : '';
-    const text = last.body.length > 30 ? last.body.slice(0, 30) + '...' : last.body;
+    const text =
+        last.body.length > 30 ? last.body.slice(0, 30) + '...' : last.body;
     return prefix + text;
 };
 
@@ -527,9 +619,22 @@ const setupEchoListener = () => {
     try {
         echo()
             .private(`messages.${authUserId.value}`)
-            .listen('.MessageSent', (payload: { id: number; sender_id: number; body: string; created_at: string }) => {
-                void pushIncomingMessage(payload.sender_id, payload.body, payload.id, payload.created_at);
-            });
+            .listen(
+                '.MessageSent',
+                (payload: {
+                    id: number;
+                    sender_id: number;
+                    body: string;
+                    created_at: string;
+                }) => {
+                    void pushIncomingMessage(
+                        payload.sender_id,
+                        payload.body,
+                        payload.id,
+                        payload.created_at,
+                    );
+                },
+            );
     } catch {
         // Reverb not available
     }
@@ -538,7 +643,9 @@ const setupEchoListener = () => {
 const teardownEchoListener = () => {
     if (!reverbEnabled || !authUserId.value) return;
     try {
-        echo().private(`messages.${authUserId.value}`).stopListening('.MessageSent');
+        echo()
+            .private(`messages.${authUserId.value}`)
+            .stopListening('.MessageSent');
     } catch {
         // ignore
     }
@@ -582,7 +689,10 @@ watch(searchQuery, (value) => {
         }
 
         nextContactsUrl.value = `/utilities/users?${params.toString()}`;
-        void fetchContactsPage(nextContactsUrl.value, { showLoader: true, append: false });
+        void fetchContactsPage(nextContactsUrl.value, {
+            showLoader: true,
+            append: false,
+        });
     }, 300);
 });
 
@@ -601,7 +711,10 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <div ref="messengerRootRef" class="fixed right-2 bottom-2 z-[70] flex flex-col-reverse items-end gap-2 sm:right-6 sm:bottom-6 sm:gap-3">
+    <div
+        ref="messengerRootRef"
+        class="fixed right-2 bottom-2 z-[70] flex flex-col-reverse items-end gap-2 sm:right-6 sm:bottom-6 sm:gap-3"
+    >
         <div class="pointer-events-auto">
             <button
                 type="button"
@@ -631,8 +744,12 @@ onBeforeUnmount(() => {
                 v-if="isOpen"
                 class="pointer-events-auto fixed inset-0 z-[80] flex h-dvh w-screen flex-col overflow-hidden bg-white text-slate-900 shadow-2xl sm:static sm:h-[620px] sm:w-[min(88vw,700px)] sm:max-w-[700px] sm:rounded-2xl sm:border sm:border-slate-200"
             >
-                <header class="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3">
-                    <div class="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                <header
+                    class="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3"
+                >
+                    <div
+                        class="flex items-center gap-2 text-sm font-semibold text-slate-700"
+                    >
                         <Users class="h-4 w-4 text-slate-500" />
                         <span>Employees</span>
                     </div>
@@ -645,25 +762,31 @@ onBeforeUnmount(() => {
                     </button>
                 </header>
 
-                <div class="min-h-0 flex flex-1 flex-col sm:flex-row">
+                <div class="flex min-h-0 flex-1 flex-col sm:flex-row">
                     <aside
                         class="min-h-0 w-full border-r border-slate-200 sm:w-[280px]"
-                        :class="activeConversationId ? 'hidden sm:flex sm:flex-col' : 'flex flex-col'"
+                        :class="
+                            activeConversationId
+                                ? 'hidden sm:flex sm:flex-col'
+                                : 'flex flex-col'
+                        "
                     >
                         <!-- Search bar -->
                         <div class="border-b border-slate-200 px-3 py-2">
                             <div class="relative">
-                                <Search class="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                                <Search
+                                    class="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-slate-400"
+                                />
                                 <input
                                     v-model="searchQuery"
                                     type="text"
                                     placeholder="Search employees..."
-                                    class="w-full rounded-lg border border-slate-200 bg-slate-50 py-1.5 pl-8 pr-8 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:bg-white focus:ring-1 focus:ring-blue-100"
+                                    class="w-full rounded-lg border border-slate-200 bg-slate-50 py-1.5 pr-8 pl-8 text-sm text-slate-700 transition outline-none placeholder:text-slate-400 focus:border-blue-400 focus:bg-white focus:ring-1 focus:ring-blue-100"
                                 />
                                 <button
                                     v-if="searchQuery"
                                     type="button"
-                                    class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                                    class="absolute top-1/2 right-2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                                     @click="searchQuery = ''"
                                 >
                                     <X class="h-3.5 w-3.5" />
@@ -671,72 +794,175 @@ onBeforeUnmount(() => {
                             </div>
                         </div>
 
-                        <div ref="contactsListContainer" class="flex-1 overflow-y-auto px-3 py-3" @scroll.passive="onContactsListScroll">
-                            <div v-if="loadingContacts" class="py-4 text-sm text-slate-500">Loading employees...</div>
-                            <div v-else-if="error" class="py-4 text-sm text-rose-600">{{ error }}</div>
+                        <div
+                            ref="contactsListContainer"
+                            class="flex-1 overflow-y-auto px-3 py-3"
+                            @scroll.passive="onContactsListScroll"
+                        >
+                            <div
+                                v-if="loadingContacts"
+                                class="py-4 text-sm text-slate-500"
+                            >
+                                Loading employees...
+                            </div>
+                            <div
+                                v-else-if="error"
+                                class="py-4 text-sm text-rose-600"
+                            >
+                                {{ error }}
+                            </div>
                             <template v-else>
                                 <!-- No results -->
                                 <div
-                                    v-if="searchQuery && conversationContacts.length === 0 && onlineEmployees.length === 0 && offlineEmployees.length === 0"
+                                    v-if="
+                                        searchQuery &&
+                                        conversationContacts.length === 0 &&
+                                        onlineEmployees.length === 0 &&
+                                        offlineEmployees.length === 0
+                                    "
                                     class="py-6 text-center text-sm text-slate-400"
                                 >
                                     No employees found for "{{ searchQuery }}"
                                 </div>
 
                                 <!-- Conversations list -->
-                                <div v-if="conversationContacts.length > 0" class="pb-3">
-                                    <div class="py-2 text-left text-sm font-semibold text-slate-700">
-                                        Chats - {{ conversationContacts.length }}
+                                <div
+                                    v-if="conversationContacts.length > 0"
+                                    class="pb-3"
+                                >
+                                    <div
+                                        class="py-2 text-left text-sm font-semibold text-slate-700"
+                                    >
+                                        Chats -
+                                        {{ conversationContacts.length }}
                                     </div>
                                     <ul class="space-y-1 pb-1">
-                                        <li v-for="employee in conversationContacts" :key="`chat-${employee.id}`">
+                                        <li
+                                            v-for="employee in conversationContacts"
+                                            :key="`chat-${employee.id}`"
+                                        >
                                             <button
                                                 type="button"
                                                 class="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition hover:bg-slate-100"
-                                                :class="activeConversationId === employee.id ? 'bg-slate-100 ring-1 ring-slate-200' : ''"
-                                                @click="void selectContact(employee.id)"
+                                                :class="
+                                                    activeConversationId ===
+                                                    employee.id
+                                                        ? 'bg-slate-100 ring-1 ring-slate-200'
+                                                        : ''
+                                                "
+                                                @click="
+                                                    void selectContact(
+                                                        employee.id,
+                                                    )
+                                                "
                                             >
-                                                <div class="relative h-10 w-10 shrink-0 overflow-visible">
+                                                <div
+                                                    class="relative h-10 w-10 shrink-0 overflow-visible"
+                                                >
                                                     <div
                                                         class="h-full w-full overflow-hidden rounded-full text-white"
-                                                        :class="employee.online ? 'bg-cyan-600/90' : 'bg-slate-400/90'"
+                                                        :class="
+                                                            employee.online
+                                                                ? 'bg-cyan-600/90'
+                                                                : 'bg-slate-400/90'
+                                                        "
                                                     >
                                                         <img
-                                                            v-if="employee.avatar"
-                                                            :src="employee.avatar"
+                                                            v-if="
+                                                                resolvedAvatar(
+                                                                    employee.avatar,
+                                                                )
+                                                            "
+                                                            :src="
+                                                                resolvedAvatar(
+                                                                    employee.avatar,
+                                                                )!
+                                                            "
                                                             :alt="employee.name"
                                                             class="h-full w-full object-cover"
                                                         />
-                                                        <div v-else class="flex h-full w-full items-center justify-center text-xs font-semibold">
-                                                            {{ getInitials(employee.name) }}
+                                                        <div
+                                                            v-else
+                                                            class="flex h-full w-full items-center justify-center text-xs font-semibold"
+                                                        >
+                                                            {{
+                                                                getInitials(
+                                                                    employee.name,
+                                                                )
+                                                            }}
                                                         </div>
                                                     </div>
                                                     <span
                                                         class="absolute -right-0.5 -bottom-0.5 h-3 w-3 rounded-full border-2 border-white"
-                                                        :class="employee.online ? 'bg-emerald-500' : 'bg-slate-300'"
+                                                        :class="
+                                                            employee.online
+                                                                ? 'bg-emerald-500'
+                                                                : 'bg-slate-300'
+                                                        "
                                                     />
                                                 </div>
                                                 <div class="min-w-0 flex-1">
-                                                    <div class="flex items-center justify-between">
-                                                        <div class="truncate text-sm font-semibold text-slate-800">{{ employee.name }}</div>
-                                                        <span class="ml-2 shrink-0 text-[10px] text-slate-400">{{ getLastMessageTime(String(employee.id)) }}</span>
+                                                    <div
+                                                        class="flex items-center justify-between"
+                                                    >
+                                                        <div
+                                                            class="truncate text-sm font-semibold text-slate-800"
+                                                        >
+                                                            {{ employee.name }}
+                                                        </div>
+                                                        <span
+                                                            class="ml-2 shrink-0 text-[10px] text-slate-400"
+                                                            >{{
+                                                                getLastMessageTime(
+                                                                    String(
+                                                                        employee.id,
+                                                                    ),
+                                                                )
+                                                            }}</span
+                                                        >
                                                     </div>
-                                                    <div class="truncate text-xs text-slate-500">{{ getLastMessagePreview(String(employee.id)) || employee.role }}</div>
+                                                    <div
+                                                        class="truncate text-xs text-slate-500"
+                                                    >
+                                                        {{
+                                                            getLastMessagePreview(
+                                                                String(
+                                                                    employee.id,
+                                                                ),
+                                                            ) || employee.role
+                                                        }}
+                                                    </div>
                                                 </div>
                                                 <span
-                                                    v-if="(unreadByContact[String(employee.id)] ?? 0) > 0"
+                                                    v-if="
+                                                        (unreadByContact[
+                                                            String(employee.id)
+                                                        ] ?? 0) > 0
+                                                    "
                                                     class="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-[11px] font-semibold text-white"
                                                 >
                                                     {{
-                                                        (unreadByContact[String(employee.id)] ?? 0) > 99
+                                                        (unreadByContact[
+                                                            String(employee.id)
+                                                        ] ?? 0) > 99
                                                             ? '99+'
-                                                            : unreadByContact[String(employee.id)]
+                                                            : unreadByContact[
+                                                                  String(
+                                                                      employee.id,
+                                                                  )
+                                                              ]
                                                     }}
                                                 </span>
                                             </button>
                                         </li>
                                     </ul>
-                                    <div v-if="loadingConversations || loadingMoreConversations" class="py-2 text-xs text-slate-500">
+                                    <div
+                                        v-if="
+                                            loadingConversations ||
+                                            loadingMoreConversations
+                                        "
+                                        class="py-2 text-xs text-slate-500"
+                                    >
                                         Loading chats...
                                     </div>
                                     <button
@@ -756,36 +982,87 @@ onBeforeUnmount(() => {
                                     class="flex w-full items-center justify-between py-2 text-left text-sm font-semibold text-slate-700"
                                     @click="onlineExpanded = !onlineExpanded"
                                 >
-                                    <span>Online - {{ onlineEmployees.length }}</span>
-                                    <ChevronDown v-if="onlineExpanded" class="h-4 w-4" />
+                                    <span
+                                        >Online -
+                                        {{ onlineEmployees.length }}</span
+                                    >
+                                    <ChevronDown
+                                        v-if="onlineExpanded"
+                                        class="h-4 w-4"
+                                    />
                                     <ChevronRight v-else class="h-4 w-4" />
                                 </button>
 
-                                <ul v-show="onlineExpanded && onlineEmployees.length > 0" class="space-y-1 pb-3">
-                                    <li v-for="employee in onlineEmployees" :key="`online-${employee.id}`">
+                                <ul
+                                    v-show="
+                                        onlineExpanded &&
+                                        onlineEmployees.length > 0
+                                    "
+                                    class="space-y-1 pb-3"
+                                >
+                                    <li
+                                        v-for="employee in onlineEmployees"
+                                        :key="`online-${employee.id}`"
+                                    >
                                         <button
                                             type="button"
                                             class="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition hover:bg-slate-100"
-                                            :class="activeConversationId === employee.id ? 'bg-slate-100 ring-1 ring-slate-200' : ''"
-                                            @click="void selectContact(employee.id)"
+                                            :class="
+                                                activeConversationId ===
+                                                employee.id
+                                                    ? 'bg-slate-100 ring-1 ring-slate-200'
+                                                    : ''
+                                            "
+                                            @click="
+                                                void selectContact(employee.id)
+                                            "
                                         >
-                                            <div class="relative h-10 w-10 shrink-0 overflow-visible">
-                                                <div class="h-full w-full overflow-hidden rounded-full bg-cyan-600/90 text-white">
+                                            <div
+                                                class="relative h-10 w-10 shrink-0 overflow-visible"
+                                            >
+                                                <div
+                                                    class="h-full w-full overflow-hidden rounded-full bg-cyan-600/90 text-white"
+                                                >
                                                     <img
-                                                        v-if="employee.avatar"
-                                                        :src="employee.avatar"
+                                                        v-if="
+                                                            resolvedAvatar(
+                                                                employee.avatar,
+                                                            )
+                                                        "
+                                                        :src="
+                                                            resolvedAvatar(
+                                                                employee.avatar,
+                                                            )!
+                                                        "
                                                         :alt="employee.name"
                                                         class="h-full w-full object-cover"
                                                     />
-                                                    <div v-else class="flex h-full w-full items-center justify-center text-xs font-semibold">
-                                                        {{ getInitials(employee.name) }}
+                                                    <div
+                                                        v-else
+                                                        class="flex h-full w-full items-center justify-center text-xs font-semibold"
+                                                    >
+                                                        {{
+                                                            getInitials(
+                                                                employee.name,
+                                                            )
+                                                        }}
                                                     </div>
                                                 </div>
-                                                <span class="absolute -right-0.5 -bottom-0.5 h-3 w-3 rounded-full border-2 border-white bg-emerald-500" />
+                                                <span
+                                                    class="absolute -right-0.5 -bottom-0.5 h-3 w-3 rounded-full border-2 border-white bg-emerald-500"
+                                                />
                                             </div>
                                             <div class="min-w-0 flex-1">
-                                                <div class="truncate text-sm font-semibold text-slate-800">{{ employee.name }}</div>
-                                                <div class="truncate text-xs text-slate-500">{{ employee.role }}</div>
+                                                <div
+                                                    class="truncate text-sm font-semibold text-slate-800"
+                                                >
+                                                    {{ employee.name }}
+                                                </div>
+                                                <div
+                                                    class="truncate text-xs text-slate-500"
+                                                >
+                                                    {{ employee.role }}
+                                                </div>
                                             </div>
                                         </button>
                                     </li>
@@ -798,39 +1075,89 @@ onBeforeUnmount(() => {
                                     class="flex w-full items-center justify-between border-t border-slate-200 py-2 text-left text-sm font-semibold text-slate-600"
                                     @click="offlineExpanded = !offlineExpanded"
                                 >
-                                    <span>Offline - {{ offlineEmployees.length }}</span>
-                                    <ChevronDown v-if="offlineExpanded" class="h-4 w-4" />
+                                    <span
+                                        >Offline -
+                                        {{ offlineEmployees.length }}</span
+                                    >
+                                    <ChevronDown
+                                        v-if="offlineExpanded"
+                                        class="h-4 w-4"
+                                    />
                                     <ChevronRight v-else class="h-4 w-4" />
                                 </button>
 
-                                <ul v-show="offlineExpanded && offlineEmployees.length > 0" class="space-y-1">
-                                    <li v-for="employee in offlineEmployees" :key="`offline-${employee.id}`">
+                                <ul
+                                    v-show="
+                                        offlineExpanded &&
+                                        offlineEmployees.length > 0
+                                    "
+                                    class="space-y-1"
+                                >
+                                    <li
+                                        v-for="employee in offlineEmployees"
+                                        :key="`offline-${employee.id}`"
+                                    >
                                         <button
                                             type="button"
                                             class="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition hover:bg-slate-100"
-                                            :class="activeConversationId === employee.id ? 'bg-slate-100 ring-1 ring-slate-200' : ''"
-                                            @click="void selectContact(employee.id)"
+                                            :class="
+                                                activeConversationId ===
+                                                employee.id
+                                                    ? 'bg-slate-100 ring-1 ring-slate-200'
+                                                    : ''
+                                            "
+                                            @click="
+                                                void selectContact(employee.id)
+                                            "
                                         >
-                                            <div class="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-slate-200 text-slate-500">
+                                            <div
+                                                class="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-slate-200 text-slate-500"
+                                            >
                                                 <img
-                                                    v-if="employee.avatar"
-                                                    :src="employee.avatar"
+                                                    v-if="
+                                                        resolvedAvatar(
+                                                            employee.avatar,
+                                                        )
+                                                    "
+                                                    :src="
+                                                        resolvedAvatar(
+                                                            employee.avatar,
+                                                        )!
+                                                    "
                                                     :alt="employee.name"
                                                     class="h-full w-full object-cover grayscale"
                                                 />
-                                                <div v-else class="flex h-full w-full items-center justify-center text-xs font-semibold">
-                                                    {{ getInitials(employee.name) }}
+                                                <div
+                                                    v-else
+                                                    class="flex h-full w-full items-center justify-center text-xs font-semibold"
+                                                >
+                                                    {{
+                                                        getInitials(
+                                                            employee.name,
+                                                        )
+                                                    }}
                                                 </div>
                                             </div>
                                             <div class="min-w-0 flex-1">
-                                                <div class="truncate text-sm font-semibold text-slate-700">{{ employee.name }}</div>
-                                                <div class="truncate text-xs text-slate-500">{{ employee.role }}</div>
+                                                <div
+                                                    class="truncate text-sm font-semibold text-slate-700"
+                                                >
+                                                    {{ employee.name }}
+                                                </div>
+                                                <div
+                                                    class="truncate text-xs text-slate-500"
+                                                >
+                                                    {{ employee.role }}
+                                                </div>
                                             </div>
                                         </button>
                                     </li>
                                 </ul>
 
-                                <div v-if="loadingMoreContacts" class="py-3 text-center text-xs text-slate-500">
+                                <div
+                                    v-if="loadingMoreContacts"
+                                    class="py-3 text-center text-xs text-slate-500"
+                                >
                                     Loading more employees...
                                 </div>
                                 <button
@@ -847,9 +1174,13 @@ onBeforeUnmount(() => {
 
                     <section
                         class="min-h-0 flex-1 flex-col bg-slate-50"
-                        :class="activeConversationId ? 'flex' : 'hidden sm:flex'"
+                        :class="
+                            activeConversationId ? 'flex' : 'hidden sm:flex'
+                        "
                     >
-                        <header class="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
+                        <header
+                            class="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3"
+                        >
                             <div class="flex items-center gap-3">
                                 <button
                                     type="button"
@@ -858,44 +1189,102 @@ onBeforeUnmount(() => {
                                 >
                                     <ChevronLeft class="h-4 w-4" />
                                 </button>
-                                <div v-if="selectedContact" class="flex items-center gap-3">
-                                    <div class="relative h-9 w-9 shrink-0 overflow-visible">
-                                        <div class="h-full w-full overflow-hidden rounded-full bg-cyan-600/90 text-white">
+                                <div
+                                    v-if="selectedContact"
+                                    class="flex items-center gap-3"
+                                >
+                                    <div
+                                        class="relative h-9 w-9 shrink-0 overflow-visible"
+                                    >
+                                        <div
+                                            class="h-full w-full overflow-hidden rounded-full bg-cyan-600/90 text-white"
+                                        >
                                             <img
-                                                v-if="selectedContact.avatar"
-                                                :src="selectedContact.avatar"
+                                                v-if="
+                                                    resolvedAvatar(
+                                                        selectedContact.avatar,
+                                                    )
+                                                "
+                                                :src="
+                                                    resolvedAvatar(
+                                                        selectedContact.avatar,
+                                                    )!
+                                                "
                                                 :alt="selectedContact.name"
                                                 class="h-full w-full object-cover"
                                             />
-                                            <div v-else class="flex h-full w-full items-center justify-center text-xs font-semibold">
-                                                {{ getInitials(selectedContact.name) }}
+                                            <div
+                                                v-else
+                                                class="flex h-full w-full items-center justify-center text-xs font-semibold"
+                                            >
+                                                {{
+                                                    getInitials(
+                                                        selectedContact.name,
+                                                    )
+                                                }}
                                             </div>
                                         </div>
                                         <span
                                             class="absolute -right-0.5 -bottom-0.5 h-3 w-3 rounded-full border-2 border-white"
-                                            :class="selectedContact.online ? 'bg-emerald-500' : 'bg-slate-300'"
+                                            :class="
+                                                selectedContact.online
+                                                    ? 'bg-emerald-500'
+                                                    : 'bg-slate-300'
+                                            "
                                         />
                                     </div>
                                     <div>
-                                        <div class="text-sm font-semibold text-slate-800">{{ selectedContact.name }}</div>
-                                        <div class="text-xs text-slate-500">{{ selectedContact.online ? 'Online' : 'Offline' }}</div>
+                                        <div
+                                            class="text-sm font-semibold text-slate-800"
+                                        >
+                                            {{ selectedContact.name }}
+                                        </div>
+                                        <div class="text-xs text-slate-500">
+                                            {{
+                                                selectedContact.online
+                                                    ? 'Online'
+                                                    : 'Offline'
+                                            }}
+                                        </div>
                                     </div>
                                 </div>
-                                <div v-else class="text-sm text-slate-500">Select an employee</div>
+                                <div v-else class="text-sm text-slate-500">
+                                    Select an employee
+                                </div>
                             </div>
                         </header>
 
-                        <div ref="messagesContainer" class="min-h-0 flex-1 overflow-y-auto px-3 py-3 sm:px-4 sm:py-4">
-                            <div v-if="!selectedContact" class="flex h-full items-center justify-center text-sm text-slate-400">
-                                Choose an employee from the list to start messaging.
+                        <div
+                            ref="messagesContainer"
+                            class="min-h-0 flex-1 overflow-y-auto px-3 py-3 sm:px-4 sm:py-4"
+                        >
+                            <div
+                                v-if="!selectedContact"
+                                class="flex h-full items-center justify-center text-sm text-slate-400"
+                            >
+                                Choose an employee from the list to start
+                                messaging.
                             </div>
-                            <div v-else-if="loadingMessages" class="flex h-full items-center justify-center">
-                                <div class="text-sm text-slate-400">Loading messages...</div>
+                            <div
+                                v-else-if="loadingMessages"
+                                class="flex h-full items-center justify-center"
+                            >
+                                <div class="text-sm text-slate-400">
+                                    Loading messages...
+                                </div>
                             </div>
-                            <div v-else-if="selectedMessages.length === 0" class="flex h-full items-center justify-center">
+                            <div
+                                v-else-if="selectedMessages.length === 0"
+                                class="flex h-full items-center justify-center"
+                            >
                                 <div class="text-center">
-                                    <div class="text-sm text-slate-500">No messages yet.</div>
-                                    <div class="mt-1 text-xs text-slate-400">Send a message to start the conversation.</div>
+                                    <div class="text-sm text-slate-500">
+                                        No messages yet.
+                                    </div>
+                                    <div class="mt-1 text-xs text-slate-400">
+                                        Send a message to start the
+                                        conversation.
+                                    </div>
                                 </div>
                             </div>
                             <ul v-else class="space-y-2.5 sm:space-y-3">
@@ -903,18 +1292,33 @@ onBeforeUnmount(() => {
                                     v-for="message in selectedMessages"
                                     :key="message.id"
                                     class="flex"
-                                    :class="message.mine ? 'justify-end' : 'justify-start'"
+                                    :class="
+                                        message.mine
+                                            ? 'justify-end'
+                                            : 'justify-start'
+                                    "
                                 >
                                     <div
                                         class="max-w-[85%] rounded-2xl px-3 py-2 text-sm shadow-sm sm:max-w-[80%]"
                                         :class="
                                             message.mine
-                                                ? 'bg-blue-600 text-white rounded-br-md'
-                                                : 'bg-white text-slate-800 border border-slate-200 rounded-bl-md'
+                                                ? 'rounded-br-md bg-blue-600 text-white'
+                                                : 'rounded-bl-md border border-slate-200 bg-white text-slate-800'
                                         "
                                     >
-                                        <p class="whitespace-pre-wrap break-words">{{ message.body }}</p>
-                                        <p class="mt-1 text-[10px]" :class="message.mine ? 'text-blue-100' : 'text-slate-400'">
+                                        <p
+                                            class="break-words whitespace-pre-wrap"
+                                        >
+                                            {{ message.body }}
+                                        </p>
+                                        <p
+                                            class="mt-1 text-[10px]"
+                                            :class="
+                                                message.mine
+                                                    ? 'text-blue-100'
+                                                    : 'text-slate-400'
+                                            "
+                                        >
                                             {{ formatTime(message.created_at) }}
                                         </p>
                                     </div>
@@ -922,20 +1326,31 @@ onBeforeUnmount(() => {
                             </ul>
                         </div>
 
-                        <form class="border-t border-slate-200 bg-white p-2.5 sm:p-3" @submit.prevent="void sendMessage()">
+                        <form
+                            class="border-t border-slate-200 bg-white p-2.5 sm:p-3"
+                            @submit.prevent="void sendMessage()"
+                        >
                             <div class="flex items-end gap-2">
                                 <textarea
                                     v-model="messageInput"
                                     rows="2"
-                                    class="max-h-28 min-h-[42px] flex-1 resize-y rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                    class="max-h-28 min-h-[42px] flex-1 resize-y rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 transition outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                                     placeholder="Type a message..."
-                                    :disabled="!selectedContact || sendingMessage"
-                                    @keydown.enter.exact.prevent="void sendMessage()"
+                                    :disabled="
+                                        !selectedContact || sendingMessage
+                                    "
+                                    @keydown.enter.exact.prevent="
+                                        void sendMessage()
+                                    "
                                 />
                                 <button
                                     type="submit"
                                     class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-                                    :disabled="!selectedContact || sendingMessage || messageInput.trim() === ''"
+                                    :disabled="
+                                        !selectedContact ||
+                                        sendingMessage ||
+                                        messageInput.trim() === ''
+                                    "
                                 >
                                     <Send class="h-4 w-4" />
                                 </button>

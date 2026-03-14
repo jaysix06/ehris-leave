@@ -14,6 +14,7 @@ class RequestedId extends Model
         'fullname',
         'email',
         'status',
+        'card_option',
     ];
 
     protected function casts(): array

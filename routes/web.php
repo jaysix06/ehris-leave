@@ -5,6 +5,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EmployeeManagement\EmployeeTasksController;
 use App\Http\Controllers\EmployeeManagement\IdCardPrintingController;
 use App\Http\Controllers\EmployeeManagement\LeaveRequestsController;
+use App\Http\Controllers\EmployeeManagement\LocatorSlipApprovalController;
 use App\Http\Controllers\MessageController;
 use App\Http\Controllers\MyDetailsController;
 use App\Http\Controllers\NotificationController;
@@ -181,6 +182,9 @@ Route::get('employee-management/psipop-update', function () {
 Route::get('employee-management/id-card-printing', [IdCardPrintingController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('employee-management.id-card-printing');
+Route::get('employee-management/id-card-printing/{id}/print', [IdCardPrintingController::class, 'print'])
+    ->middleware(['auth', 'verified'])
+    ->name('employee-management.id-card-printing.print');
 Route::get('employee-management/id-card-printing/{id}/eodb-id-bb', [IdCardPrintingController::class, 'eodbIdBb'])
     ->middleware(['auth', 'verified'])
     ->name('employee-management.id-card-printing.eodb-id-bb');
@@ -196,9 +200,22 @@ Route::get('employee-management/leave-requests', [LeaveRequestsController::class
 Route::get('employee-management/employee-tasks', [EmployeeTasksController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('employee-management.employee-tasks');
+Route::get('employee-management/locator-slip-approvals', [LocatorSlipApprovalController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('employee-management.locator-slip-approvals');
+
+Route::get('employee-management/employee-tasks/export/pdf', [EmployeeTasksController::class, 'exportPdf'])
+    ->middleware(['auth', 'verified'])
+    ->name('employee-management.employee-tasks.export-pdf');
 Route::get('api/employee-management/leave-requests/datatables', [LeaveRequestsController::class, 'datatables'])
     ->middleware(['auth', 'verified'])
     ->name('api.employee-management.leave-requests.datatables');
+Route::get('api/employee-management/locator-slip-approvals/datatables', [LocatorSlipApprovalController::class, 'datatables'])
+    ->middleware(['auth', 'verified'])
+    ->name('api.employee-management.locator-slip-approvals.datatables');
+Route::patch('employee-management/locator-slip-approvals/{id}/decision', [LocatorSlipApprovalController::class, 'decide'])
+    ->middleware(['auth', 'verified'])
+    ->name('employee-management.locator-slip-approvals.decision');
 
 Route::get('self-service', function () {
     return Inertia::render('SelfService');
@@ -239,6 +256,9 @@ Route::get('self-service/id-card', [IdCardController::class, 'show'])
 Route::get('self-service/id-card/template/{filename}', [IdCardController::class, 'template'])
     ->middleware(['auth', 'verified'])
     ->name('self-service.id-card.template');
+Route::get('self-service/id-card/sample/{option}', [IdCardController::class, 'sample'])
+    ->middleware(['auth', 'verified'])
+    ->name('self-service.id-card.sample');
 Route::put('self-service/id-card/update', [IdCardController::class, 'update'])
     ->middleware(['auth', 'verified'])
     ->name('self-service.id-card.update');

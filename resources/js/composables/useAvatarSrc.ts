@@ -8,7 +8,9 @@ import { computed, toValue } from 'vue';
  * - IdCard: path like "uploads/20856/20856.jpg" → "/uploads/20856/20856.jpg"
  * - Plain filename (legacy): "72_123.jpg" → "/avatars/72_123.jpg"
  */
-export function useAvatarSrc(avatar: MaybeRefOrGetter<string | null | undefined>) {
+export function useAvatarSrc(
+    avatar: MaybeRefOrGetter<string | null | undefined>,
+) {
     return computed(() => {
         const raw = toValue(avatar);
         if (typeof raw !== 'string') return null;
@@ -18,11 +20,18 @@ export function useAvatarSrc(avatar: MaybeRefOrGetter<string | null | undefined>
         const cleaned = s.split('?')[0]?.split('#')[0] ?? '';
         const normalizedName = cleaned.split('/').pop()?.toLowerCase() ?? '';
 
-        if (normalizedName === 'avatar-default.jpg' || cleaned.toLowerCase().endsWith('/avatar-default.jpg')) {
+        if (
+            normalizedName === 'avatar-default.jpg' ||
+            cleaned.toLowerCase().endsWith('/avatar-default.jpg')
+        ) {
             return '/avatar-default.jpg';
         }
 
-        if (/^(https?:)?\/\//i.test(cleaned) || cleaned.startsWith('data:') || cleaned.startsWith('blob:')) {
+        if (
+            /^(https?:)?\/\//i.test(cleaned) ||
+            cleaned.startsWith('data:') ||
+            cleaned.startsWith('blob:')
+        ) {
             return cleaned;
         }
         if (cleaned.startsWith('/')) {
