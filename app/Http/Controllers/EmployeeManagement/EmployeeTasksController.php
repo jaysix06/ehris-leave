@@ -4,10 +4,13 @@ namespace App\Http\Controllers\EmployeeManagement;
 
 use App\Http\Controllers\Controller;
 use App\Models\Attendance;
+use App\Models\Employee;
 use App\Models\SelfServiceTask;
 use App\Models\User;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
@@ -268,6 +271,106 @@ class EmployeeTasksController extends Controller
         )));
     }
 
+    public function exportPdf(Request $request): HttpResponse
+    {
+        if (! $this->canManageEmployeeTasks($request->user())) {
+            abort(403, 'Access denied. Only HR and admin users can export employee tasks.');
+        }
+
+        $request->validate([
+            'user_id' => ['required', 'integer'],
+            'date' => ['required', 'date'],
+        ]);
+
+        $userId = (int) $request->input('user_id');
+        $selectedDate = Carbon::parse($request->input('date'))->toDateString();
+
+        $user = User::find($userId);
+        if (! $user) {
+            abort(404, 'Employee not found.');
+        }
+
+        // Get tasks for the selected date (same logic as index method)
+        $tasks = SelfServiceTask::query()
+            ->where('user_id', $userId)
+            ->where(function ($query) use ($selectedDate) {
+                $query
+                    ->where(function ($singleDayQuery) use ($selectedDate) {
+                        $singleDayQuery
+                            ->whereNull('due_date_end')
+                            ->whereDate('due_date', $selectedDate);
+                    })
+                    ->orWhere(function ($rangeQuery) use ($selectedDate) {
+                        $rangeQuery
+                            ->whereNotNull('due_date_end')
+                            ->whereDate('due_date', '<=', $selectedDate)
+                            ->whereDate('due_date_end', '>=', $selectedDate);
+                    });
+            })
+            ->orderBy('due_date')
+            ->orderBy('title')
+            ->get();
+
+        if ($tasks->isEmpty()) {
+            abort(404, 'No tasks found for this employee on the selected date.');
+        }
+
+        // Use the same date for both from and to (single day export)
+        $dateFrom = Carbon::parse($selectedDate)->startOfDay();
+        $dateTo = Carbon::parse($selectedDate)->endOfDay();
+
+        $subtitle = '('.$dateFrom->format('F d, Y').')';
+        [$employeeName, $station] = $this->getEmployeeNameAndStationForPdf($user);
+
+        $tasksForView = $tasks->map(function ($t) {
+            $start = $t->due_date?->format('m/d/Y') ?? '';
+            $end = ($t->due_date_end && $t->due_date_end != $t->due_date)
+                ? $t->due_date_end->format('m/d/Y')
+                : $start;
+            $status = (string) ($t->status ?? '');
+            $isComplete = in_array($status, ['Complete', 'completed'], true);
+            $isOnHold = in_array($status, ['On Hold', 'on hold'], true);
+            $accomplishment = '';
+            if ($isComplete) {
+                $accomplishment = (string) ($t->accomplishment_report ?? '');
+            } elseif ($isOnHold) {
+                $accomplishment = 'On Hold';
+            } else {
+                $accomplishment = 'In Progress';
+            }
+
+            return [
+                'targeted_task' => $t->description ?? '',
+                'accomplishment' => $accomplishment,
+                'date_range' => $start.'-'.$end,
+                'priority' => $t->priority ?? '',
+            ];
+        })->all();
+
+        [$headerImageDataUri, $footerImageDataUri] = $this->getWfhPdfTemplateImageDataUris();
+
+        $html = $this->buildWfhPdfHtml(
+            $headerImageDataUri,
+            $footerImageDataUri,
+            $subtitle,
+            $employeeName,
+            $station,
+            $tasksForView
+        );
+
+        $filename = 'employee_task_report_'.$employeeName.'_'.$selectedDate.'.pdf';
+        $filename = preg_replace('/[^a-zA-Z0-9_-]/', '_', $filename);
+
+        $dompdfFontPaths = $this->ensureDompdfFontDirectoriesExist();
+
+        $pdf = Pdf::setOption([
+            'font_dir' => $dompdfFontPaths['font_dir'],
+            'font_cache' => $dompdfFontPaths['font_cache'],
+        ])->loadHTML($html)->setPaper('a4', 'landscape');
+
+        return $pdf->download($filename);
+    }
+
     private function canManageEmployeeTasks(mixed $authUser): bool
     {
         $role = strtolower(trim((string) ($authUser?->role ?? '')));
@@ -279,5 +382,110 @@ class EmployeeTasksController extends Controller
         }
 
         return str_contains($role, 'admin') || str_contains($role, 'hr');
+    }
+
+    /**
+     * Get employee name and station for PDF (reused from WfhTimeInOutController logic).
+     *
+     * @return array{0: string, 1: string} [displayName, station]
+     */
+    private function getEmployeeNameAndStationForPdf(User $user): array
+    {
+        $name = $this->employeeDisplayName($user);
+        $station = '';
+
+        if (Schema::hasTable('tbl_emp_official_info')) {
+            $hrid = (int) ($user->hrId ?? 0);
+            if ($hrid > 0) {
+                $emp = Employee::query()
+                    ->where('hrid', $hrid)
+                    ->first();
+                if ($emp && Schema::hasColumn('tbl_emp_official_info', 'station')) {
+                    $station = (string) ($emp->station ?? '');
+                }
+            }
+        }
+
+        return [$name, $station];
+    }
+
+    /**
+     * Get WFH PDF header/footer images as data URIs (reused from WfhTimeInOutController).
+     *
+     * @return array{0: string|null, 1: string|null} [headerImageDataUri, footerImageDataUri]
+     */
+    private function getWfhPdfTemplateImageDataUris(): array
+    {
+        $base = rtrim(public_path(), '/\\');
+        $headerPath = $base.'/Accomplishment Report Templates/header.jpg';
+        if (! is_file($headerPath)) {
+            $headerPath = $base.\DIRECTORY_SEPARATOR.'Accomplishment Report Templates'.\DIRECTORY_SEPARATOR.'header.jpg';
+        }
+        if (! is_file($headerPath)) {
+            $headerPath = $base.'/assets/img/header.png';
+        }
+        $footerPath = $base.'/Accomplishment Report Templates/footer.jpg';
+        if (! is_file($footerPath)) {
+            $footerPath = $base.\DIRECTORY_SEPARATOR.'Accomplishment Report Templates'.\DIRECTORY_SEPARATOR.'footer.jpg';
+        }
+        if (! is_file($footerPath)) {
+            $footerPath = $base.'/assets/img/footer.png';
+        }
+
+        $headerDataUri = null;
+        if ($headerPath !== '' && is_file($headerPath)) {
+            $content = @file_get_contents($headerPath);
+            if ($content !== false) {
+                $mime = (strtolower(pathinfo($headerPath, PATHINFO_EXTENSION)) === 'png') ? 'image/png' : 'image/jpeg';
+                $headerDataUri = 'data:'.$mime.';base64,'.base64_encode($content);
+            }
+        }
+
+        $footerDataUri = null;
+        if ($footerPath !== '' && is_file($footerPath)) {
+            $content = @file_get_contents($footerPath);
+            if ($content !== false) {
+                $mime = (strtolower(pathinfo($footerPath, PATHINFO_EXTENSION)) === 'png') ? 'image/png' : 'image/jpeg';
+                $footerDataUri = 'data:'.$mime.';base64,'.base64_encode($content);
+            }
+        }
+
+        return [$headerDataUri, $footerDataUri];
+    }
+
+    /**
+     * Build WFH PDF HTML by calling WfhTimeInOutController method via reflection.
+     *
+     * @param  array<int, array{targeted_task: string, accomplishment: string, date_range: string, priority: string}>  $tasks
+     */
+    private function buildWfhPdfHtml(
+        ?string $headerImageDataUri,
+        ?string $footerImageDataUri,
+        string $subtitle,
+        string $employeeName,
+        string $station,
+        array $tasks
+    ): string {
+        $wfhController = app(\App\Http\Controllers\SelfService\WfhTimeInOutController::class);
+        $reflection = new \ReflectionClass($wfhController);
+        $method = $reflection->getMethod('buildWfhPdfHtml');
+        $method->setAccessible(true);
+
+        return $method->invoke($wfhController, $headerImageDataUri, $footerImageDataUri, $subtitle, $employeeName, $station, $tasks);
+    }
+
+    /**
+     * Ensure DomPDF font directories exist by calling WfhTimeInOutController method.
+     *
+     * @return array{font_dir: string, font_cache: string}
+     */
+    private function ensureDompdfFontDirectoriesExist(): array
+    {
+        $wfhController = app(\App\Http\Controllers\SelfService\WfhTimeInOutController::class);
+        $reflection = new \ReflectionClass($wfhController);
+        $method = $reflection->getMethod('ensureDompdfFontDirectoriesExist');
+        $method->setAccessible(true);
+
+        return $method->invoke($wfhController);
     }
 }

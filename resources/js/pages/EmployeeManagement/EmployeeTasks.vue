@@ -3,12 +3,15 @@ import { Head, router } from '@inertiajs/vue3';
 import {
     BriefcaseBusiness,
     CalendarDays,
+    ChevronDown,
     Clock3,
+    Download,
     ShieldAlert,
 } from 'lucide-vue-next';
-import { computed, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { DatePicker } from 'v-calendar';
+import { toast } from 'vue3-toastify';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/AppLayout.vue';
 import employeeManagementRoutes from '@/routes/employee-management';
 import type { BreadcrumbItem } from '@/types';
@@ -57,12 +60,79 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
-const filterDate = ref(props.selectedDate);
+const filterDate = ref<Date | null>(
+    props.selectedDate ? new Date(`${props.selectedDate}T00:00:00`) : null,
+);
+
+const disabledDates = ref([
+    {
+        repeat: {
+            weekdays: [1, 7], // Sunday (1) and Saturday (7)
+        },
+    },
+]);
+
+const filterDateInputLabel = computed(() => {
+    if (!filterDate.value) {
+        return 'Select a date';
+    }
+    return new Intl.DateTimeFormat('en-US', {
+        month: '2-digit',
+        day: '2-digit',
+        year: 'numeric',
+    }).format(filterDate.value);
+});
+
+/**
+ * Inject a <style> tag to hide Saturday/Sunday in the v-calendar popover.
+ * The popover is teleported to <body>, so scoped CSS cannot reach it.
+ * We use the vc-popover-content-wrapper class that v-calendar puts on all popovers.
+ */
+const POPOVER_STYLE_ID = 'employee-task-calendar-popover-style';
+
+function ensurePopoverStyle(): void {
+    if (document.getElementById(POPOVER_STYLE_ID)) {
+        return;
+    }
+    const style = document.createElement('style');
+    style.id = POPOVER_STYLE_ID;
+    style.textContent = `
+        .vc-popover-content-wrapper {
+            z-index: 50 !important;
+        }
+        .vc-popover-content-wrapper .vc-weekdays,
+        .vc-popover-content-wrapper .vc-week {
+            grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+        }
+        .vc-popover-content-wrapper .vc-weekdays .vc-weekday-1,
+        .vc-popover-content-wrapper .vc-weekdays .vc-weekday-7,
+        .vc-popover-content-wrapper .vc-week .weekday-1,
+        .vc-popover-content-wrapper .vc-week .weekday-7,
+        .vc-popover-content-wrapper .vc-weekdays > *:nth-child(1),
+        .vc-popover-content-wrapper .vc-weekdays > *:nth-child(7),
+        .vc-popover-content-wrapper .vc-week > *:nth-child(1),
+        .vc-popover-content-wrapper .vc-week > *:nth-child(7) {
+            display: none !important;
+        }
+    `;
+    document.head.appendChild(style);
+}
+
+function removePopoverStyle(): void {
+    document.getElementById(POPOVER_STYLE_ID)?.remove();
+}
+
+onMounted(ensurePopoverStyle);
+onUnmounted(removePopoverStyle);
 
 watch(
     () => props.selectedDate,
     (value) => {
-        filterDate.value = value;
+        if (value) {
+            filterDate.value = new Date(`${value}T00:00:00`);
+        } else {
+            filterDate.value = null;
+        }
     },
 );
 
@@ -104,10 +174,20 @@ const totalTasks = computed(() =>
 );
 
 function applyDateFilter(): void {
+    if (!filterDate.value) {
+        return;
+    }
+
+    // Format date in local timezone to avoid timezone shift
+    const year = filterDate.value.getFullYear();
+    const month = String(filterDate.value.getMonth() + 1).padStart(2, '0');
+    const day = String(filterDate.value.getDate()).padStart(2, '0');
+    const dateString = `${year}-${month}-${day}`;
+
     router.get(
         employeeManagementRoutes.employeeTasks().url,
         {
-            date: filterDate.value,
+            date: dateString,
         },
         {
             preserveScroll: true,
@@ -115,6 +195,60 @@ function applyDateFilter(): void {
             replace: true,
         },
     );
+}
+
+const exportPdfLoading = ref<Record<number, boolean>>({});
+
+function exportEmployeeTasks(employee: EmployeeCard): void {
+    if (!props.selectedDate) {
+        toast.error('Please select a date first.');
+        return;
+    }
+
+    exportPdfLoading.value[employee.user_id] = true;
+
+    const url = `/employee-management/employee-tasks/export/pdf?user_id=${encodeURIComponent(employee.user_id)}&date=${encodeURIComponent(props.selectedDate)}`;
+
+    fetch(url, {
+        method: 'GET',
+        credentials: 'same-origin',
+        headers: {
+            Accept: 'application/pdf',
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+    })
+        .then(async (res) => {
+            if (!res.ok) {
+                const text = await res.text();
+                throw new Error(text.length < 200 ? text : `Export failed (${res.status}).`);
+            }
+            const disposition = res.headers.get('Content-Disposition');
+            const blob = await res.blob();
+            return { blob, disposition };
+        })
+        .then((result) => {
+            let filename = `employee_task_report_${employee.name}_${props.selectedDate}.pdf`;
+            filename = filename.replace(/[^a-zA-Z0-9_-]/g, '_');
+            if (result.disposition) {
+                const m = result.disposition.match(/filename="?([^";\n]+)"?/);
+                if (m) {
+                    filename = m[1].trim();
+                }
+            }
+            const u = URL.createObjectURL(result.blob);
+            const a = document.createElement('a');
+            a.href = u;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(u);
+            toast.success('Export downloaded.');
+        })
+        .catch((err: Error) => {
+            toast.error(err?.message ?? 'Export failed.');
+        })
+        .finally(() => {
+            exportPdfLoading.value[employee.user_id] = false;
+        });
 }
 
 function resolveAvatarSrc(avatar: string | null): string | null {
@@ -166,10 +300,10 @@ function resolveAvatarSrc(avatar: string | null): string | null {
             class="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8"
         >
             <section
-                class="overflow-hidden rounded-3xl border border-slate-200 bg-linear-to-br from-white via-slate-50 to-emerald-50 shadow-sm"
+                class="overflow-visible rounded-3xl border border-slate-200 bg-linear-to-br from-white via-slate-50 to-emerald-50 shadow-sm"
             >
                 <div
-                    class="flex flex-col gap-5 px-5 py-6 sm:px-7 lg:flex-row lg:items-end lg:justify-between"
+                    class="relative flex flex-col gap-5 px-5 py-6 sm:px-7 lg:flex-row lg:items-start lg:justify-between"
                 >
                     <div class="max-w-3xl">
                         <p
@@ -195,24 +329,36 @@ function resolveAvatarSrc(avatar: string | null): string | null {
                     </div>
 
                     <form
-                        class="flex w-full max-w-md flex-col gap-3 rounded-2xl border border-white/70 bg-white/90 p-4 shadow-sm backdrop-blur lg:w-auto"
+                        class="relative z-10 flex w-full max-w-lg flex-col gap-2 rounded-2xl border border-white/70 bg-white/90 p-3 shadow-sm backdrop-blur lg:w-auto"
                         @submit.prevent="applyDateFilter"
                     >
                         <label
                             for="employee-task-date"
-                            class="text-sm font-medium text-slate-700"
+                            class="text-xs font-medium text-slate-700"
                             >Filter by date</label
                         >
-                        <div class="flex flex-col gap-3 sm:flex-row">
-                            <Input
+                        <div class="flex flex-col gap-2">
+                            <DatePicker
                                 id="employee-task-date"
                                 v-model="filterDate"
-                                type="date"
-                                class="border-slate-300 bg-white text-slate-900"
-                            />
+                                :disabled-dates="disabledDates"
+                                :masks="{ input: 'MM/DD/YYYY' }"
+                                :popover="{ visibility: 'click' }"
+                            >
+                                <template #default="{ togglePopover }">
+                                    <button
+                                        type="button"
+                                        class="inline-flex w-full items-center justify-between rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-900 shadow-sm transition hover:bg-slate-50"
+                                        @click="togglePopover"
+                                    >
+                                        <span>{{ filterDateInputLabel }}</span>
+                                        <ChevronDown class="h-4 w-4 text-slate-400" />
+                                    </button>
+                                </template>
+                            </DatePicker>
                             <button
                                 type="submit"
-                                class="inline-flex items-center justify-center rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
+                                class="inline-flex items-center justify-center rounded-md bg-slate-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-slate-700"
                             >
                                 Apply
                             </button>
@@ -394,16 +540,27 @@ function resolveAvatarSrc(avatar: string | null): string | null {
                                 />
                                 Tasks
                             </div>
-                            <span
-                                class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600"
-                            >
-                                {{ employee.tasks.length }}
-                                {{
-                                    employee.tasks.length === 1
-                                        ? 'task'
-                                        : 'tasks'
-                                }}
-                            </span>
+                            <div class="flex items-center gap-2">
+                                <span
+                                    class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600"
+                                >
+                                    {{ employee.tasks.length }}
+                                    {{
+                                        employee.tasks.length === 1
+                                            ? 'task'
+                                            : 'tasks'
+                                    }}
+                                </span>
+                                <button
+                                    type="button"
+                                    class="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2 disabled:opacity-60 disabled:pointer-events-none"
+                                    :disabled="exportPdfLoading[employee.user_id] || employee.tasks.length === 0"
+                                    @click="exportEmployeeTasks(employee)"
+                                >
+                                    <Download class="h-3.5 w-3.5" />
+                                    {{ exportPdfLoading[employee.user_id] ? 'Exporting…' : 'Export' }}
+                                </button>
+                            </div>
                         </div>
 
                         <div
@@ -472,3 +629,4 @@ function resolveAvatarSrc(avatar: string | null): string | null {
         </div>
     </AppLayout>
 </template>
+
