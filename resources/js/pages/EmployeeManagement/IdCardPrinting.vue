@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { Head } from '@inertiajs/vue3';
+import { Pencil, Printer, Trash2 } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { BreadcrumbItem } from '@/types';
-import { Pencil, Printer, Trash2 } from 'lucide-vue-next';
 
 const pageTitle = 'REQUESTED ID';
 
@@ -19,6 +19,7 @@ type RequestedIdRow = {
     fullname: string;
     email: string | null;
     status: string;
+    card_option: string;
     updated_at: string | null;
 };
 
@@ -112,25 +113,18 @@ const paginated = computed(() => {
                                 <td class="p-3">
                                     <div class="flex flex-wrap items-center gap-2">
                                         <a
-                                            :href="`/employee-management/id-card-printing/${row.id}/eodb-id`"
+                                            :href="`/employee-management/id-card-printing/${row.id}/print`"
                                             target="_blank"
                                             rel="noopener noreferrer"
                                             class="inline-flex items-center gap-1 rounded border border-input bg-background px-2 py-1 text-xs font-medium hover:bg-muted/50"
-                                            title="EODB ID (opens in new tab)"
+                                            title="Print ID card (opens in new tab)"
                                         >
                                             <Printer class="size-3.5" />
-                                            Pocket ID
+                                            Print ID
                                         </a>
-                                        <a
-                                            :href="`/employee-management/id-card-printing/${row.id}/eodb-id-bb`"
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            class="inline-flex items-center gap-1 rounded border border-input bg-background px-2 py-1 text-xs font-medium hover:bg-muted/50"
-                                            title="EODB ID BB (opens in new tab)"
-                                        >
-                                            <Printer class="size-3.5" />
-                                            EODB ID BB
-                                        </a>
+                                        <span class="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                                            {{ row.card_option === 'pocket_id' ? 'Pocket ID' : 'EODB ID BB' }}
+                                        </span>
                                         <button
                                             type="button"
                                             class="inline-flex items-center gap-1 rounded border border-input bg-background px-2 py-1 text-xs font-medium hover:bg-muted/50"

@@ -19,6 +19,10 @@ use Symfony\Component\HttpFoundation\Response;
 
 class IdCardPrintingController extends Controller
 {
+    private const CARD_OPTION_POCKET_ID = 'pocket_id';
+
+    private const CARD_OPTION_EODB_ID_BB = 'eodb_id_bb';
+
     /**
      * List requested IDs for the Employee Management → ID Card Printing page.
      */
@@ -37,6 +41,7 @@ class IdCardPrintingController extends Controller
                     'fullname' => $row->fullname ?? '—',
                     'email' => $row->email,
                     'status' => $row->status ?? 'On Process',
+                    'card_option' => $this->normalizeCardOption($row->card_option ?? null),
                     'updated_at' => $row->updated_at?->toIso8601String(),
                 ])
                 ->values()
@@ -57,6 +62,7 @@ class IdCardPrintingController extends Controller
                     ]))) ?: ($row->email ?? '—'),
                     'email' => $row->email ?? null,
                     'status' => 'On Process',
+                    'card_option' => self::CARD_OPTION_EODB_ID_BB,
                     'updated_at' => null,
                 ])
                 ->values()
@@ -68,21 +74,24 @@ class IdCardPrintingController extends Controller
         ]);
     }
 
+    /**
+     * Print using the card option selected in Self Service.
+     */
+    public function print(Request $request, int $id): Response
+    {
+        $ctx = $this->resolvePrintContext($id);
+        if (($ctx['card_option'] ?? self::CARD_OPTION_EODB_ID_BB) === self::CARD_OPTION_POCKET_ID) {
+            return $this->renderPocketIdPdf($ctx);
+        }
+
+        return $this->renderEodbIdBbPdf($ctx);
+    }
+
     public function eodbId(Request $request, int $id): Response
     {
         $ctx = $this->resolvePrintContext($id);
-        $spreadPng = PocketIdImageService::buildPocketSpread($ctx);
-        if ($spreadPng === null) {
-            abort(404, 'Unable to generate pocket ID image. Check template files and GD extension.');
-        }
 
-        $pdf = Pdf::loadView('id-cards.eodb-id-bb', [
-            'card_image_data_uri' => 'data:image/png;base64,'.base64_encode($spreadPng),
-        ])->setPaper('a4', 'portrait');
-
-        $filename = 'eodb-id-'.preg_replace('/[^a-z0-9\-]/i', '-', $ctx['fullname']).'.pdf';
-
-        return $pdf->stream($filename, ['Attachment' => false]);
+        return $this->renderPocketIdPdf($ctx);
     }
 
     /**
@@ -92,6 +101,11 @@ class IdCardPrintingController extends Controller
     {
         $ctx = $this->resolvePrintContext($id);
 
+        return $this->renderEodbIdBbPdf($ctx);
+    }
+
+    private function renderEodbIdBbPdf(array $ctx): Response
+    {
         $png = IdCardImageService::buildEodbCard([
             'fullname' => $ctx['fullname'],
             'lastname' => $ctx['lastname'],
@@ -121,7 +135,33 @@ class IdCardPrintingController extends Controller
             'card_image_data_uri' => 'data:image/png;base64,'.base64_encode($png),
         ])->setPaper('a4', 'portrait');
 
-        return $pdf->stream($filename, ['Attachment' => false]);
+        $response = $pdf->stream($filename, ['Attachment' => false]);
+        if (app()->environment('testing')) {
+            $response->headers->set('X-Ehris-Card-Option', self::CARD_OPTION_EODB_ID_BB);
+        }
+
+        return $response;
+    }
+
+    private function renderPocketIdPdf(array $ctx): Response
+    {
+        $spreadPng = PocketIdImageService::buildPocketSpread($ctx);
+        if ($spreadPng === null) {
+            abort(404, 'Unable to generate pocket ID image. Check template files and GD extension.');
+        }
+
+        $pdf = Pdf::loadView('id-cards.eodb-id-bb', [
+            'card_image_data_uri' => 'data:image/png;base64,'.base64_encode($spreadPng),
+        ])->setPaper('a4', 'portrait');
+
+        $filename = 'eodb-id-'.preg_replace('/[^a-z0-9\-]/i', '-', $ctx['fullname']).'.pdf';
+
+        $response = $pdf->stream($filename, ['Attachment' => false]);
+        if (app()->environment('testing')) {
+            $response->headers->set('X-Ehris-Card-Option', self::CARD_OPTION_POCKET_ID);
+        }
+
+        return $response;
     }
 
     private function resolvePrintContext(int $id): array
@@ -168,6 +208,7 @@ class IdCardPrintingController extends Controller
         }
 
         $legacyPrintRow = $this->resolveLegacyPrintIdRow($hrid, $email) ?? $legacyById;
+        $cardOption = $this->normalizeCardOption($requested?->card_option ?? null);
 
         $fullname = trim((string) ($requested?->fullname ?? ''));
         if ($fullname === '') {
@@ -290,7 +331,18 @@ class IdCardPrintingController extends Controller
             'philhealth' => (string) ($personalInfo?->philhealth ?? $legacyPrintRow?->philhealth_no ?? ''),
             'birth_date' => (string) ($personalInfo?->dob ?? $legacyPrintRow?->bday ?? ''),
             'blood_type' => (string) ($personalInfo?->blood_type ?? $legacyPrintRow?->blood_type ?? ''),
+            'card_option' => $cardOption,
         ];
+    }
+
+    private function normalizeCardOption(mixed $value): string
+    {
+        $option = trim((string) $value);
+        if (in_array($option, [self::CARD_OPTION_POCKET_ID, self::CARD_OPTION_EODB_ID_BB], true)) {
+            return $option;
+        }
+
+        return self::CARD_OPTION_EODB_ID_BB;
     }
 
     private function resolveLegacyPrintIdRow(mixed $hrid, ?string $email): ?object

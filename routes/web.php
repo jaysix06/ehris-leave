@@ -151,6 +151,9 @@ Route::get('employee-management/psipop-update', function () {
 Route::get('employee-management/id-card-printing', [IdCardPrintingController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('employee-management.id-card-printing');
+Route::get('employee-management/id-card-printing/{id}/print', [IdCardPrintingController::class, 'print'])
+    ->middleware(['auth', 'verified'])
+    ->name('employee-management.id-card-printing.print');
 Route::get('employee-management/id-card-printing/{id}/eodb-id-bb', [IdCardPrintingController::class, 'eodbIdBb'])
     ->middleware(['auth', 'verified'])
     ->name('employee-management.id-card-printing.eodb-id-bb');
@@ -222,6 +225,9 @@ Route::get('self-service/id-card', [IdCardController::class, 'show'])
 Route::get('self-service/id-card/template/{filename}', [IdCardController::class, 'template'])
     ->middleware(['auth', 'verified'])
     ->name('self-service.id-card.template');
+Route::get('self-service/id-card/sample/{option}', [IdCardController::class, 'sample'])
+    ->middleware(['auth', 'verified'])
+    ->name('self-service.id-card.sample');
 Route::put('self-service/id-card/update', [IdCardController::class, 'update'])
     ->middleware(['auth', 'verified'])
     ->name('self-service.id-card.update');
