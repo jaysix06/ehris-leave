@@ -2,15 +2,18 @@
 
 use App\Http\Controllers\Auth\PasswordResetOtpController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\EmployeeManagement\EmployeeTasksController;
 use App\Http\Controllers\EmployeeManagement\IdCardPrintingController;
 use App\Http\Controllers\EmployeeManagement\LeaveRequestsController;
 use App\Http\Controllers\MessageController;
 use App\Http\Controllers\MyDetailsController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\RequestStatus\MyLeaveController;
+use App\Http\Controllers\RequestStatus\MyRequestsController;
 use App\Http\Controllers\SelfService\CalendarController;
 use App\Http\Controllers\SelfService\IdCardController;
 use App\Http\Controllers\SelfService\LeaveApplicationController;
+use App\Http\Controllers\SelfService\LocatorSlipController;
 use App\Http\Controllers\SelfService\TimeLogsController;
 use App\Http\Controllers\SelfService\WfhTimeInOutController;
 use App\Http\Controllers\SurveyController;
@@ -159,6 +162,9 @@ Route::get('employee-management/deped-email-requests', function () {
 Route::get('employee-management/leave-requests', [LeaveRequestsController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('employee-management.leave-requests');
+Route::get('employee-management/employee-tasks', [EmployeeTasksController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('employee-management.employee-tasks');
 Route::get('api/employee-management/leave-requests/datatables', [LeaveRequestsController::class, 'datatables'])
     ->middleware(['auth', 'verified'])
     ->name('api.employee-management.leave-requests.datatables');
@@ -223,13 +229,18 @@ Route::patch('self-service/leave-application/{id}/decision', [LeaveApplicationCo
 Route::get('self-service/deped-email-requests', function () {
     return Inertia::render('SelfService/DepedEmailRequests');
 })->middleware(['auth', 'verified'])->name('self-service.deped-email-requests');
+Route::get('self-service/locator-slip', [LocatorSlipController::class, 'show'])
+    ->middleware(['auth', 'verified'])
+    ->name('self-service.locator-slip');
+Route::post('self-service/locator-slip', [LocatorSlipController::class, 'store'])
+    ->middleware(['auth', 'verified'])
+    ->name('self-service.locator-slip.store');
 
 Route::get('request-status', function () {
     return Inertia::render('RequestStatus');
 })->middleware(['auth', 'verified'])->name('request-status');
-Route::get('request-status/my-requests', function () {
-    return Inertia::render('RequestStatus/MyRequests');
-})->middleware(['auth', 'verified'])->name('request-status.my-requests');
+Route::get('request-status/my-requests', [MyRequestsController::class, 'index'])
+    ->middleware(['auth', 'verified'])->name('request-status.my-requests');
 Route::get('request-status/my-leave', [MyLeaveController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('request-status.my-leave');
