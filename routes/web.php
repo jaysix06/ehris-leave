@@ -169,6 +169,10 @@ Route::get('employee-management/employee-tasks', [EmployeeTasksController::class
 Route::get('employee-management/locator-slip-approvals', [LocatorSlipApprovalController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('employee-management.locator-slip-approvals');
+
+Route::get('employee-management/employee-tasks/export/pdf', [EmployeeTasksController::class, 'exportPdf'])
+    ->middleware(['auth', 'verified'])
+    ->name('employee-management.employee-tasks.export-pdf');
 Route::get('api/employee-management/leave-requests/datatables', [LeaveRequestsController::class, 'datatables'])
     ->middleware(['auth', 'verified'])
     ->name('api.employee-management.leave-requests.datatables');
