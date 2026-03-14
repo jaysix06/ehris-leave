@@ -7,16 +7,24 @@ use App\Models\EmpOfficialInfo;
 use App\Models\EmpPersonalInfo;
 use App\Models\RequestedId;
 use App\Models\User;
+use App\Services\IdCardImageService;
+use App\Services\PocketIdImageService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class IdCardController extends Controller
 {
+    private const CARD_OPTION_POCKET_ID = 'pocket_id';
+
+    private const CARD_OPTION_EODB_ID_BB = 'eodb_id_bb';
+
     /**
      * Resolve the directory path for ID card templates (PNG files).
      * Tries env ID_CARD_TEMPLATES_PATH, then public/id-card-templates, then ../TEMPLATE ID/TEMPLATE.
@@ -152,6 +160,11 @@ class IdCardController extends Controller
         $templates = $this->listTemplates();
         $templateBaseUrl = url('/self-service/id-card/template');
         $signaturePath = $this->resolveStoredSignaturePath($hrid, $email);
+        $selectedCardOption = self::CARD_OPTION_EODB_ID_BB;
+        $existingRequest = $this->findRequestedIdRecord($profile, $hrid, $email);
+        if ($existingRequest && $this->isCardOptionValid((string) ($existingRequest->card_option ?? ''))) {
+            $selectedCardOption = (string) $existingRequest->card_option;
+        }
 
         return Inertia::render('SelfService/IdCard', [
             'profile' => $profile,
@@ -161,6 +174,8 @@ class IdCardController extends Controller
             'templates' => $templates,
             'templateBaseUrl' => $templateBaseUrl,
             'signaturePath' => $signaturePath,
+            'cardOptions' => $this->cardOptions(),
+            'selectedCardOption' => $selectedCardOption,
         ]);
     }
 
@@ -194,7 +209,86 @@ class IdCardController extends Controller
     }
 
     /**
-     * Update ID-relevant user details (official, personal, contact).
+     * Render an actual generated sample preview for each card option.
+     */
+    public function sample(Request $request, string $option): Response
+    {
+        $cardOption = strtolower(trim($option));
+        if (! $this->isCardOptionValid($cardOption)) {
+            abort(404, 'Invalid card option.');
+        }
+
+        $authUser = $request->user();
+        $profile = $authUser && Schema::hasTable('tbl_user')
+            ? User::query()
+                ->select(['firstname', 'middlename', 'lastname', 'extname', 'email', 'job_title', 'role', 'fullname', 'hrId', 'userId', 'department_id'])
+                ->where('email', $authUser->email)
+                ->first()
+            : null;
+
+        $sampleFirstName = trim((string) ($profile?->firstname ?? 'JUAN'));
+        $sampleMiddleName = trim((string) ($profile?->middlename ?? 'SANTOS'));
+        $sampleLastName = trim((string) ($profile?->lastname ?? 'DELA CRUZ'));
+        $sampleExtension = trim((string) ($profile?->extname ?? ''));
+        $sampleFullName = trim((string) ($profile?->fullname ?? ''));
+        if ($sampleFullName === '') {
+            $sampleFullName = trim(implode(' ', array_filter([$sampleFirstName, $sampleMiddleName, $sampleLastName, $sampleExtension])));
+        }
+
+        $samplePhotoPath = is_file(public_path('avatar-default.jpg')) ? public_path('avatar-default.jpg') : null;
+        $sampleSignaturePath = null;
+        $signatureRelativePath = $this->resolveStoredSignaturePath(
+            $profile?->hrId ?? $profile?->userId ?? null,
+            $profile?->email
+        );
+        if ($signatureRelativePath !== null) {
+            $candidate = public_path(ltrim($signatureRelativePath, '/'));
+            if (is_file($candidate)) {
+                $sampleSignaturePath = $candidate;
+            }
+        }
+
+        $ctx = [
+            'fullname' => $sampleFullName,
+            'lastname' => $sampleLastName,
+            'firstname' => $sampleFirstName,
+            'middlename' => $sampleMiddleName,
+            'extension' => $sampleExtension,
+            'employee_id' => '000000',
+            'department_abbrev' => 'DEPED OZAMIZ',
+            'division' => 'DIVISION OFFICE',
+            'photo_path' => $samplePhotoPath,
+            'signature_path' => $sampleSignaturePath,
+            'employ_status' => 'Permanent',
+            'job_shorten' => null,
+            'job_title' => (string) ($profile?->job_title ?? 'Teacher I'),
+            'role' => (string) ($profile?->role ?? ''),
+            'emergency_contact' => '09171234567',
+            'station_no' => '0000',
+            'tin' => '000-000-000',
+            'gsis' => '0000000000',
+            'pag_ibig' => '0000000000',
+            'philhealth' => '000000000000',
+            'birth_date' => '1990-01-01',
+            'blood_type' => 'O+',
+        ];
+
+        $png = $cardOption === self::CARD_OPTION_POCKET_ID
+            ? PocketIdImageService::buildPocketSpread($ctx)
+            : IdCardImageService::buildEodbCard($ctx);
+
+        if ($png === null) {
+            abort(404, 'Unable to render sample card preview.');
+        }
+
+        return response($png, 200, [
+            'Content-Type' => 'image/png',
+            'Cache-Control' => 'private, max-age=300',
+        ]);
+    }
+
+    /**
+     * Submit ID request using existing MyDetails data and selected card option.
      */
     public function update(Request $request): RedirectResponse
     {
@@ -209,159 +303,72 @@ class IdCardController extends Controller
                 ->withErrors(['message' => 'Unable to identify employee.']);
         }
 
+        $hrid = $profile?->hrId ?? $profile?->userId ?? $currentKeyHrid;
+        $email = $profile?->email ?? $authUser?->email;
+
+        $officialInfo = null;
+        if ($hrid !== null && Schema::hasTable('tbl_emp_official_info')) {
+            $officialInfo = EmpOfficialInfo::query()->where('hrid', $hrid)->first();
+        }
+        if ($officialInfo === null && $email && Schema::hasTable('tbl_emp_official_info') && Schema::hasColumn('tbl_emp_official_info', 'email')) {
+            $officialInfo = EmpOfficialInfo::query()->where('email', $email)->first();
+        }
+
         $data = $request->validate([
-            'hrid' => ['nullable', 'string', 'max:64'],
-            'employee_id' => ['nullable', 'string', 'max:64'],
-            'prefix_name' => ['nullable', 'string', 'max:32'],
-            'firstname' => ['nullable', 'string', 'max:128'],
-            'middlename' => ['nullable', 'string', 'max:128'],
-            'lastname' => ['nullable', 'string', 'max:128'],
-            'extension' => ['nullable', 'string', 'max:32'],
-            'birth_date' => ['nullable', 'string', 'max:32'],
-            'prc_no' => ['nullable', 'string', 'max:64'],
-            'tin' => ['nullable', 'string', 'max:64'],
-            'gsis' => ['nullable', 'string', 'max:64'],
-            'gsis_bp' => ['nullable', 'string', 'max:64'],
-            'pag_ibig' => ['nullable', 'string', 'max:64'],
-            'philhealth' => ['nullable', 'string', 'max:64'],
-            'blood_type' => ['nullable', 'string', 'max:16'],
-            'job_title' => ['nullable', 'string', 'max:255'],
-            'emergency_name' => ['nullable', 'string', 'max:255'],
-            'emergency_contact' => ['nullable', 'string', 'max:64'],
-            'emergency_email' => ['nullable', 'string', 'max:255'],
-            'id_photo' => ['nullable', 'file', 'image', 'max:10240'],
-            'signature' => ['nullable', 'file', 'image', 'max:10240'],
+            'card_option' => ['required', 'string', 'in:'.self::CARD_OPTION_POCKET_ID.','.self::CARD_OPTION_EODB_ID_BB],
+            'id_photo' => ['required', 'file', 'image', 'max:10240'],
+            'signature' => ['required', 'file', 'image', 'max:10240'],
+            'emergency_contact' => [$request->input('card_option') === self::CARD_OPTION_POCKET_ID ? 'required' : 'nullable', 'string', 'max:64'],
+            'station_no' => [$request->input('card_option') === self::CARD_OPTION_POCKET_ID ? 'required' : 'nullable', 'string', 'max:64'],
+            'tin' => [$request->input('card_option') === self::CARD_OPTION_POCKET_ID ? 'required' : 'nullable', 'string', 'max:64'],
+            'gsis' => [$request->input('card_option') === self::CARD_OPTION_POCKET_ID ? 'required' : 'nullable', 'string', 'max:64'],
+            'pag_ibig' => [$request->input('card_option') === self::CARD_OPTION_POCKET_ID ? 'required' : 'nullable', 'string', 'max:64'],
+            'philhealth' => [$request->input('card_option') === self::CARD_OPTION_POCKET_ID ? 'required' : 'nullable', 'string', 'max:64'],
+            'birth_date' => [$request->input('card_option') === self::CARD_OPTION_POCKET_ID ? 'required' : 'nullable', 'date'],
+            'blood_type' => [$request->input('card_option') === self::CARD_OPTION_POCKET_ID ? 'required' : 'nullable', 'string', 'max:16'],
         ]);
 
-        // If the user entered an HRID, persist it to tbl_user.hrId and migrate existing rows if needed.
-        $requestedHridRaw = trim((string) ($data['hrid'] ?? ''));
-        $requestedHrid = ctype_digit($requestedHridRaw) ? (int) $requestedHridRaw : null;
-
-        if ($requestedHrid !== null && $requestedHrid > 0 && $profile instanceof User) {
-            $oldHrid = $currentKeyHrid;
-            if ((int) ($profile->hrId ?? 0) !== $requestedHrid) {
-                $profile->hrId = $requestedHrid;
-                $profile->save();
-            }
-
-            // If we previously keyed employee records by userId (or an old hrid), migrate them to the new HRID.
-            if ($oldHrid !== $requestedHrid) {
-                foreach (['tbl_emp_official_info', 'tbl_emp_personal_info', 'tbl_emp_contact_info'] as $table) {
-                    if (Schema::hasTable($table) && Schema::hasColumn($table, 'hrid')) {
-                        DB::table($table)->where('hrid', $oldHrid)->update(['hrid' => $requestedHrid]);
-                    }
-                }
-            }
+        $personalInfo = null;
+        if ($hrid !== null && Schema::hasTable('tbl_emp_personal_info')) {
+            $personalInfo = EmpPersonalInfo::query()->where('hrid', $hrid)->first();
         }
 
-        // Recompute key hrid after any update/migration.
-        if ($profile instanceof User) {
-            $profile->refresh();
-        }
-        $hrid = $profile?->hrId ?? $profile?->userId ?? $currentKeyHrid;
-
-        $officialColumns = [
-            'employee_id', 'prefix_name', 'firstname', 'middlename', 'lastname', 'extension',
-            'job_title',
-        ];
-        $personalColumns = [
-            'dob' => 'birth_date',
-            'prc_no' => 'prc_no',
-            'tin' => 'tin',
-            'gsis' => 'gsis',
-            'gsis_bp' => 'gsis_bp',
-            'pag_ibig' => 'pag_ibig',
-            'philhealth' => 'philhealth',
-            'blood_type' => 'blood_type',
-        ];
-        $contactEmergencyColumns = [
-            // Actual columns in tbl_emp_contact_info are emergency_name, emergency_num, emergency_email
-            'emergency_name' => 'emergency_name',
-            'emergency_contact' => 'emergency_num',
-            'emergency_email' => 'emergency_email',
-        ];
-
-        if (Schema::hasTable('tbl_emp_official_info')) {
-            $officialPayload = [];
-            foreach ($officialColumns as $key) {
-                if (! array_key_exists($key, $data)) {
-                    continue;
-                }
-                if (Schema::hasColumn('tbl_emp_official_info', $key)) {
-                    $officialPayload[$key] = $data[$key] ?: null;
-                }
-            }
-            if ($officialPayload !== []) {
-                // Upsert so first-time users get a row created.
-                $base = ['hrid' => $hrid];
-                if ($profile?->email && Schema::hasColumn('tbl_emp_official_info', 'email')) {
-                    $base['email'] = $profile->email;
-                }
-                DB::table('tbl_emp_official_info')->updateOrInsert(
-                    ['hrid' => $hrid],
-                    array_merge($base, $officialPayload),
-                );
-            }
-        }
-
-        if (Schema::hasTable('tbl_emp_personal_info')) {
-            $personalPayload = [];
-            foreach ($personalColumns as $dbCol => $requestKey) {
-                if (! array_key_exists($requestKey, $data) || ! Schema::hasColumn('tbl_emp_personal_info', $dbCol)) {
-                    continue;
-                }
-                $personalPayload[$dbCol] = $data[$requestKey] ?: null;
-            }
-            if ($personalPayload !== []) {
-                DB::table('tbl_emp_personal_info')->updateOrInsert(
-                    ['hrid' => $hrid],
-                    array_merge(['hrid' => $hrid], $personalPayload),
-                );
-            }
-        }
-
+        $contactInfo = null;
         if (Schema::hasTable('tbl_emp_contact_info')) {
-            $contactPayload = [];
-            foreach ($contactEmergencyColumns as $requestKey => $dbCol) {
-                if (! array_key_exists($requestKey, $data)) {
-                    continue;
-                }
-                if (Schema::hasColumn('tbl_emp_contact_info', $dbCol)) {
-                    $contactPayload[$dbCol] = $data[$requestKey] ?: null;
-                }
+            if ($hrid !== null) {
+                $contactInfo = DB::table('tbl_emp_contact_info')->where('hrid', $hrid)->first();
             }
-            if ($contactPayload !== []) {
-                $base = ['hrid' => $hrid];
-                if ($profile?->email && Schema::hasColumn('tbl_emp_contact_info', 'email')) {
-                    $base['email'] = $profile->email;
-                }
-                DB::table('tbl_emp_contact_info')->updateOrInsert(
-                    ['hrid' => $hrid],
-                    array_merge($base, $contactPayload),
-                );
+
+            if ($contactInfo === null && $email && Schema::hasColumn('tbl_emp_contact_info', 'email')) {
+                $contactInfo = DB::table('tbl_emp_contact_info')->where('email', $email)->first();
             }
         }
 
-        // Create or update ID card request so it appears in Employee Management → ID Card Printing.
+        $fullname = trim(implode(' ', array_filter([
+            (string) ($officialInfo?->firstname ?? $profile?->firstname ?? ''),
+            (string) ($officialInfo?->middlename ?? $profile?->middlename ?? ''),
+            (string) ($officialInfo?->lastname ?? $profile?->lastname ?? ''),
+            (string) ($officialInfo?->extension ?? $profile?->extname ?? ''),
+        ])));
+
+        if ($fullname === '' && $profile) {
+            $fullname = trim((string) ($profile->fullname ?? $profile->name ?? ''));
+        }
+
         if (Schema::hasTable('tbl_requested_id')) {
             $userId = $profile?->userId ?? $authUser?->userId ?? $authUser?->id ?? null;
-            $email = $profile?->email ?? $authUser?->email;
-            $fullname = trim(implode(' ', array_filter([
-                $data['firstname'] ?? '',
-                $data['middlename'] ?? '',
-                $data['lastname'] ?? '',
-                $data['extension'] ?? '',
-            ])));
-            if ($fullname === '' && $profile) {
-                $fullname = trim((string) ($profile->fullname ?? $profile->name ?? ''));
-            }
             $payload = [
-                'hrid' => $hrid,
-                'fullname' => $fullname ?: null,
+                'hrid' => is_numeric((string) $hrid) ? (int) $hrid : null,
+                'fullname' => $fullname !== '' ? $fullname : null,
                 'email' => $email,
                 'status' => 'On Process',
                 'updated_at' => now(),
             ];
+
+            if (Schema::hasColumn('tbl_requested_id', 'card_option')) {
+                $payload['card_option'] = (string) $data['card_option'];
+            }
+
             if ($userId !== null) {
                 RequestedId::query()->updateOrInsert(['user_id' => $userId], array_merge($payload, ['user_id' => $userId]));
             } elseif ($email !== null && $email !== '') {
@@ -377,6 +384,14 @@ class IdCardController extends Controller
         $fileKey = (string) ($profile?->userId ?? $hrid);
         $uploadedPhotoPath = null;
         $uploadedSignPath = null;
+        $emergencyContactInput = trim((string) ($data['emergency_contact'] ?? ''));
+        $stationNoInput = trim((string) ($data['station_no'] ?? ''));
+        $tinInput = trim((string) ($data['tin'] ?? ''));
+        $gsisInput = trim((string) ($data['gsis'] ?? ''));
+        $pagIbigInput = trim((string) ($data['pag_ibig'] ?? ''));
+        $philhealthInput = trim((string) ($data['philhealth'] ?? ''));
+        $birthDateInput = trim((string) ($data['birth_date'] ?? ''));
+        $bloodTypeInput = trim((string) ($data['blood_type'] ?? ''));
 
         try {
             if ($request->hasFile('id_photo')) {
@@ -413,7 +428,6 @@ class IdCardController extends Controller
             }
 
             if (Schema::hasTable('tbl_printingid_depaide')) {
-                $email = $profile?->email ?? $authUser?->email;
                 $existing = DB::table('tbl_printingid_depaide')
                     ->where(function ($q) use ($hrid, $email) {
                         $hasAny = false;
@@ -434,29 +448,41 @@ class IdCardController extends Controller
 
                 $basePayload = array_filter([
                     'email' => $email,
-                    'hr_id' => (string) $hrid,
-                    'tin_no' => (string) ($data['tin'] ?? ''),
-                    'fname' => (string) ($data['firstname'] ?? ''),
-                    'lname' => (string) ($data['lastname'] ?? ''),
-                    'mname' => (string) ($data['middlename'] ?? ''),
-                    'ext_name' => (string) ($data['extension'] ?? ''),
-                    'job_title' => (string) ($data['job_title'] ?? ''),
-                    'role' => (string) ($profile?->role ?? ''),
-                    'dep_id' => (string) (($profile?->department_id ?? '') ?? ''),
-                    'emp_id' => is_numeric($data['employee_id'] ?? null) ? (int) $data['employee_id'] : null,
-                    'prc_no' => (string) ($data['prc_no'] ?? ''),
-                    'emrgncy_no' => (string) ($data['emergency_contact'] ?? ''),
-                    'emrgncy_name' => (string) ($data['emergency_name'] ?? ''),
-                    'emrgncy_email' => (string) ($data['emergency_email'] ?? ''),
-                    'prfx_name' => (string) ($data['prefix_name'] ?? ''),
-                    'bday' => (string) ($data['birth_date'] ?? ''),
-                    'gsis_no' => (string) ($data['gsis'] ?? ''),
-                    'pagibig_no' => (string) ($data['pag_ibig'] ?? ''),
-                    'philhealth_no' => (string) ($data['philhealth'] ?? ''),
-                    'blood_type' => (string) ($data['blood_type'] ?? ''),
+                    'hr_id' => $hrid !== null ? (string) $hrid : null,
+                    'tin_no' => $tinInput !== '' ? $tinInput : (string) ($personalInfo?->tin ?? ''),
+                    'fname' => (string) ($officialInfo?->firstname ?? $profile?->firstname ?? ''),
+                    'lname' => (string) ($officialInfo?->lastname ?? $profile?->lastname ?? ''),
+                    'mname' => (string) ($officialInfo?->middlename ?? $profile?->middlename ?? ''),
+                    'ext_name' => (string) ($officialInfo?->extension ?? $profile?->extname ?? ''),
+                    'job_title' => (string) ($officialInfo?->job_title ?? $profile?->job_title ?? ''),
+                    'role' => (string) ($profile?->role ?? $officialInfo?->role ?? ''),
+                    'dep_id' => (string) ($officialInfo?->division_code ?? $officialInfo?->office ?? $profile?->department_id ?? ''),
+                    'emp_id' => is_numeric((string) ($officialInfo?->employee_id ?? null))
+                        ? (int) $officialInfo?->employee_id
+                        : (is_numeric((string) $hrid) ? (int) $hrid : null),
+                    'prc_no' => (string) ($personalInfo?->prc_no ?? ''),
+                    'emrgncy_no' => $emergencyContactInput !== '' ? $emergencyContactInput : (string) ($contactInfo?->emergency_num ?? ''),
+                    'emrgncy_name' => (string) ($contactInfo?->emergency_name ?? ''),
+                    'emrgncy_email' => (string) ($contactInfo?->emergency_email ?? ''),
+                    'prfx_name' => (string) ($officialInfo?->prefix_name ?? ''),
+                    'bday' => $birthDateInput !== '' ? $birthDateInput : (string) ($personalInfo?->dob ?? ''),
+                    'gsis_no' => $gsisInput !== '' ? $gsisInput : (string) ($personalInfo?->gsis ?? ''),
+                    'pagibig_no' => $pagIbigInput !== '' ? $pagIbigInput : (string) ($personalInfo?->pag_ibig ?? ''),
+                    'philhealth_no' => $philhealthInput !== '' ? $philhealthInput : (string) ($personalInfo?->philhealth ?? ''),
+                    'blood_type' => $bloodTypeInput !== '' ? $bloodTypeInput : (string) ($personalInfo?->blood_type ?? ''),
                 ], fn ($v) => $v !== null && $v !== '');
 
-                // Legacy table fallback: update existing row; create minimal row if missing.
+                $stationNoValue = $stationNoInput !== ''
+                    ? $stationNoInput
+                    : (string) ($officialInfo?->station_no ?? $officialInfo?->station_code ?? '');
+                if ($stationNoValue !== '') {
+                    if (Schema::hasColumn('tbl_printingid_depaide', 'station_no')) {
+                        $basePayload['station_no'] = $stationNoValue;
+                    } elseif (Schema::hasColumn('tbl_printingid_depaide', 'station_code')) {
+                        $basePayload['station_code'] = $stationNoValue;
+                    }
+                }
+
                 if ($existing) {
                     $updatePayload = $basePayload;
                     if ($uploadedPhotoPath !== null && $uploadedPhotoPath !== '') {
@@ -478,14 +504,16 @@ class IdCardController extends Controller
                 }
             }
         } catch (\Throwable $e) {
-            \Log::warning('ID card file upload step failed', [
+            Log::warning('ID card file upload step failed', [
                 'error' => $e->getMessage(),
                 'hrid' => $hrid,
-                'email' => $profile?->email ?? $authUser?->email,
+                'email' => $email,
             ]);
         }
 
-        return redirect()->route('self-service.id-card')->with('status', 'Details updated.');
+        return redirect()
+            ->route('self-service.id-card')
+            ->with('success', 'New submit request sent successfully.');
     }
 
     private function storePublicUpload($file, string $relativeDir, string $baseName, ?float $targetAspectRatio = null): ?string
@@ -583,6 +611,60 @@ class IdCardController extends Controller
         File::copy($sourcePath, $targetPath);
 
         return trim($relativeDir, '/').'/'.$filename;
+    }
+
+    /**
+     * @return array<int, array{value: string, label: string, description: string, sampleImage: string}>
+     */
+    private function cardOptions(): array
+    {
+        return [
+            [
+                'value' => self::CARD_OPTION_POCKET_ID,
+                'label' => 'ID only',
+                'description' => 'Compact layout for pocket-size printing.',
+                'sampleImage' => route('self-service.id-card.sample', ['option' => self::CARD_OPTION_POCKET_ID]),
+            ],
+            [
+                'value' => self::CARD_OPTION_EODB_ID_BB,
+                'label' => 'EODB ID BB',
+                'description' => 'Standard EODB ID BB layout.',
+                'sampleImage' => route('self-service.id-card.sample', ['option' => self::CARD_OPTION_EODB_ID_BB]),
+            ],
+        ];
+    }
+
+    private function isCardOptionValid(string $option): bool
+    {
+        return in_array($option, [self::CARD_OPTION_POCKET_ID, self::CARD_OPTION_EODB_ID_BB], true);
+    }
+
+    private function findRequestedIdRecord(?User $profile, mixed $hrid, ?string $email): ?RequestedId
+    {
+        if (! Schema::hasTable('tbl_requested_id')) {
+            return null;
+        }
+
+        $userId = $profile?->userId;
+        if ($userId !== null) {
+            $record = RequestedId::query()->where('user_id', $userId)->first();
+            if ($record) {
+                return $record;
+            }
+        }
+
+        if ($hrid !== null && $hrid !== '') {
+            $record = RequestedId::query()->where('hrid', $hrid)->first();
+            if ($record) {
+                return $record;
+            }
+        }
+
+        if ($email !== null && $email !== '') {
+            return RequestedId::query()->where('email', $email)->first();
+        }
+
+        return null;
     }
 
     private function resolveStoredSignaturePath(mixed $hrid, ?string $email): ?string
